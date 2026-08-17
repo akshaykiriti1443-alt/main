@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motion — keyable overlays</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,500&family=Inter:wght@300;400;500;600&display=swap">
+<style>
+  :root{ --ink:#0b0b0d; --bone:#f4efe7; --amber:#ffb04a; --muted:#8b847b; --line:rgba(244,239,231,.14); }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:transparent; }
+  body{
+    font-family:'Inter',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+    color:var(--bone); font-size:12px; font-weight:300;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
+    background:var(--ink);
+  }
+
+  /* the checkerboard is what tells you the alpha is real */
+  .stagewrap{ position:relative; line-height:0; box-shadow:0 30px 90px rgba(0,0,0,.6); }
+  .stagewrap::before{
+    content:''; position:absolute; inset:0; z-index:0;
+    background-color:#2a2a2e;
+    background-image:
+      linear-gradient(45deg,#1e1e21 25%,transparent 25%,transparent 75%,#1e1e21 75%),
+      linear-gradient(45deg,#1e1e21 25%,transparent 25%,transparent 75%,#1e1e21 75%);
+    background-size:28px 28px; background-position:0 0,14px 14px;
+  }
+  .stagewrap[data-bg="black"]::before{ background:#000; }
+  .stagewrap[data-bg="white"]::before{ background:#fff; }
+  /* a stand-in for footage: something busy and mid-key, which is the real test */
+  .stagewrap[data-bg="plate"]::before{
+    background:
+      radial-gradient(58% 74% at 22% 26%, #6c7f8d 0%, transparent 62%),
+      radial-gradient(46% 60% at 76% 68%, #b08050 0%, transparent 60%),
+      linear-gradient(148deg,#2b3138 0%,#59493c 52%,#20242a 100%);
+  }
+  #stage{ position:relative; z-index:1; display:block; max-width:min(1100px,92vw); height:auto; }
+
+  .ui{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:center; max-width:min(1100px,92vw); width:100%; }
+  .ui button, .ui select{
+    font:inherit; color:var(--bone); background:rgba(255,255,255,.05);
+    border:1px solid var(--line); border-radius:4px; padding:7px 12px; cursor:pointer;
+    letter-spacing:.09em; text-transform:uppercase; font-size:10px;
+  }
+  .ui button:hover, .ui select:hover{ border-color:var(--amber); color:var(--amber); }
+  .ui button.on{ border-color:var(--amber); color:var(--amber); }
+  #scrub{ flex:1; min-width:220px; accent-color:var(--amber); }
+  .read{ font-variant-numeric:tabular-nums; color:var(--muted); letter-spacing:.08em; min-width:104px; text-align:right; font-size:10px; }
+  .hint{ color:var(--muted); font-size:10.5px; letter-spacing:.05em; text-align:center; max-width:min(1100px,92vw); line-height:1.6; }
+  .hint b{ color:var(--bone); font-weight:500; }
+
+  /* render mode: nothing on the page but the canvas, on nothing */
+  body.render{ background:transparent; display:block; }
+  body.render .ui,body.render .hint,body.render .stagewrap::before{ display:none; }
+  body.render .stagewrap{ box-shadow:none; }
+  body.render #stage{ max-width:none; }
+</style>
+</head>
+<body>
+
+<div class="stagewrap" id="wrap" data-bg="checker"><canvas id="stage"></canvas></div>
+
+<div class="ui">
+  <select id="comp" title="Composition"></select>
+  <button id="play">Play</button>
+  <input type="range" id="scrub" min="0" max="1000" value="0">
+  <span class="read" id="read">0.00s / 0.00s</span>
+  <button class="bg" data-bg="checker">Alpha</button>
+  <button class="bg" data-bg="plate">Plate</button>
+  <button class="bg" data-bg="black">Black</button>
+  <button class="bg" data-bg="white">White</button>
+  <button id="blur">Blur off</button>
+</div>
+<p class="hint">
+  Everything is a pure function of <b>t</b>. The checkerboard is the transparency you will key over —
+  <b>Plate</b> stands in for footage. Render with <b>node render.mjs --comp &lt;name&gt;</b>.
+</p>
+
+<script>
+/* =====================================================================
+   A motion-graphics engine for keyable overlays.
+
+   One rule holds the whole thing up: the frame is a pure function of time.
+   Nothing accumulates, nothing reads the wall clock, nothing calls
+   Math.random() without a seed. Ask for t = 2.318 twice and you get the
+   same pixels — which is what makes frame-exact rendering, retakes and
+   sub-frame motion blur possible at all.
+
+   Alpha is the other half. These are overlays: they are composited over
+   footage nobody has shot yet, so the background is genuinely nothing.
+   Canvas compositing runs in premultiplied space, so 'lighter' sums both
+   colour and coverage — a glow drawn that way carries its own alpha and
+   keys correctly. That is the reason this is Canvas 2D and not WebGL,
+   where an additive pass over a transparent clear leaves a halo whose
+   alpha is wrong and whose edges go dark on the timeline.
+   ===================================================================== */
+(function () {
+'use strict';
+
+/* ------------------------------------------------------------- 0 · math */
+var Q     = new URLSearchParams(location.search);
+var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+var sat   = function (v) { return clamp(v, 0, 1); };
+var lerp  = function (a, b, t) { return a + (b - a) * t; };
+var TAU   = Math.PI * 2;
+
+/* deterministic noise — a seeded generator, never Math.random() */
+function rng(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+var E = {
+  linear:  function (t) { return t; },
+  out:     function (t) { return 1 - Math.pow(1 - t, 3); },
+  outQuint:function (t) { return 1 - Math.pow(1 - t, 5); },
+  outExpo: function (t) { return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t); },
+  inOut:   function (t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; },
+  in:      function (t) { return t * t * t; },
+  /* overshoot, for anything that should feel struck rather than placed */
+  back:    function (t) { var c = 1.70158, u = t - 1; return 1 + (c + 1) * u * u * u + c * u * u; },
+  /* a settling spring — decaying oscillation, ends exactly at 1 */
+  spring:  function (t) { return t >= 1 ? 1 : 1 - Math.pow(2, -9 * t) * Math.cos(t * 13.5); }
+};
+
+/* The timeline primitive. seg() is a window on the clock: 0 before `at`,
+   1 after `at + dur`, eased in between. Every animation in every comp is
+   built from these, which is why nothing here needs a tween library or a
+   state machine — the value at any t is computed, never stepped. */
+function seg(t, at, dur, ease) {
+  if (dur <= 0) return t >= at ? 1 : 0;
+  return (ease || E.out)(sat((t - at) / dur));
+}
+/* the same window run backwards, for exits */
+function segOut(t, at, dur, ease) { return 1 - seg(t, at, dur, ease); }
+/* a window that rises, holds and falls — one call for a full appearance */
+function pulse(t, at, rise, hold, fall, ease) {
+  return seg(t, at, rise, ease) * segOut(t, at + rise + hold, fall, ease || E.inOut);
+}
+
+/* ------------------------------------------------------------ 1 · paint */
+var PAL = {
+  bone:   '#f4efe7',
+  boneDim:'#c8c1b6',
+  muted:  '#9a938a',
+  amber:  '#ffb04a',
+  ember:  '#ff6a3d',
+  ink:    '#0b0b0d'
+};
+var SANS  = "'Inter',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif";
+var SERIF = "'Playfair Display',Georgia,'Times New Roman',serif";
+
+function rrect(c, x, y, w, h, r) {
+  r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+/* Type over footage has no background to sit on, so it carries its own.
+   A soft dark spread under every glyph is the difference between legible
+   on any plate and legible only on the one you previewed against. */
+function shadow(c, blur, alpha, dy) {
+  c.shadowColor = 'rgba(0,0,0,' + (alpha === undefined ? .55 : alpha) + ')';
+  c.shadowBlur = blur === undefined ? 22 : blur;
+  c.shadowOffsetY = dy || 0;
+}
+function noShadow(c) { c.shadowColor = 'transparent'; c.shadowBlur = 0; c.shadowOffsetY = 0; }
+
+/* Draw into a scratch layer, then composite the layer with the shadow.
+
+   A canvas shadow is clipped by whatever clip is in force, so setting one
+   inside a mask stamps the mask's own rectangle into the alpha — which is
+   invisible over black and shows up as a faint box the moment the overlay
+   lands on real footage. Masking here and shadowing on the way out keeps
+   the softness attached to the glyphs instead of to the mask. */
+var LAYER = null;
+function layer(c, W, H, blur, alpha, dy, fn) {
+  if (!LAYER || LAYER.width !== W || LAYER.height !== H) {
+    LAYER = document.createElement('canvas'); LAYER.width = W; LAYER.height = H;
+  }
+  var lc = LAYER.getContext('2d');
+  lc.setTransform(1, 0, 0, 1, 0, 0);
+  lc.clearRect(0, 0, W, H);
+  lc.save(); fn(lc); lc.restore();
+  c.save();
+  shadow(c, blur, alpha, dy);
+  c.drawImage(LAYER, 0, 0);
+  c.restore();
+}
+
+/* letter-spaced text — canvas has no tracking, so it is drawn per glyph */
+function tracked(c, text, x, y, track, align) {
+  var i, w = 0, chars = String(text).split('');
+  for (i = 0; i < chars.length; i++) w += c.measureText(chars[i]).width + track;
+  w -= track;
+  var px = align === 'center' ? x - w / 2 : (align === 'right' ? x - w : x);
+  for (i = 0; i < chars.length; i++) {
+    c.fillText(chars[i], px, y);
+    px += c.measureText(chars[i]).width + track;
+  }
+  return w;
+}
+function trackedWidth(c, text, track) {
+  var i, w = 0, chars = String(text).split('');
+  for (i = 0; i < chars.length; i++) w += c.measureText(chars[i]).width + track;
+  return w - track;
+}
+/* greedy wrap against a pixel width, returns lines */
+function wrap(c, text, maxW) {
+  var words = String(text).split(/\s+/), lines = [], line = '';
+  for (var i = 0; i < words.length; i++) {
+    var test = line ? line + ' ' + words[i] : words[i];
+    if (c.measureText(test).width > maxW && line) { lines.push(line); line = words[i]; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+/* count a number up, holding its format steady so it never jitters width */
+function counted(v, dp) { return v.toFixed(dp || 0); }
+
+/* ------------------------------------------------------------- 2 · glow
+   A bright-pass and three blurred scales, summed back with 'lighter'.
+   Because canvas composites premultiplied, this adds coverage as well as
+   colour: the halo arrives with its own alpha and keys as light rather
+   than as a grey rectangle. */
+var GLOW = { b: null };
+function glowPass(src, out, amount) {
+  if (!amount) return;
+  var W = src.width, H = src.height;
+  if (!GLOW.b || GLOW.b.width !== W || GLOW.b.height !== H) {
+    GLOW.b = document.createElement('canvas'); GLOW.b.width = W; GLOW.b.height = H;
+  }
+  var gb = GLOW.b.getContext('2d');
+
+  /* The bright pass is the source itself, unmodified — and that is the
+     whole trick. An earlier version filled flat white through 'source-in',
+     which keys on *coverage* rather than luminance: the drop shadows and
+     the dimmed back-catalogue lines all bloomed just as hard as the white
+     type, and a wide blur turned a block of captions into one glowing
+     rectangle sitting on the footage. Blurring the source directly makes
+     the glow luminance-weighted for free — black shadow pixels add nothing
+     under 'lighter', amber stays amber, and only what is actually bright
+     spills. The radii stay tight for the same reason: past roughly 2.5% of
+     frame width the spill stops reading as light on type and starts
+     reading as a lifted box. */
+  var scales = [W * .003, W * .009, W * .024];
+  var weight = [.44, .26, .13];
+  out.save();
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  out.globalCompositeOperation = 'lighter';
+  for (var i = 0; i < scales.length; i++) {
+    gb.setTransform(1, 0, 0, 1, 0, 0);
+    gb.clearRect(0, 0, W, H);
+    gb.filter = 'blur(' + scales[i].toFixed(2) + 'px)';
+    gb.drawImage(src, 0, 0);
+    gb.filter = 'none';
+    out.globalAlpha = amount * weight[i];
+    out.drawImage(GLOW.b, 0, 0);
+  }
+  out.restore();
+}
+
+/* ==================================================================
+   3 · the compositions
+   Each is { w, h, dur, glow, draw(c, t, S) } where S carries the frame's
+   own dimensions. draw() may be called for any t, in any order, more than
+   once — so it must never mutate anything outside its own scope.
+   ================================================================== */
+var COMPS = {};
+
+/* ---------------------------------------------------- title card / sting
+   Rules strike out from the centre, the wordmark rises out of a mask a
+   letter at a time, a sweep of light crosses it, and the whole thing
+   retracts the way it arrived. 5 seconds, built to sit over an establishing
+   shot. Change the three strings and it is your card. */
+var STING = {
+  eyebrow: 'EST. 2019 — PORTLAND, OR',
+  title:   "MIKE'S",
+  sub:     'Five honest things, and fire.'
+};
+COMPS.sting = {
+  w: 1920, h: 1080, dur: 5.0, glow: .70,
+  draw: function (c, t, S) {
+    var cx = S.w / 2, cy = S.h / 2, k = S.w / 1920;      /* one scale factor */
+    /* the whole card leaves together, so every element multiplies by this */
+    var out = segOut(t, 4.15, .70, E.inOut);
+    if (out <= 0) return;
+
+    /* — the two rules, drawn from the centre outward */
+    var ruleW = 470 * k, rise = seg(t, 0.05, .85, E.outExpo) * out;
+    c.save();
+    c.globalAlpha = rise;
+    shadow(c, 18 * k, .5);
+    [-1, 1].forEach(function (s) {
+      var y = cy + s * 118 * k;
+      var g = c.createLinearGradient(cx - ruleW / 2, 0, cx + ruleW / 2, 0);
+      g.addColorStop(0, 'rgba(255,176,74,0)');
+      g.addColorStop(.5, PAL.amber);
+      g.addColorStop(1, 'rgba(255,176,74,0)');
+      c.fillStyle = g;
+      c.fillRect(cx - (ruleW * rise) / 2, y, ruleW * rise, Math.max(1, 1.4 * k));
+    });
+    c.restore();
+
+    /* — eyebrow: tracking settles from wide to set as it fades up */
+    var ev = seg(t, .30, .95, E.outExpo) * out;
+    if (ev > 0) {
+      c.save();
+      c.globalAlpha = ev;
+      c.font = '500 ' + (15 * k).toFixed(1) + 'px ' + SANS;
+      c.fillStyle = PAL.boneDim;
+      c.textBaseline = 'alphabetic';
+      shadow(c, 16 * k, .6);
+      tracked(c, STING.eyebrow, cx, cy - 152 * k, lerp(26 * k, 6.4 * k, ev), 'center');
+      c.restore();
+    }
+
+    /* — the wordmark, a letter at a time out of a hard mask */
+    var size = 178 * k;
+    c.font = '500 ' + size + 'px ' + SERIF;
+    var chars = STING.title.split('');
+    var track = 8 * k;
+    var total = trackedWidth(c, STING.title, track);
+    var baseline = cy + 60 * k;
+
+    /* every letter is masked inside the layer; the shadow is applied once,
+       to the assembled word, on the way out */
+    layer(c, S.w, S.h, 34 * k, .62, 3 * k, function (lc) {
+      lc.font = '500 ' + size + 'px ' + SERIF;
+      lc.textBaseline = 'alphabetic';
+      var lx = cx - total / 2;
+      for (var i = 0; i < chars.length; i++) {
+        var cw = lc.measureText(chars[i]).width;
+        var a = seg(t, .55 + i * .055, .95, E.outExpo);
+        if (a > 0) {
+          lc.save();
+          /* a hard clip on the band the letter rises into, so the glyph is
+             genuinely cut off at the baseline rather than faded */
+          lc.beginPath();
+          lc.rect(lx - 4 * k, baseline - size * 1.02, cw + 8 * k, size * 1.28);
+          lc.clip();
+          lc.globalAlpha = out * sat(a * 1.6);
+          lc.fillStyle = PAL.bone;
+          lc.fillText(chars[i], lx, baseline + (1 - a) * size * 1.05);
+          lc.restore();
+        }
+        lx += cw + track;
+      }
+    });
+
+    /* — the sweep: a narrow diagonal band of light clipped to the type */
+    var sw = seg(t, 1.15, 1.05, E.inOut);
+    if (sw > 0 && sw < 1) {
+      c.save();
+      c.globalAlpha = out * Math.sin(sw * Math.PI) * .85;
+      c.globalCompositeOperation = 'lighter';
+      /* re-draw the word as the clip region */
+      c.beginPath();
+      var sx = cx - total / 2;
+      for (var j = 0; j < chars.length; j++) {
+        var w2 = c.measureText(chars[j]).width;
+        c.rect(sx, baseline - size * .78, w2, size * .96);
+        sx += w2 + track;
+      }
+      c.clip();
+      var band = S.w * .34;
+      var pos = lerp(-band, S.w + band, sw);
+      var lg = c.createLinearGradient(pos - band / 2, cy - 200 * k, pos + band / 2, cy + 200 * k);
+      lg.addColorStop(0, 'rgba(255,176,74,0)');
+      lg.addColorStop(.5, 'rgba(255,214,160,.95)');
+      lg.addColorStop(1, 'rgba(255,176,74,0)');
+      c.fillStyle = lg;
+      c.fillRect(0, cy - 260 * k, S.w, 520 * k);
+      c.restore();
+    }
+
+    /* — the line underneath, arriving last and leaving first */
+    var sv = seg(t, 1.45, .9, E.outExpo) * out;
+    if (sv > 0) {
+      c.save();
+      c.globalAlpha = sv;
+      c.font = 'italic 500 ' + (30 * k).toFixed(1) + 'px ' + SERIF;
+      c.fillStyle = PAL.amber;
+      c.textAlign = 'center';
+      shadow(c, 20 * k, .6);
+      c.fillText(STING.sub, cx, cy + 172 * k + (1 - sv) * 14 * k);
+      c.restore();
+    }
+  }
+};
+
+/* ------------------------------------------------------ kinetic captions
+   Lines arrive on their own beat and push the stack upward; older lines
+   dim and drift. Emphasis words take the accent colour and a little extra
+   weight. Retime the whole piece by editing one column of numbers. */
+var SCRIPT = [
+  { t: 0.20, text: 'Nothing here is modelled.' },
+  { t: 1.25, text: 'No files. No photographs.' },
+  { t: 2.35, text: 'Every surface is drawn', },
+  { t: 3.20, text: 'at load, from noise.', hot: 'noise.' },
+  { t: 4.40, text: 'It is math', hot: 'math' },
+  { t: 5.15, text: 'all the way down.', hot: 'down.' }
+];
+COMPS.kinetic = {
+  w: 1920, h: 1080, dur: 8.0, glow: .18,
+  draw: function (c, t, S) {
+    var k = S.w / 1920;
+    var size = 62 * k, lead = 84 * k;
+    var baseY = S.h - 190 * k;                 /* the newest line sits here */
+    var out = segOut(t, 7.1, .75, E.inOut);
+    if (out <= 0) return;
+
+    /* how many lines have landed, as a continuous value — the stack rides
+       it, so the push upward is driven by the same clock as the words */
+    var landed = 0, i;
+    for (i = 0; i < SCRIPT.length; i++) landed += seg(t, SCRIPT[i].t, .48, E.outQuint);
+
+    c.font = '500 ' + size.toFixed(1) + 'px ' + SANS;
+    c.textBaseline = 'alphabetic';
+
+    for (i = 0; i < SCRIPT.length; i++) {
+      var L = SCRIPT[i];
+      var a = seg(t, L.t, .52, E.outQuint);
+      if (a <= 0) continue;
+      /* age in lines: 0 while newest, growing as later lines arrive */
+      var age = clamp(landed - (i + 1), 0, SCRIPT.length);
+      var y = baseY - age * lead - (1 - a) * 22 * k;
+      var fade = clamp(1 - age * .21, .26, 1);
+
+      /* words carry their own small stagger inside the line */
+      var words = L.text.split(' ');
+      var gap = c.measureText(' ').width;
+      var lineW = 0, j;
+      for (j = 0; j < words.length; j++) lineW += c.measureText(words[j]).width + gap;
+      lineW -= gap;
+      var x = S.w / 2 - lineW / 2;
+
+      for (j = 0; j < words.length; j++) {
+        var wa = seg(t, L.t + j * .045, .5, E.outQuint);
+        var ww = c.measureText(words[j]).width;
+        var hot = L.hot && words[j] === L.hot;
+        c.save();
+        c.globalAlpha = out * fade * sat(wa * 1.4);
+        /* the arrival is a short rise plus a touch of scale, struck from
+           the word's own baseline so the line never shifts */
+        c.translate(x + ww / 2, y);
+        c.scale(lerp(.94, 1, E.spring(sat(wa))), lerp(.94, 1, E.spring(sat(wa))));
+        c.translate(-(x + ww / 2), 0);
+        c.fillStyle = hot ? PAL.amber : PAL.bone;
+        shadow(c, 26 * k, .68, 2 * k);
+        c.fillText(words[j], x, (1 - wa) * 26 * k);
+        c.restore();
+        x += ww + gap;
+      }
+
+      /* a hairline that draws under the newest line only */
+      if (age < 1) {
+        var ru = seg(t, L.t + .12, .6, E.outExpo) * (1 - age);
+        c.save();
+        c.globalAlpha = out * ru * .8;
+        c.fillStyle = PAL.amber;
+        c.fillRect(S.w / 2 - (lineW * ru) / 2, y + 26 * k, lineW * ru, Math.max(1, 1.6 * k));
+        c.restore();
+      }
+    }
+  }
+};
+
+/* -------------------------------------------------------- data animation
+   Bars grow, figures count, the baseline draws itself. This is the one
+   that earns the method: the whole comp is a function of DATA, so a
+   different set of numbers is a different render, not a different build. */
+var DATA = {
+  eyebrow: 'MEASURED — COLD START, 1920×1080',
+  title:   'Time to first frame',
+  unit:    'ms',
+  rows: [
+    { label: 'Procedural, one file', value: 34,  hot: true },
+    { label: 'Bundled scene + GLB',  value: 128 },
+    { label: 'Framework + loader',   value: 246 },
+    { label: 'Video texture chain',  value: 412 }
+  ]
+};
+COMPS.data = {
+  w: 1920, h: 1080, dur: 7.0, glow: .26,
+  draw: function (c, t, S) {
+    var k = S.w / 1920;
+    var out = segOut(t, 6.1, .75, E.inOut);
+    if (out <= 0) return;
+
+    var left = 260 * k, right = S.w - 300 * k, span = right - left;
+    var top = 330 * k, rowH = 116 * k;
+    var max = DATA.rows.reduce(function (m, r) { return Math.max(m, r.value); }, 0) * 1.06;
+
+    /* — heading */
+    var hv = seg(t, .10, .8, E.outExpo) * out;
+    if (hv > 0) {
+      c.save();
+      c.globalAlpha = hv;
+      shadow(c, 20 * k, .6);
+      c.font = '500 ' + (15 * k).toFixed(1) + 'px ' + SANS;
+      c.fillStyle = PAL.amber;
+      tracked(c, DATA.eyebrow, left, top - 118 * k, lerp(18 * k, 5.6 * k, hv), 'left');
+      c.font = '500 ' + (74 * k).toFixed(1) + 'px ' + SERIF;
+      c.fillStyle = PAL.bone;
+      c.textAlign = 'left';
+      c.globalAlpha = hv;
+      c.fillText(DATA.title, left, top - 46 * k + (1 - hv) * 16 * k);
+      c.restore();
+    }
+
+    /* — the baseline, drawn downward, which the bars then hang off */
+    var bl = seg(t, .45, .85, E.outExpo) * out;
+    if (bl > 0) {
+      c.save();
+      c.globalAlpha = bl * .5;
+      c.fillStyle = PAL.bone;
+      c.fillRect(left - 2 * k, top - 10 * k, Math.max(1, 1.4 * k), (DATA.rows.length * rowH + 6 * k) * bl);
+      c.restore();
+    }
+
+    for (var i = 0; i < DATA.rows.length; i++) {
+      var R = DATA.rows[i];
+      var at = .70 + i * .16;
+      var grow = seg(t, at, 1.15, E.outExpo);
+      var app  = seg(t, at, .55, E.outQuint);
+      if (app <= 0) continue;
+      var y = top + i * rowH;
+      var bw = span * (R.value / max) * grow;
+      var bh = 40 * k;
+
+      /* label, arriving from the baseline */
+      c.save();
+      c.globalAlpha = out * app;
+      shadow(c, 18 * k, .62);
+      c.font = '400 ' + (23 * k).toFixed(1) + 'px ' + SANS;
+      c.fillStyle = R.hot ? PAL.bone : PAL.muted;
+      c.textAlign = 'left';
+      c.fillText(R.label, left + 16 * k - (1 - app) * 18 * k, y - 12 * k);
+      c.restore();
+
+      /* the bar */
+      c.save();
+      c.globalAlpha = out * app;
+      var g = c.createLinearGradient(left, 0, left + Math.max(bw, 1), 0);
+      if (R.hot) { g.addColorStop(0, 'rgba(255,106,61,.92)'); g.addColorStop(1, PAL.amber); }
+      else       { g.addColorStop(0, 'rgba(244,239,231,.16)'); g.addColorStop(1, 'rgba(244,239,231,.34)'); }
+      c.fillStyle = g;
+      shadow(c, 22 * k, .5, 3 * k);
+      rrect(c, left, y, bw, bh, 2 * k);
+      c.fill();
+      noShadow(c);
+      /* a bright cap on the growing end, so the bar reads as still moving */
+      if (grow < 1 && bw > 4 * k) {
+        c.globalAlpha = out * (1 - grow) * .9;
+        c.fillStyle = '#fff6e6';
+        c.fillRect(left + bw - 2.5 * k, y, 2.5 * k, bh);
+      }
+      c.restore();
+
+      /* the figure, counting as the bar grows, in tabular figures so the
+         digits never shuffle the layout while they change */
+      c.save();
+      c.globalAlpha = out * app;
+      shadow(c, 18 * k, .62);
+      c.font = '500 ' + (40 * k).toFixed(1) + 'px ' + SANS;
+      c.textAlign = 'left';
+      c.fillStyle = R.hot ? PAL.amber : PAL.boneDim;
+      var vx = left + bw + 20 * k;
+      var txt = counted(R.value * grow, 0);
+      c.fillText(txt, vx, y + bh - 8 * k);
+      var tw = c.measureText(txt).width;
+      c.font = '400 ' + (19 * k).toFixed(1) + 'px ' + SANS;
+      c.fillStyle = PAL.muted;
+      c.fillText(DATA.unit, vx + tw + 7 * k, y + bh - 8 * k);
+      c.restore();
+    }
+  }
+};
+
+/* =========================================================== 4 · driver */
+var stage = document.getElementById('stage');
+var ctx = stage.getContext('2d');
+var wrapEl = document.getElementById('wrap');
+
+var RENDER = Q.get('render') === '1';
+var name = Q.get('comp') || 'sting';
+if (!COMPS[name]) name = 'sting';
+var W = parseInt(Q.get('w') || COMPS[name].w, 10);
+var H = parseInt(Q.get('h') || COMPS[name].h, 10);
+var SAMPLES = parseInt(Q.get('samples') || '1', 10);      /* motion blur */
+var SHUTTER = parseFloat(Q.get('shutter') || '0.55');     /* of a frame */
+var FPS = parseFloat(Q.get('fps') || '30');
+var GLOW_MUL = Q.has('glow') ? parseFloat(Q.get('glow')) : 1;   /* override, for isolating passes */
+
+var buf = document.createElement('canvas');               /* one sub-frame */
+var bctx = buf.getContext('2d');
+
+function size(w, h) {
+  W = w; H = h;
+  stage.width = W; stage.height = H;
+  buf.width = W; buf.height = H;
+  stage.style.width = RENDER ? W + 'px' : '';
+  stage.style.height = RENDER ? H + 'px' : '';
+}
+size(W, H);
+
+/* Draw exactly one sub-frame into `buf`, glow included. */
+function drawOnce(t) {
+  var comp = COMPS[name];
+  bctx.setTransform(1, 0, 0, 1, 0, 0);
+  bctx.clearRect(0, 0, W, H);
+  bctx.save();
+  comp.draw(bctx, clamp(t, 0, comp.dur), { w: W, h: H });
+  bctx.restore();
+  noShadow(bctx);
+  glowPass(buf, bctx, comp.glow * GLOW_MUL);
+}
+
+/* Motion blur, done the cheap correct way. Canvas composites premultiplied,
+   so drawing each sub-frame with globalAlpha = 1/N under 'lighter' sums
+   premultiplied colour *and* coverage — which is exactly the premultiplied
+   average, and therefore the right answer for straight-alpha output. No
+   pixel loop, no unpremultiply step, and the GPU does the work. */
+function frame(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if (SAMPLES <= 1) {
+    drawOnce(t);
+    ctx.drawImage(buf, 0, 0);
+    return;
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 1 / SAMPLES;
+  for (var i = 0; i < SAMPLES; i++) {
+    drawOnce(t + ((i / (SAMPLES - 1)) - .5) * (SHUTTER / FPS));
+    ctx.drawImage(buf, 0, 0);
+  }
+  ctx.restore();
+}
+
+/* ------------------------------------------------------ the public API */
+var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+window.MG = {
+  ready: ready,
+  list:  function () { return Object.keys(COMPS); },
+  info:  function () { return { comp: name, dur: COMPS[name].dur, w: W, h: H, fps: FPS, samples: SAMPLES }; },
+  seek:  function (t) { frame(t); return true; },
+  setComp: function (n) {
+    if (!COMPS[n]) return false;
+    name = n;
+    if (!Q.get('w')) size(COMPS[n].w, COMPS[n].h);
+    frame(0);
+    return true;
+  },
+  setSamples: function (n) { SAMPLES = Math.max(1, n | 0); }
+};
+
+/* --------------------------------------------------------- 5 · preview */
+if (RENDER) {
+  document.body.classList.add('render');
+  ready.then(function () { frame(0); });
+} else {
+  var sel = document.getElementById('comp');
+  Object.keys(COMPS).forEach(function (n) {
+    var o = document.createElement('option');
+    o.value = n; o.textContent = n;
+    if (n === name) o.selected = true;
+    sel.appendChild(o);
+  });
+
+  var scrub = document.getElementById('scrub');
+  var read  = document.getElementById('read');
+  var playB = document.getElementById('play');
+  var blurB = document.getElementById('blur');
+  var playing = false, t0 = 0, tAt = 0;
+
+  function show(t) {
+    var d = COMPS[name].dur;
+    tAt = clamp(t, 0, d);
+    frame(tAt);
+    scrub.value = String((tAt / d) * 1000);
+    read.textContent = tAt.toFixed(2) + 's / ' + d.toFixed(2) + 's';
+  }
+  ready.then(function () { show(0); });
+
+  sel.addEventListener('change', function () { window.MG.setComp(sel.value); show(0); });
+  scrub.addEventListener('input', function () {
+    playing = false; playB.textContent = 'Play'; playB.classList.remove('on');
+    show((+scrub.value / 1000) * COMPS[name].dur);
+  });
+  playB.addEventListener('click', function () {
+    playing = !playing;
+    playB.textContent = playing ? 'Pause' : 'Play';
+    playB.classList.toggle('on', playing);
+    t0 = performance.now() - tAt * 1000;
+  });
+  blurB.addEventListener('click', function () {
+    SAMPLES = SAMPLES > 1 ? 1 : 6;
+    blurB.textContent = SAMPLES > 1 ? 'Blur ×6' : 'Blur off';
+    blurB.classList.toggle('on', SAMPLES > 1);
+    show(tAt);
+  });
+  [].slice.call(document.querySelectorAll('.bg')).forEach(function (b) {
+    b.addEventListener('click', function () {
+      wrapEl.dataset.bg = b.dataset.bg;
+      [].slice.call(document.querySelectorAll('.bg')).forEach(function (o) { o.classList.toggle('on', o === b); });
+    });
+  });
+
+  (function tick(now) {
+    if (playing) {
+      var t = (now - t0) / 1000;
+      if (t > COMPS[name].dur) { t0 = now; t = 0; }     /* loop the preview */
+      show(t);
+    }
+    requestAnimationFrame(tick);
+  })(performance.now());
+}
+})();
+</script>
+</body>
+</html>
