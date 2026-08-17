@@ -1,0 +1,2091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mike's — Five honest things, and fire</title>
+<meta name="description" content="An artisanal burger house in the dark. Five chapters, five layers, taken apart one at a time and put back together.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230b0b0d'/%3E%3Cellipse cx='16' cy='12' rx='10' ry='5' fill='%23ff9d3b'/%3E%3Crect x='6' y='15' width='20' height='2.6' fill='%23f2ece3' fill-opacity='.75'/%3E%3Cellipse cx='16' cy='21' rx='10' ry='4' fill='%23c9a24a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500&display=swap">
+<style>
+/* ================================================================= tokens */
+:root{
+  --ink:#0b0b0d;            /* the room */
+  --ink-2:#121215;          /* raised black */
+  --bone:#f2ece3;           /* warm paper white */
+  --bone-dim:#b4aca1;
+  --muted:#7c746b;
+  --line:rgba(242,236,227,.12);
+  --line-soft:rgba(242,236,227,.06);
+  --amber:#ff9d3b;          /* the lamps */
+  --ember:#ff5f2e;
+  --gold:#c9a24a;
+  --serif:'Playfair Display','Cormorant Garamond',ui-serif,Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+  --pad:clamp(20px,3.6vw,64px);
+  --nav-h:78px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --ease-io:cubic-bezier(.65,0,.35,1);
+}
+*,*::before,*::after{ box-sizing:border-box; }
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0; background:var(--ink); color:var(--bone);
+  font-family:var(--sans); font-weight:300; font-size:16px; line-height:1.65;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;
+}
+body.is-locked{ overflow:hidden; height:100vh; }
+::selection{ background:var(--amber); color:#0b0b0d; }
+img{ max-width:100%; display:block; }
+a{ color:inherit; text-decoration:none; }
+button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; }
+
+/* ================================================================= layers */
+#gl{ position:fixed; inset:0; width:100%; height:100%; display:block; z-index:0; background:#0b0b0d; }
+#vignette{
+  position:fixed; inset:0; z-index:55; pointer-events:none;
+  background:radial-gradient(128% 96% at 50% 44%, transparent 38%, rgba(2,2,3,.62) 100%);
+}
+#grain{
+  position:fixed; inset:-1px; z-index:60; pointer-events:none;
+  opacity:.042; mix-blend-mode:overlay; background-repeat:repeat; background-size:170px 170px;
+}
+.page{ position:relative; z-index:10; }
+
+/* =================================================================== type */
+.label{
+  font-size:10px; font-weight:500; letter-spacing:.24em; text-transform:uppercase;
+  color:var(--bone-dim); text-shadow:0 1px 16px rgba(0,0,0,.9);
+}
+.label .sep{ color:var(--muted); margin:0 .5em; }
+.label .hot{ color:var(--amber); }
+h1,h2,h3,h4{ margin:0; font-weight:400; }
+.display{
+  font-family:var(--serif); font-weight:400; line-height:1.02; letter-spacing:-.018em;
+  text-shadow:0 2px 40px rgba(0,0,0,.8);
+}
+.d-hero{ font-size:clamp(40px,6.6vw,102px); }
+.d-sec{ font-size:clamp(30px,4.1vw,66px); }
+.d-sm{ font-size:clamp(28px,3.6vw,52px); }
+.display em{ font-style:italic; color:var(--gold); }
+.lead{ font-size:clamp(15px,1.1vw,18px); line-height:1.7; color:#cdc5ba; max-width:44ch; text-shadow:0 1px 22px rgba(0,0,0,.95); }
+.body{ font-size:14.5px; line-height:1.72; color:#a49c92; max-width:42ch; text-shadow:0 1px 20px rgba(0,0,0,.95); }
+.rule{ height:1px; background:var(--line); border:0; margin:0; }
+
+/* ================================================================ reveals */
+[data-rv]{ opacity:0; }
+[data-rv="up"]{ transform:translate3d(0,30px,0); }
+[data-rv="fade"]{ transform:none; }
+[data-rv="left"]{ transform:translate3d(-24px,0,0); }
+[data-rv].rv-in{
+  opacity:1; transform:none;
+  transition:opacity 1s var(--ease-out), transform 1.15s var(--ease-out);
+}
+.word-mask{ display:inline-block; overflow:hidden; vertical-align:bottom; }
+.word{
+  display:inline-block; opacity:0; transform:translate3d(0,110%,0);
+  transition:transform .9s var(--ease-out), opacity .55s var(--ease-out);
+  transition-delay:var(--wd,0ms); will-change:transform,opacity;
+}
+.rv-in .word,.rv-in.word-split .word{ opacity:1; transform:none; }
+
+/* ============================================================= preloader */
+#pre{
+  position:fixed; inset:0; z-index:100; background:#0b0b0d;
+  display:flex; align-items:center; justify-content:center;
+  transition:opacity .9s var(--ease), visibility .9s;
+}
+#pre.done{ opacity:0; visibility:hidden; pointer-events:none; }
+.pre-in{ width:min(440px,76vw); text-align:center; }
+.pre-mark{ font-family:var(--serif); font-size:34px; letter-spacing:.06em; margin-bottom:26px; color:var(--bone); }
+.pre-mark i{ font-style:italic; color:var(--amber); }
+.pre-bar{ position:relative; height:1px; background:rgba(242,236,227,.14); overflow:hidden; }
+.pre-bar i{ position:absolute; inset:0 100% 0 0; background:var(--amber); transition:right .35s linear; }
+.pre-meta{
+  display:flex; justify-content:space-between; margin-top:12px;
+  font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted);
+}
+.pre-meta b{ font-weight:500; color:var(--bone-dim); font-variant-numeric:tabular-nums; }
+
+/* =================================================================== nav */
+.nav{
+  /* width comes from --vw, not right:0 — a fixed element resolves its insets
+     against the initial containing block, which on a phone runs wider than
+     the visual viewport and carries the burger off the right edge */
+  position:fixed; top:0; left:0; width:var(--vw,100%); height:var(--nav-h); z-index:50;
+  display:flex; align-items:center; gap:28px; padding:0 var(--pad);
+  transition:transform .55s var(--ease), background .5s;
+}
+.nav::before{
+  content:''; position:absolute; inset:0; z-index:-1; pointer-events:none; opacity:0;
+  background:linear-gradient(to bottom, rgba(11,11,13,.9), rgba(11,11,13,0));
+  transition:opacity .5s var(--ease);
+}
+.nav.stuck::before{ opacity:1; }
+.nav.hide{ transform:translateY(-100%); }
+.brand{ display:flex; align-items:baseline; gap:10px; margin-right:auto; }
+.brand b{ font-family:var(--serif); font-size:24px; font-weight:500; letter-spacing:.02em; }
+.brand i{ font-style:normal; font-size:9px; letter-spacing:.26em; text-transform:uppercase; color:var(--muted); }
+.nav-links{ display:flex; gap:30px; }
+.nav-link{ position:relative; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--bone-dim); transition:color .4s; }
+.nav-link::after{
+  content:''; position:absolute; left:0; right:100%; bottom:-6px; height:1px;
+  background:var(--amber); transition:right .5s var(--ease-out);
+}
+.nav-link:hover,.nav-link.on{ color:var(--bone); }
+.nav-link.on::after{ right:0; }
+.nav-cta{
+  font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+  border:1px solid var(--line); border-radius:999px; padding:9px 18px; transition:.45s var(--ease);
+}
+.nav-cta:hover{ border-color:var(--amber); color:var(--amber); }
+.nav-burger{ display:none; width:26px; height:16px; position:relative; }
+.nav-burger i{ position:absolute; left:0; right:0; height:1px; background:var(--bone); transition:.45s var(--ease); }
+.nav-burger i:first-child{ top:3px; } .nav-burger i:last-child{ bottom:3px; }
+.nav-burger.active i:first-child{ top:8px; transform:rotate(45deg); }
+.nav-burger.active i:last-child{ bottom:7px; transform:rotate(-45deg); }
+
+/* ================================================================== hero */
+.hero{
+  position:relative; min-height:100svh; padding:0 var(--pad);
+  display:flex; flex-direction:column; justify-content:space-between;
+}
+.hero-top{ padding-top:calc(var(--nav-h) + clamp(16px,5vh,64px)); max-width:min(660px,52vw); position:relative; z-index:2; }
+.hero-top .lead{ margin-top:26px; }
+.hero-foot{ padding-bottom:clamp(24px,4.4vh,48px); position:relative; z-index:2; }
+.hero-cue{ display:flex; align-items:center; gap:12px; margin-bottom:34px; font-size:10px; letter-spacing:.24em; text-transform:uppercase; color:var(--muted); }
+.hero-cue .track{ display:block; width:60px; height:1px; background:var(--line); position:relative; overflow:hidden; }
+.hero-cue .track i{ position:absolute; inset:0; background:var(--amber); animation:cue 2.6s var(--ease-io) infinite; }
+@keyframes cue{ 0%{ transform:translateX(-100%);} 55%,100%{ transform:translateX(100%);} }
+.chips{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:clamp(14px,2vw,34px); border-top:1px solid var(--line); padding-top:20px; }
+.chip{ display:flex; gap:12px; cursor:default; transition:opacity .5s var(--ease); }
+.chip .n{ font-family:var(--serif); font-size:clamp(22px,2.1vw,32px); color:var(--bone); line-height:1; font-variant-numeric:tabular-nums; }
+.chip .tx b{ display:block; font-size:12px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; margin-bottom:5px; }
+.chip .tx p{ margin:0; font-size:12.5px; line-height:1.5; color:var(--muted); max-width:22ch; }
+.chips:hover .chip{ opacity:.42; }
+.chips .chip:hover{ opacity:1; }
+.chips .chip:hover .n{ color:var(--amber); }
+.hero-side{
+  position:absolute; right:var(--pad); top:50%; transform:translateY(-50%);
+  writing-mode:vertical-rl; font-size:10px; letter-spacing:.42em; text-transform:uppercase; color:var(--muted);
+}
+
+/* ============================================================== chapters */
+.sec{
+  position:relative; min-height:118svh; padding:clamp(90px,16vh,190px) var(--pad);
+  display:flex; flex-direction:column; justify-content:center;
+}
+.sec > *:not(.fg){ position:relative; z-index:2; }
+/* A scrim under the reading matter. The stack is a live object behind the
+   type, and on a narrow frame there is nowhere for it to go — so the page
+   darkens the middle of the room rather than moving the food out of it. */
+.sec::before,.fin::before{
+  content:''; position:absolute; inset:0; z-index:1; pointer-events:none;
+  background:radial-gradient(122% 76% at 50% 50%, rgba(11,11,13,.55), rgba(11,11,13,.22) 62%, transparent 88%);
+}
+.sec-head{ display:flex; align-items:center; gap:18px; margin-bottom:clamp(28px,5vh,58px); }
+.sec-head .rule{ flex:1; max-width:min(190px,14vw); }
+/* Three tracks, not two: the middle one is empty on purpose — it is the
+   column the exploded stack lives in on a wide frame. */
+.ch-grid{ display:grid; grid-template-columns:minmax(0,34vw) 1fr minmax(0,27vw); gap:0; align-items:end; }
+.ch-title{ grid-column:1; grid-row:1; }
+.ch-copy{ grid-column:3; grid-row:1; }
+.sec.alt .ch-title{ grid-column:3; }
+.sec.alt .ch-copy{ grid-column:1; }
+.ch-copy .body + .body{ margin-top:18px; }
+.specs{
+  display:flex; flex-wrap:wrap; gap:clamp(18px,2.4vw,44px);
+  margin-top:clamp(34px,6vh,70px); border-top:1px solid var(--line); padding-top:22px;
+}
+.spec b{ display:block; font-family:var(--serif); font-size:clamp(26px,2.8vw,44px); line-height:1; font-variant-numeric:tabular-nums; }
+.spec b em{ font-style:normal; font-size:.44em; letter-spacing:.06em; color:var(--bone-dim); margin-left:.32em; }
+.spec span{ display:block; margin-top:9px; font-size:9.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); }
+.arrowlink{ display:inline-flex; align-items:center; gap:11px; margin-top:30px; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--bone-dim); transition:color .4s; }
+.arrowlink .ar{ width:26px; height:26px; border:1px solid var(--line); border-radius:50%; display:grid; place-items:center; transition:.5s var(--ease); }
+.arrowlink:hover{ color:var(--amber); } .arrowlink:hover .ar{ border-color:var(--amber); transform:translate(3px,-3px); }
+
+/* =============================================================== closing */
+.fin{ text-align:center; align-items:center; justify-content:flex-end; min-height:100svh; padding-bottom:clamp(56px,11vh,120px); }
+.fin .display{ margin:22px 0 26px; }
+.fin .lead{ margin:0 auto; text-align:center; }
+.cta{
+  position:relative; display:inline-flex; align-items:center; gap:12px; margin-top:44px;
+  padding:16px 34px; border:1px solid var(--line); border-radius:999px; overflow:hidden;
+  font-size:11px; letter-spacing:.2em; text-transform:uppercase;
+}
+.cta i.bg{ position:absolute; inset:0; background:var(--amber); transform:translateY(101%); transition:transform .6s var(--ease-out); z-index:0; }
+.cta span,.cta svg{ position:relative; z-index:1; transition:color .5s; }
+.cta:hover i.bg{ transform:none; } .cta:hover span{ color:#0b0b0d; } .cta:hover svg path{ stroke:#0b0b0d; }
+
+/* ================================================================ footer */
+.foot{ position:relative; padding:clamp(70px,12vh,140px) var(--pad) clamp(34px,6vh,60px); border-top:1px solid var(--line-soft); }
+.foot > *:not(.fg){ position:relative; z-index:2; }
+.foot-grid{ display:grid; grid-template-columns:minmax(0,1.5fr) repeat(3,minmax(0,.75fr)); gap:clamp(24px,4vw,62px); }
+.foot-brand b{ font-family:var(--serif); font-size:30px; font-weight:500; display:block; margin-bottom:16px; }
+.foot-brand p{ margin:0; font-size:13px; line-height:1.7; color:var(--muted); max-width:34ch; }
+.foot h4{ font-size:9.5px; letter-spacing:.24em; text-transform:uppercase; color:var(--bone-dim); margin-bottom:16px; }
+.foot ul{ list-style:none; margin:0; padding:0; }
+.foot li{ margin-bottom:9px; font-size:13px; color:var(--muted); transition:color .35s; }
+.foot li a:hover{ color:var(--bone); }
+.foot-base{
+  display:flex; flex-wrap:wrap; gap:16px; justify-content:space-between;
+  margin-top:clamp(46px,8vh,92px); padding-top:22px; border-top:1px solid var(--line-soft);
+  font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted);
+}
+
+/* ========================================================= progress rail */
+.rail{ position:fixed; right:calc(var(--pad) - 6px); top:50%; transform:translateY(-50%); z-index:45; display:flex; flex-direction:column; gap:13px; align-items:center; }
+.rail button{ width:24px; height:10px; display:grid; place-items:center; }
+.rail i{ display:block; width:12px; height:1px; background:rgba(242,236,227,.24); transition:.55s var(--ease-out); }
+.rail button.on i{ width:24px; background:var(--amber); }
+.rail button:hover i{ width:24px; background:var(--bone-dim); }
+
+/* ================================================================ cursor */
+.cur{
+  position:fixed; z-index:80; top:0; left:0; width:26px; height:26px; margin:-13px 0 0 -13px;
+  border:1px solid rgba(242,236,227,.4); border-radius:50%; pointer-events:none; opacity:0;
+  transition:width .35s var(--ease-out), height .35s var(--ease-out), margin .35s var(--ease-out),
+             background .35s, border-color .35s, opacity .3s;
+}
+.cur.act{ width:54px; height:54px; margin:-27px 0 0 -27px; background:rgba(255,157,59,.08); border-color:rgba(255,157,59,.65); }
+@media (hover:hover) and (pointer:fine){ .cur{ opacity:1; } }
+
+/* =============================================== foreground collage (fg) */
+/* The near plane is hosted outside .page: .page is a stacking context at
+   z-index 10, so nothing parented inside it can rise past the nav. */
+#fg-sky{ position:fixed; left:0; top:0; width:0; height:0; z-index:52; pointer-events:none; }
+.fg{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
+.fg.is-active,.fg.is-retiring{
+  position:fixed; left:0; top:0; width:var(--vw,100vw); height:100svh;
+  overflow:visible; transition:opacity .8s var(--ease), filter .8s var(--ease);
+}
+.fg.is-active{ opacity:1; filter:none; }
+.fg.is-retiring{ opacity:0; filter:blur(14px); }
+.fg:not(.is-active):not(.is-retiring){ opacity:0; }
+.fg-el{ position:absolute; opacity:0; transition:opacity .9s var(--ease-out), transform 1.1s var(--ease-out); }
+.is-active .fg-el{ opacity:1; }
+.fg-el[data-in="up"]{ transform:translate3d(0,34px,0); }
+.fg-el[data-in="left"]{ transform:translate3d(-30px,0,0); }
+.fg-el[data-in="right"]{ transform:translate3d(30px,0,0); }
+.is-active .fg-el{ transform:translate3d(var(--px,0px),var(--py,0px),0); }
+
+/* — steam: layered radial washes, blurred, drifting on a long cycle */
+.steam{
+  border-radius:50%; filter:blur(38px); mix-blend-mode:screen;
+  background:radial-gradient(closest-side, rgba(255,205,150,.22), rgba(255,150,70,.09) 46%, transparent 74%);
+  animation:drift 26s var(--ease-io) infinite alternate;
+}
+.steam.cool{ background:radial-gradient(closest-side, rgba(190,215,235,.14), rgba(120,150,180,.06) 48%, transparent 76%); animation-duration:34s; }
+.steam.tight{ filter:blur(22px); animation-duration:19s; }
+@keyframes drift{
+  from{ transform:translate3d(var(--px,0px),var(--py,0px),0) scale(1) rotate(-3deg); }
+  to  { transform:translate3d(calc(var(--px,0px) + 26px),calc(var(--py,0px) - 42px),0) scale(1.14) rotate(4deg); }
+}
+
+/* — callout badges: hairline chips that name the layer on screen */
+.badge{
+  pointer-events:none; padding:13px 17px 14px; min-width:132px;
+  border:1px solid var(--line); border-radius:3px;
+  background:rgba(13,13,15,.52); backdrop-filter:blur(9px); -webkit-backdrop-filter:blur(9px);
+}
+.badge .k{ display:block; font-size:8.5px; letter-spacing:.26em; text-transform:uppercase; color:var(--muted); margin-bottom:7px; }
+.badge b{ display:block; font-family:var(--serif); font-size:19px; font-weight:400; letter-spacing:.01em; }
+.badge b em{ font-style:normal; font-size:.6em; color:var(--amber); margin-left:.4em; letter-spacing:.08em; }
+.badge .tick{ display:block; margin-top:10px; height:1px; background:linear-gradient(90deg,var(--amber),transparent); }
+.badge.round{ border-radius:999px; min-width:0; padding:10px 18px; }
+.badge.round b{ font-family:var(--sans); font-size:10px; letter-spacing:.2em; text-transform:uppercase; }
+/* a hairline leader from the badge toward the layer it names */
+.leader{ height:1px; background:linear-gradient(90deg,transparent,var(--line) 18%,var(--line)); }
+.leader.rev{ background:linear-gradient(270deg,transparent,var(--line) 18%,var(--line)); }
+
+/* — per-chapter placement. Keyed off [data-fg], not the section id, so a
+     stage keeps its composition after being re-parented into #fg-sky. */
+/* Badges live in the top and bottom bands of the frame, never in the middle.
+   The reading columns are vertically centred and the exploded stack owns the
+   gutter between them, so those two strips are the only real estate on the
+   page that is free at every width — which is also why the same placement
+   still works once the columns collapse on a phone. */
+[data-fg="crown"] .s1{ left:-6%;  top:4%;    width:46vw; height:46vw; }
+[data-fg="crown"] .s2{ right:2%;  top:44%;   width:30vw; height:30vw; }
+[data-fg="crown"] .b1{ right:8%;  top:13%; }
+[data-fg="crown"] .l1{ right:calc(8% + 150px); top:calc(13% + 36px); width:clamp(50px,7vw,120px); }
+
+[data-fg="melt"] .s1{ right:-8%; top:10%;   width:50vw; height:50vw; }
+[data-fg="melt"] .s2{ left:2%;   bottom:2%; width:28vw; height:28vw; }
+[data-fg="melt"] .b1{ right:8%;  top:13%; }
+[data-fg="melt"] .l1{ right:calc(8% + 150px); top:calc(13% + 36px); width:clamp(50px,7vw,120px); }
+[data-fg="melt"] .b2{ left:8%;   bottom:11%; }
+
+[data-fg="age"] .s1{ left:-4%;  bottom:-8%; width:56vw; height:56vw; }
+[data-fg="age"] .s2{ right:4%;  top:8%;     width:26vw; height:26vw; }
+[data-fg="age"] .b1{ left:42%;  bottom:11%; }
+[data-fg="age"] .l1{ left:calc(42% + 168px); bottom:calc(11% + 36px); width:clamp(50px,7vw,120px); }
+[data-fg="age"] .b2{ right:8%;  top:13%; }
+
+[data-fg="garden"] .s1{ right:-6%; top:6%;    width:44vw; height:44vw; }
+[data-fg="garden"] .s2{ left:-2%;  bottom:0%; width:34vw; height:34vw; }
+[data-fg="garden"] .b1{ right:8%;  bottom:11%; }
+[data-fg="garden"] .l1{ right:calc(8% + 168px); bottom:calc(11% + 36px); width:clamp(50px,7vw,120px); }
+
+[data-fg="build"] .s1{ left:20%; top:34%; width:60vw; height:60vw; }
+[data-fg="build"] .b1{ left:9%;  top:15%; }
+[data-fg="build"] .b2{ right:9%; top:15%; }
+
+[data-fg="colophon"] .s1{ left:-10%; bottom:-14%; width:46vw; height:46vw; }
+
+/* =========================================================== no-webgl */
+.no-webgl #gl{
+  background:
+    radial-gradient(72% 46% at 50% 8%,  rgba(255,157,59,.16), transparent 66%),
+    radial-gradient(52% 42% at 78% 62%, rgba(255,95,46,.10), transparent 70%),
+    linear-gradient(180deg,#121215 0%,#0b0b0d 60%);
+}
+.no-webgl .fg .steam{ opacity:.5; }
+.no-webgl .hero::after{
+  content:''; position:absolute; left:0; right:0; bottom:0; height:46%;
+  background:linear-gradient(to top, rgba(11,11,13,.94), transparent); z-index:1; pointer-events:none;
+}
+
+/* ============================================================ responsive */
+@media (max-width:1080px){
+  .ch-grid,.sec.alt .ch-grid{ grid-template-columns:1fr; gap:30px; }
+  .ch-title,.ch-copy,.sec.alt .ch-title,.sec.alt .ch-copy{ grid-column:1; grid-row:auto; }
+  .body,.lead{ max-width:56ch; }
+  .hero-top{ max-width:min(680px,74vw); }
+  .foot-grid{ grid-template-columns:1fr 1fr; }
+  .hero-side{ display:none; }
+  /* nowhere for the stack to stand aside to — deepen the scrim instead */
+  .sec::before,.fin::before{
+    background:radial-gradient(128% 82% at 50% 50%, rgba(11,11,13,.84), rgba(11,11,13,.55) 60%, rgba(11,11,13,.18) 90%);
+  }
+}
+@media (max-width:820px){
+  .nav{ gap:16px; }
+  .nav-links{
+    position:fixed; left:0; top:0; width:var(--vw,100%); height:100svh; z-index:-1;
+    flex-direction:column; justify-content:center; align-items:flex-start; gap:26px;
+    padding:0 var(--pad); background:rgba(11,11,13,.97);
+    opacity:0; visibility:hidden; transition:opacity .5s var(--ease), visibility .5s;
+  }
+  .nav.menu-open .nav-links{ opacity:1; visibility:visible; }
+  .nav-link{ font-size:20px; letter-spacing:.1em; }
+  .nav-cta{ display:none; }
+  .nav-burger{ display:block; }
+  .chips{ grid-template-columns:1fr 1fr; gap:22px 18px; }
+  .rail{ display:none; }
+  .sec{ min-height:112svh; }
+  .badge{ min-width:112px; padding:10px 13px 11px; }
+  .badge b{ font-size:15px; }
+  .leader{ display:none; }
+  /* the reading column is the whole width now, so the bands get tighter */
+  [data-fg] .b1,[data-fg] .b2{ left:auto; right:auto; top:auto; bottom:auto; }
+  [data-fg="crown"] .b1,[data-fg="melt"] .b1,[data-fg="age"] .b2{ right:5%; top:11%; }
+  [data-fg="age"] .b1,[data-fg="garden"] .b1{ right:5%; bottom:9%; }
+  [data-fg="melt"] .b2{ left:5%; bottom:9%; }
+  [data-fg="build"] .b1{ left:5%; top:11%; }
+  [data-fg="build"] .b2{ right:5%; top:11%; }
+  /* keep the chapter head on one line */
+  .sec-head .label:last-child{ display:none; }
+  .sec-head .rule{ max-width:none; }
+  .foot-grid{ grid-template-columns:1fr; gap:34px; }
+}
+@media (max-width:560px){
+  .chips{ grid-template-columns:1fr; }
+  .chip .tx p{ max-width:none; }
+  .specs{ gap:20px 30px; }
+  [data-fg] .b1,[data-fg] .b2{ transform:scale(.9); transform-origin:left top; }
+}
+@media (prefers-reduced-motion:reduce){
+  *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+  [data-rv]{ opacity:1 !important; transform:none !important; }
+  .word{ opacity:1 !important; transform:none !important; }
+  .fg-el{ opacity:1 !important; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="gl" aria-hidden="true"></canvas>
+<div id="vignette"></div>
+<div id="grain"></div>
+<div class="cur" id="cursor"></div>
+
+<!-- ============================================================ preloader -->
+<div id="pre">
+  <div class="pre-in">
+    <div class="pre-mark">Mike<i>'s</i></div>
+    <div class="pre-bar"><i id="pre-fill"></i></div>
+    <div class="pre-meta"><span id="pre-job">Lighting the room</span><b><span id="pre-pct">0</span>%</b></div>
+  </div>
+</div>
+
+<!-- ================================================================== nav -->
+<header class="nav" id="nav">
+  <a class="brand" href="#top" data-cursor><b>Mike's</b><i>Est. 2019 · Portland</i></a>
+  <nav class="nav-links" id="navlinks">
+    <a class="nav-link" href="#crown" data-cursor>The Crown</a>
+    <a class="nav-link" href="#melt" data-cursor>The Melt</a>
+    <a class="nav-link" href="#age" data-cursor>The Dry Age</a>
+    <a class="nav-link" href="#garden" data-cursor>The Garden</a>
+  </nav>
+  <a class="nav-cta" href="#build" data-cursor>Reserve</a>
+  <button class="nav-burger" aria-label="Menu" data-cursor><i></i><i></i></button>
+</header>
+
+<div class="page" id="top">
+
+<!-- ================================================================= hero -->
+<section class="hero" id="hero" data-cam="0">
+  <div class="hero-top">
+    <div class="label" data-rv="fade">Chapter 00<span class="sep">/</span>04<span class="sep">—</span><span class="hot">The House</span></div>
+    <h1 class="display d-hero" data-rv="up" data-split style="margin-top:22px">Five honest things, and <em>fire</em>.</h1>
+    <p class="lead" data-rv="up">A dark room, a hot iron, and a burger built one deliberate layer
+      at a time. Scroll to take it apart.</p>
+  </div>
+
+  <div class="hero-foot">
+    <div class="hero-cue" data-rv="fade"><span>Scroll to descend</span><span class="track"><i></i></span></div>
+    <div class="chips" id="chips">
+      <div class="chip" data-chip="1" data-rv="up" data-cursor><span class="n">01</span>
+        <span class="tx"><b>The Crown</b><p>Brioche, folded eight times and left alone.</p></span></div>
+      <div class="chip" data-chip="2" data-rv="up" data-cursor><span class="n">02</span>
+        <span class="tx"><b>The Melt</b><p>Cheddar that waited two years to run.</p></span></div>
+      <div class="chip" data-chip="3" data-rv="up" data-cursor><span class="n">03</span>
+        <span class="tx"><b>The Dry Age</b><p>Brisket, forty-five days in the cold.</p></span></div>
+      <div class="chip" data-chip="4" data-rv="up" data-cursor><span class="n">04</span>
+        <span class="tx"><b>The Garden</b><p>Something green, cut four minutes ago.</p></span></div>
+    </div>
+  </div>
+
+  <div class="hero-side" data-rv="fade">Taken apart · 01 — 04</div>
+</section>
+
+<!-- =========================================================== chapter 01 -->
+<section class="sec" id="crown" data-cam="1">
+  <div class="fg" data-fg="crown" aria-hidden="true">
+    <span class="fg-el steam s1" data-in="up" data-par="-.10"></span>
+    <span class="fg-el steam cool s2" data-in="up" data-par=".16"></span>
+    <span class="fg-el badge b1" data-in="right" data-par=".07">
+      <span class="k">Layer 01 — Crown</span><b>Brioche <em>21% butter</em></b><span class="tick"></span>
+    </span>
+    <span class="fg-el leader rev l1" data-in="right" data-par=".07"></span>
+  </div>
+
+  <div class="sec-head" data-rv="fade">
+    <span class="label">Chapter 01<span class="sep">/</span>04<span class="sep">—</span><span class="hot">The Crown</span></span>
+    <hr class="rule">
+    <span class="label">Brioche Bun</span>
+  </div>
+  <div class="ch-grid">
+    <div class="ch-title">
+      <h2 class="display d-sec" data-rv="up" data-split>Butter, folded eight times, then left alone.</h2>
+    </div>
+    <div class="ch-copy">
+      <p class="body" data-rv="up">The dough goes cold before it goes anywhere. Eight folds over three days,
+        each one laminating a little more butter into a crumb that has no business being this light — and
+        then seventy-two hours of nothing at all, which is the part most kitchens skip.</p>
+      <p class="body" data-rv="up">It bakes dark. Not burnt: dark. An egg wash taken to the edge of the amber
+        it is named for, so the crown carries a little bitterness against everything sweet underneath it.</p>
+      <a class="arrowlink" href="#melt" data-rv="fade" data-cursor><span>Lift the crown</span>
+        <span class="ar"><svg viewBox="0 0 14 14" width="12" height="12" fill="none"><path d="M3 11 11 3M5 3h6v6" stroke="#f2ece3" stroke-width="1.2"/></svg></span></a>
+    </div>
+  </div>
+  <div class="specs" data-rv="up">
+    <div class="spec"><b>72<em>hr</em></b><span>Cold proof</span></div>
+    <div class="spec"><b>08</b><span>Laminated folds</span></div>
+    <div class="spec"><b>218<em>°c</em></b><span>Deck bake</span></div>
+    <div class="spec"><b>21<em>%</em></b><span>Butter by weight</span></div>
+  </div>
+</section>
+
+<!-- =========================================================== chapter 02 -->
+<section class="sec alt" id="melt" data-cam="2">
+  <div class="fg" data-fg="melt" aria-hidden="true">
+    <span class="fg-el steam s1" data-in="up" data-par="-.13"></span>
+    <span class="fg-el steam tight s2" data-in="up" data-par=".18"></span>
+    <span class="fg-el badge b1" data-in="left" data-par=".06">
+      <span class="k">Layer 02 — Melt</span><b>Cheddar <em>24 months</em></b><span class="tick"></span>
+    </span>
+    <span class="fg-el leader l1" data-in="left" data-par=".06"></span>
+    <span class="fg-el badge round b2" data-in="right" data-par=".11"><b>61°C · The run point</b></span>
+  </div>
+
+  <div class="sec-head" data-rv="fade">
+    <span class="label">Chapter 02<span class="sep">/</span>04<span class="sep">—</span><span class="hot">The Melt</span></span>
+    <hr class="rule">
+    <span class="label">Aged Cheddar</span>
+  </div>
+  <div class="ch-grid">
+    <div class="ch-title">
+      <h2 class="display d-sec" data-rv="up" data-split>Cheddar that waited two years to <em>run</em>.</h2>
+    </div>
+    <div class="ch-copy">
+      <p class="body" data-rv="up">Twenty-four months in a cellar in the coast range, turned by hand, until the
+        curd has gone crystalline and tastes faintly of stone. A young cheese melts obediently. This one has to
+        be persuaded — and that is the whole point.</p>
+      <p class="body" data-rv="up">It goes on the patty still hot off the iron, under a cloche, for exactly the
+        forty seconds it takes to slump rather than pool. Any longer and two years of work turns into oil.</p>
+      <a class="arrowlink" href="#age" data-rv="fade" data-cursor><span>Down to the iron</span>
+        <span class="ar"><svg viewBox="0 0 14 14" width="12" height="12" fill="none"><path d="M3 11 11 3M5 3h6v6" stroke="#f2ece3" stroke-width="1.2"/></svg></span></a>
+    </div>
+  </div>
+  <div class="specs" data-rv="up">
+    <div class="spec"><b>24<em>mo</em></b><span>Cellar aged</span></div>
+    <div class="spec"><b>61<em>°c</em></b><span>Melt point</span></div>
+    <div class="spec"><b>40<em>s</em></b><span>Under the cloche</span></div>
+    <div class="spec"><b>38<em>g</em></b><span>Per slice</span></div>
+  </div>
+</section>
+
+<!-- =========================================================== chapter 03 -->
+<section class="sec" id="age" data-cam="3">
+  <div class="fg" data-fg="age" aria-hidden="true">
+    <span class="fg-el steam s1" data-in="up" data-par="-.09"></span>
+    <span class="fg-el steam tight s2" data-in="right" data-par=".2"></span>
+    <span class="fg-el badge b1" data-in="right" data-par=".08">
+      <span class="k">Layer 03 — Patty</span><b>Brisket <em>45 day</em></b><span class="tick"></span>
+    </span>
+    <span class="fg-el leader rev l1" data-in="right" data-par=".08"></span>
+    <span class="fg-el badge round b2" data-in="left" data-par=".13"><b>Ground once · never twice</b></span>
+  </div>
+
+  <div class="sec-head" data-rv="fade">
+    <span class="label">Chapter 03<span class="sep">/</span>04<span class="sep">—</span><span class="hot">The Dry Age</span></span>
+    <hr class="rule">
+    <span class="label">Smoked Brisket Patty</span>
+  </div>
+  <div class="ch-grid">
+    <div class="ch-title">
+      <h2 class="display d-sec" data-rv="up" data-split>Brisket, forty-five days in the <em>cold</em>.</h2>
+    </div>
+    <div class="ch-copy">
+      <p class="body" data-rv="up">Whole packers hang in a still, dry room at two degrees until they lose a
+        third of their water and gain something else entirely — a smell closer to hazelnut and old paper than
+        to raw beef. The bark that forms is trimmed away and mourned.</p>
+      <p class="body" data-rv="up">Ground once, coarse, and never packed. It meets a plancha at 260°C for
+        ninety seconds a side, which is long enough to build a crust and short enough that the centre never
+        learns what happened.</p>
+      <a class="arrowlink" href="#garden" data-rv="fade" data-cursor><span>Something green</span>
+        <span class="ar"><svg viewBox="0 0 14 14" width="12" height="12" fill="none"><path d="M3 11 11 3M5 3h6v6" stroke="#f2ece3" stroke-width="1.2"/></svg></span></a>
+    </div>
+  </div>
+  <div class="specs" data-rv="up">
+    <div class="spec"><b>45<em>d</em></b><span>Dry aged</span></div>
+    <div class="spec"><b>24<em>%</em></b><span>Fat ratio</span></div>
+    <div class="spec"><b>260<em>°c</em></b><span>Plancha</span></div>
+    <div class="spec"><b>90<em>s</em></b><span>Per side</span></div>
+  </div>
+</section>
+
+<!-- =========================================================== chapter 04 -->
+<section class="sec alt" id="garden" data-cam="4">
+  <div class="fg" data-fg="garden" aria-hidden="true">
+    <span class="fg-el steam cool s1" data-in="up" data-par="-.12"></span>
+    <span class="fg-el steam s2" data-in="left" data-par=".17"></span>
+    <span class="fg-el badge b1" data-in="left" data-par=".07">
+      <span class="k">Layer 04 — Greens</span><b>Cut <em>4 min ago</em></b><span class="tick"></span>
+    </span>
+    <span class="fg-el leader l1" data-in="left" data-par=".07"></span>
+  </div>
+
+  <div class="sec-head" data-rv="fade">
+    <span class="label">Chapter 04<span class="sep">/</span>04<span class="sep">—</span><span class="hot">The Garden</span></span>
+    <hr class="rule">
+    <span class="label">Crisp Greens</span>
+  </div>
+  <div class="ch-grid">
+    <div class="ch-title">
+      <h2 class="display d-sec" data-rv="up" data-split>Something green, cut four minutes <em>ago</em>.</h2>
+    </div>
+    <div class="ch-copy">
+      <p class="body" data-rv="up">There is a tray of little gems and mustard frill growing under lamps at the
+        back of the room, and the only thing that qualifies it for this burger is proximity. Four minutes from
+        cut to plate. Nothing travels; nothing wilts on the way.</p>
+      <p class="body" data-rv="up">Dressed in nothing but its own cold. Against forty-five days of beef and
+        two years of cheese, the job of a leaf is to interrupt — one clean, wet, uncomplicated sentence in the
+        middle of a very long paragraph.</p>
+      <a class="arrowlink" href="#build" data-rv="fade" data-cursor><span>Put it back together</span>
+        <span class="ar"><svg viewBox="0 0 14 14" width="12" height="12" fill="none"><path d="M3 11 11 3M5 3h6v6" stroke="#f2ece3" stroke-width="1.2"/></svg></span></a>
+    </div>
+  </div>
+  <div class="specs" data-rv="up">
+    <div class="spec"><b>04<em>min</em></b><span>Cut to plate</span></div>
+    <div class="spec"><b>02<em>°c</em></b><span>Held at</span></div>
+    <div class="spec"><b>01</b><span>Grower</span></div>
+    <div class="spec"><b>00</b><span>Miles travelled</span></div>
+  </div>
+</section>
+
+<!-- ============================================================== closing -->
+<section class="sec fin" id="build" data-cam="5">
+  <div class="fg" data-fg="build" aria-hidden="true">
+    <span class="fg-el steam s1" data-in="up" data-par="-.14"></span>
+    <span class="fg-el badge round b1" data-in="left" data-par=".09"><b>Five layers</b></span>
+    <span class="fg-el badge round b2" data-in="right" data-par=".09"><b>One plate</b></span>
+  </div>
+
+  <div class="label" data-rv="fade">Chapter 05<span class="sep">—</span><span class="hot">The Build</span></div>
+  <h2 class="display d-sec" data-rv="up" data-split>Then we put it back <em>together</em>.</h2>
+  <p class="lead" data-rv="up">Bottom bun, greens, brisket, cheddar, crown. Ninety seconds of assembly on top
+    of four years of waiting. Twenty-two seats, one seating a night, no substitutions.</p>
+  <a class="cta" href="#top" data-rv="fade" data-cursor>
+    <i class="bg"></i><span>Reserve a table</span>
+    <svg viewBox="0 0 14 14" width="12" height="12" fill="none"><path d="M3 11 11 3M5 3h6v6" stroke="#f2ece3" stroke-width="1.3"/></svg>
+  </a>
+</section>
+
+<!-- =============================================================== footer -->
+<footer class="foot" data-cam="6">
+  <div class="fg" data-fg="colophon" aria-hidden="true">
+    <span class="fg-el steam cool s1" data-in="up" data-par=".08"></span>
+  </div>
+  <div class="foot-grid">
+    <div class="foot-brand">
+      <b>Mike's</b>
+      <p>An artisanal burger house in the dark. Five layers, taken apart in four chapters and
+        reassembled in ninety seconds.</p>
+    </div>
+    <div><h4>Chapters</h4><ul>
+      <li><a href="#crown" data-cursor>01 — The Crown</a></li>
+      <li><a href="#melt" data-cursor>02 — The Melt</a></li>
+      <li><a href="#age" data-cursor>03 — The Dry Age</a></li>
+      <li><a href="#garden" data-cursor>04 — The Garden</a></li>
+    </ul></div>
+    <div><h4>The Room</h4><ul>
+      <li>Wed — Sun</li><li>18:00 · one seating</li><li>22 seats</li><li>No substitutions</li>
+    </ul></div>
+    <div><h4>Find us</h4><ul>
+      <li>418 SE Ankeny</li><li>Portland, Oregon</li><li><a href="#build" data-cursor>Reservations</a></li>
+    </ul></div>
+  </div>
+  <div class="foot-base">
+    <span>© 2026 Mike's</span>
+    <span>Fire · Patience · Five things</span>
+    <span>WebGL · Built in one file</span>
+  </div>
+</footer>
+
+</div><!-- /.page -->
+
+<!-- The active chapter's near plane is parked here rather than in its section:
+     .page is a stacking context at z-index 10, so nothing inside it can rise
+     past the nav. #fg-sky sits above the whole layout instead. -->
+<div id="fg-sky" aria-hidden="true"></div>
+
+<div class="rail" id="rail"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =====================================================================
+   MIKE'S — an exploded burger, lit like a still life, after hours.
+   Every texture and every piece of geometry on this page is generated at
+   runtime. The only external dependency is three.js itself.
+   ===================================================================== */
+(function () {
+'use strict';
+
+/* ------------------------------------------------------------ 0 · basics */
+var Q      = new URLSearchParams(location.search);
+var qs     = function (k, d) { var v = Q.get(k); return v === null ? d : v; };
+var qn     = function (k, d) { var v = Q.get(k); return v === null ? d : parseFloat(v); };
+var REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+var COARSE = matchMedia('(hover: none)').matches;
+
+var TAU    = Math.PI * 2;
+var clamp  = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+var sat    = function (v) { return clamp(v, 0, 1); };
+var lerp   = function (a, b, t) { return a + (b - a) * t; };
+var smooth = function (e0, e1, x) { var t = sat((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+var easeOut= function (t) { return 1 - Math.pow(1 - t, 3); };
+/* frame-rate independent damping — the same lag at 30fps and at 144 */
+var damp   = function (cur, to, rate, dt) { return lerp(cur, to, 1 - Math.exp(-rate * dt)); };
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+/* classic 2-D gradient noise, used for vertex displacement */
+function noise2D(seed) {
+  var rnd = mulberry32(seed), p = new Uint8Array(256), perm = new Uint8Array(512), i, j, t;
+  for (i = 0; i < 256; i++) p[i] = i;
+  for (i = 255; i > 0; i--) { j = (rnd() * (i + 1)) | 0; t = p[i]; p[i] = p[j]; p[j] = t; }
+  for (i = 0; i < 512; i++) perm[i] = p[i & 255];
+  var G = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+  var fade = function (x) { return x * x * x * (x * (x * 6 - 15) + 10); };
+  return function (x, y) {
+    var xi = Math.floor(x), yi = Math.floor(y);
+    var X = xi & 255, Y = yi & 255, xf = x - xi, yf = y - yi;
+    var u = fade(xf), v = fade(yf);
+    var g = function (h, dx, dy) { var q = G[h & 7]; return q[0] * dx + q[1] * dy; };
+    var aa = perm[perm[X] + Y], ab = perm[perm[X] + Y + 1];
+    var ba = perm[perm[X + 1] + Y], bb = perm[perm[X + 1] + Y + 1];
+    return lerp(lerp(g(aa, xf, yf), g(ba, xf - 1, yf), u),
+                lerp(g(ab, xf, yf - 1), g(bb, xf - 1, yf - 1), u), v);
+  };
+}
+function fbm(n, x, y, oct) {
+  var a = .5, f = 1, s = 0, m = 0;
+  for (var i = 0; i < (oct || 4); i++) { s += a * n(x * f, y * f); m += a; a *= .5; f *= 2; }
+  return s / m;
+}
+
+/* ------------------------------------------------------------ 1 · canvas */
+function cvs(w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+
+/* Stacked, up-scaled value noise. Drawing a handful of tiny random canvases
+   scaled up with smoothing is an order of magnitude faster than evaluating
+   fbm per pixel, and indistinguishable once it multiplies a dark albedo. */
+function fbmCanvas(W, H, seed, octaves, baseCells, contrast) {
+  var out = cvs(W, H), o = out.getContext('2d');
+  o.fillStyle = '#808080'; o.fillRect(0, 0, W, H);
+  var cells = baseCells || 4, alpha = 1;
+  for (var i = 0; i < (octaves || 5); i++) {
+    var n = cvs(cells, cells), nx = n.getContext('2d');
+    var im = nx.createImageData(cells, cells), d = im.data, r = mulberry32(seed + i * 977);
+    for (var k = 0; k < cells * cells; k++) {
+      var v = 128 + (r() - .5) * 255 * (contrast || 1);
+      d[k * 4] = d[k * 4 + 1] = d[k * 4 + 2] = clamp(v, 0, 255); d[k * 4 + 3] = 255;
+    }
+    nx.putImageData(im, 0, 0);
+    o.globalAlpha = alpha;
+    o.globalCompositeOperation = i === 0 ? 'source-over' : 'overlay';
+    o.imageSmoothingEnabled = true; o.imageSmoothingQuality = 'high';
+    o.drawImage(n, 0, 0, W, H);
+    cells *= 2; alpha *= .60;
+  }
+  o.globalAlpha = 1; o.globalCompositeOperation = 'source-over';
+  return out;
+}
+/* height field → tangent-space normal map (blur first, then Sobel) */
+function normalFromHeight(hc, strength) {
+  var W = hc.width, H = hc.height;
+  var b = cvs(W, H), bx = b.getContext('2d');
+  bx.filter = 'blur(1px)'; bx.drawImage(hc, 0, 0); bx.filter = 'none';
+  var src = bx.getImageData(0, 0, W, H).data;
+  var out = cvs(W, H), ox = out.getContext('2d');
+  var im = ox.createImageData(W, H), d = im.data;
+  var at = function (x, y) { return src[(((y + H) % H) * W + ((x + W) % W)) * 4] / 255; };
+  var s = strength || 2.2, x, y;
+  for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+    var gx = (at(x + 1, y) - at(x - 1, y)) * s;
+    var gy = (at(x, y + 1) - at(x, y - 1)) * s;
+    var nx = -gx, ny = gy, nz = 1;
+    var il = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz);
+    var i = (y * W + x) * 4;
+    d[i]     = (nx * il * .5 + .5) * 255;
+    d[i + 1] = (ny * il * .5 + .5) * 255;
+    d[i + 2] = (nz * il * .5 + .5) * 255;
+    d[i + 3] = 255;
+  }
+  ox.putImageData(im, 0, 0);
+  return out;
+}
+function speckle(ctx, W, H, seed, n, rMin, rMax, fill) {
+  var r = mulberry32(seed);
+  ctx.fillStyle = fill;
+  for (var i = 0; i < n; i++) {
+    var x = r() * W, y = r() * H, rad = rMin + r() * (rMax - rMin);
+    ctx.beginPath(); ctx.ellipse(x, y, rad, rad * (.5 + r() * .8), r() * TAU, 0, TAU); ctx.fill();
+  }
+}
+
+/* --------------------------------------------------------- 2 · surfaces */
+/* Every generator returns { map, normal, rough } canvases. */
+
+/* brioche: a warm, uneven bake with a darker egg-washed crest */
+function texBrioche(seed) {
+  var S = 512, h = fbmCanvas(S, S, seed, 5, 5, 1.05);
+  var c = cvs(S, S), x = c.getContext('2d');
+  var g = x.createLinearGradient(0, 0, 0, S);
+  g.addColorStop(0,   '#c2955c');
+  g.addColorStop(.42, '#e0b87e');
+  g.addColorStop(.78, '#bd9055');
+  g.addColorStop(1,   '#8e6633');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+  x.globalAlpha = .34; x.globalCompositeOperation = 'overlay';
+  x.drawImage(h, 0, 0); x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+  /* blistered highlights and scorch */
+  x.globalAlpha = .28; speckle(x, S, S, seed + 3, 260, 1.5, 7, '#f0cf9c');
+  x.globalAlpha = .22; speckle(x, S, S, seed + 9, 130, 2, 11, '#7a5326');
+  x.globalAlpha = 1;
+  var hh = cvs(S, S), hx = hh.getContext('2d');
+  hx.drawImage(h, 0, 0);
+  hx.globalAlpha = .5; speckle(hx, S, S, seed + 3, 260, 1.5, 7, '#ffffff'); hx.globalAlpha = 1;
+  return { map: c, normal: normalFromHeight(hh, 2.6), rough: roughFrom(h, .62, .96) };
+}
+/* char: near-black crust with the grey-hot fissures of a hard sear */
+function texChar(seed) {
+  var S = 512, h = fbmCanvas(S, S, seed, 6, 6, 1.25);
+  var c = cvs(S, S), x = c.getContext('2d');
+  x.fillStyle = '#2a1509'; x.fillRect(0, 0, S, S);
+  x.globalAlpha = .55; x.globalCompositeOperation = 'overlay'; x.drawImage(h, 0, 0);
+  x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+  /* fissures — short bright strokes where the crust has split */
+  var r = mulberry32(seed + 41), i, j;
+  for (i = 0; i < 150; i++) {
+    var px = r() * S, py = r() * S, a = r() * TAU, len = 10 + r() * 52;
+    x.strokeStyle = 'rgba(150,84,32,' + (.12 + r() * .3).toFixed(2) + ')';
+    x.lineWidth = .6 + r() * 1.9;
+    x.beginPath(); x.moveTo(px, py);
+    for (j = 0; j < 4; j++) { px += Math.cos(a) * len / 4; py += Math.sin(a) * len / 4; a += (r() - .5) * .9; x.lineTo(px, py); }
+    x.stroke();
+  }
+  x.globalAlpha = .22; speckle(x, S, S, seed + 7, 380, .8, 3.4, '#0a0503');
+  x.globalAlpha = .13; speckle(x, S, S, seed + 8, 90, 2, 9, '#c07038');
+  x.globalAlpha = 1;
+  return { map: c, normal: normalFromHeight(h, 3.4), rough: roughFrom(h, .70, 1.0) };
+}
+/* aged cheddar: deep orange, faintly crystalline */
+function texCheddar(seed) {
+  var S = 384, h = fbmCanvas(S, S, seed, 4, 6, .8);
+  var c = cvs(S, S), x = c.getContext('2d');
+  var g = x.createLinearGradient(0, 0, S, S);
+  g.addColorStop(0, '#e0982f'); g.addColorStop(.5, '#f2b558'); g.addColorStop(1, '#cf8425');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+  x.globalAlpha = .20; x.globalCompositeOperation = 'overlay'; x.drawImage(h, 0, 0);
+  x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+  x.globalAlpha = .30; speckle(x, S, S, seed + 5, 220, .7, 2.2, '#fff0cf');  /* tyrosine */
+  x.globalAlpha = .16; speckle(x, S, S, seed + 6, 60, 3, 10, '#a4500b');
+  x.globalAlpha = 1;
+  return { map: c, normal: normalFromHeight(h, 1.5), rough: roughFrom(h, .40, .78) };
+}
+/* leaf: green with a pale rib and radial veining */
+function texLeaf(seed) {
+  var S = 384, h = fbmCanvas(S, S, seed, 4, 7, .75);
+  var c = cvs(S, S), x = c.getContext('2d');
+  var g = x.createRadialGradient(S * .5, S * .5, S * .04, S * .5, S * .5, S * .58);
+  g.addColorStop(0, '#cfe0a4'); g.addColorStop(.42, '#7f9e46'); g.addColorStop(1, '#3d5720');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+  x.globalAlpha = .22; x.globalCompositeOperation = 'overlay'; x.drawImage(h, 0, 0);
+  x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+  var r = mulberry32(seed + 12);
+  for (var i = 0; i < 90; i++) {
+    var a = r() * TAU;
+    x.strokeStyle = 'rgba(214,232,178,' + (.05 + r() * .13).toFixed(2) + ')';
+    x.lineWidth = .5 + r() * 1.2;
+    x.beginPath(); x.moveTo(S / 2, S / 2);
+    x.quadraticCurveTo(S / 2 + Math.cos(a + .3) * S * .28, S / 2 + Math.sin(a + .3) * S * .28,
+                       S / 2 + Math.cos(a) * S * .55, S / 2 + Math.sin(a) * S * .55);
+    x.stroke();
+  }
+  return { map: c, normal: normalFromHeight(h, 1.9), rough: roughFrom(h, .52, .88) };
+}
+/* Remap a mid-grey noise field into a usable roughness range. The height
+   canvas averages 0.5, and three multiplies material.roughness by it — hang
+   one on a patty straight and the char comes back polished like wet glass. */
+function roughFrom(h, lo, hi) {
+  var W = h.width, H = h.height, c = cvs(W, H), x = c.getContext('2d');
+  x.fillStyle = 'rgb(' + Math.round(hi * 255) + ',' + Math.round(hi * 255) + ',' + Math.round(hi * 255) + ')';
+  x.fillRect(0, 0, W, H);
+  x.globalAlpha = clamp(hi - lo, 0, 1) * 1.6;
+  x.drawImage(h, 0, 0);
+  x.globalAlpha = 1;
+  return c;
+}
+
+/* a soft round falloff — embers, steam, lamp glows */
+function texGlow(inner, mid) {
+  var S = 128, c = cvs(S, S), x = c.getContext('2d');
+  var g = x.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  g.addColorStop(0, inner); g.addColorStop(.34, mid); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+  return c;
+}
+/* a puff with structure, for the volumetric-ish steam sheets */
+function texSteam(seed) {
+  var S = 256, c = cvs(S, S), x = c.getContext('2d');
+  var n = fbmCanvas(S, S, seed, 5, 3, 1.1);
+  x.drawImage(n, 0, 0);
+  /* mask it into a soft disc so the sheet has no edge of its own */
+  x.globalCompositeOperation = 'destination-in';
+  var g = x.createRadialGradient(S / 2, S / 2, S * .04, S / 2, S / 2, S * .5);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.5, 'rgba(0,0,0,.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+  x.globalCompositeOperation = 'source-over';
+  return c;
+}
+
+/* ================================================================ 3 · gl */
+var canvas = document.getElementById('gl');
+/* The layout viewport, not the window. On a phone innerWidth follows the
+   initial containing block, which can run wider than what CSS lays out
+   against — sizing the canvas from it renders a frame wider than the phone
+   shows and drops the right edge of the scene off screen. */
+var vpW = function () { return document.documentElement.clientWidth  || innerWidth; };
+var vpH = function () { return document.documentElement.clientHeight || innerHeight; };
+
+var renderer, scene, camera, maxAniso = 1;
+var LOW        = qs('q', COARSE ? 'low' : 'high') === 'low';
+var WANT_POST  = qs('post', '1') !== '0';
+var WANT_SHADOW= qs('shadow', LOW ? '0' : '1') !== '0';
+var DPR_CAP    = qn('dpr', LOW ? 1.4 : 1.9);
+/* The scene is fill-bound — additive particles plus a bloom chain — so pixels
+   are the only knob worth turning on unknown hardware. */
+var PERF = { scale: 1, acc: 0, n: 0, locked: qs('adapt', '1') === '0' };
+
+function initGL() {
+  if (qs('nogl', '0') !== '0' || !window.THREE) throw new Error('webgl unavailable');
+  renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: !WANT_POST, alpha: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, DPR_CAP));
+  renderer.setSize(vpW(), vpH(), true);
+  /* With post on, the grade is done by hand in the composite shader, so the
+     scene stays linear and untonemapped all the way to it. */
+  renderer.outputEncoding = WANT_POST ? THREE.LinearEncoding : THREE.sRGBEncoding;
+  renderer.toneMapping    = WANT_POST ? THREE.NoToneMapping  : THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1;
+  renderer.setClearColor(col(0x0b0b0d), 1);
+  if (WANT_SHADOW) { renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; }
+  maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+  scene = new THREE.Scene();
+  /* Density puts the room behind the food; the colour is what decides how
+     dark it is back there. Warm, not neutral — the fog is lamplight. */
+  scene.fog = new THREE.FogExp2(0x000000, 0.048);
+  scene.fog.color.copy(col(0x0e0c0d));
+  scene.background = col(0x0b0b0d);
+  camera = new THREE.PerspectiveCamera(34, vpW() / vpH(), .1, 90);
+  scene.add(camera);
+}
+
+function tx(canvasEl, o) {
+  o = o || {};
+  var t = new THREE.CanvasTexture(canvasEl);
+  t.wrapS = t.wrapT = o.wrap || THREE.ClampToEdgeWrapping;
+  if (o.repeat) t.repeat.set(o.repeat[0], o.repeat[1]);
+  t.anisotropy = Math.min(o.aniso || 8, maxAniso);
+  if (o.srgb !== false) t.encoding = THREE.sRGBEncoding;
+  t.needsUpdate = true;
+  return t;
+}
+/* HDR-bright values: anything above 1 survives because the scene renders into
+   a half-float buffer, and it is what the bloom feeds on. */
+var hdr = function (r, g, b) { return new THREE.Color().setRGB(r, g, b); };
+/* Three r128 has no colour management: a hex handed to a material or a light
+   is used as a linear value, so an sRGB swatch comes out of the grade several
+   stops too bright and washed out. Everything authored goes through here. */
+var col = function (h) { return new THREE.Color(h).convertSRGBToLinear(); };
+
+/* a {map, normal, rough} set hung on a standard material at one tiling */
+function surface(t, rep, o) {
+  o = o || {};
+  var wrap = THREE.RepeatWrapping, aniso = o.aniso || 8;
+  var m = new THREE.MeshStandardMaterial({
+    map: tx(t.map, { wrap: wrap, repeat: rep, aniso: aniso }),
+    normalMap: tx(t.normal, { wrap: wrap, repeat: rep, srgb: false, aniso: aniso }),
+    normalScale: new THREE.Vector2(o.normal === undefined ? 1 : o.normal, o.normal === undefined ? 1 : o.normal),
+    color: o.color === undefined ? 0xffffff : col(o.color),
+    roughness: o.roughness === undefined ? .82 : o.roughness,
+    metalness: o.metalness === undefined ? .02 : o.metalness
+  });
+  if (t.rough) m.roughnessMap = tx(t.rough, { wrap: wrap, repeat: rep, srgb: false });
+  return m;
+}
+
+/* --- geometry helpers ---------------------------------------------------- */
+/* A solid of revolution from a 2-D profile, then knocked out of true with
+   noise so nothing on the plate looks turned on a lathe. */
+function lathe(profile, seg, nSeed, amp, freq) {
+  var pts = profile.map(function (p) { return new THREE.Vector2(p[0], p[1]); });
+  var g = new THREE.LatheGeometry(pts, seg || 64);
+  if (amp) {
+    var n = noise2D(nSeed || 1), pos = g.attributes.position, v = new THREE.Vector3();
+    for (var i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      var r = Math.sqrt(v.x * v.x + v.z * v.z);
+      if (r < 1e-4) continue;
+      var a = Math.atan2(v.z, v.x);
+      var d = fbm(n, Math.cos(a) * (freq || 2.2), Math.sin(a) * (freq || 2.2) + v.y * 2.4, 3) * amp;
+      var s = 1 + d;
+      pos.setXYZ(i, v.x * s, v.y + d * .55, v.z * s);
+    }
+    pos.needsUpdate = true;
+  }
+  g.computeVertexNormals();
+  return g;
+}
+/* a square slice draped over a round patty: the corners hang, the middle sags */
+function drapedSlab(size, segs, radius, droop, nSeed) {
+  var g = new THREE.PlaneGeometry(size, size, segs, segs);
+  g.rotateX(-Math.PI / 2);
+  var n = noise2D(nSeed || 7), pos = g.attributes.position, v = new THREE.Vector3();
+  for (var i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    var r = Math.sqrt(v.x * v.x + v.z * v.z);
+    var over = smooth(radius * .78, radius * 1.5, r);          /* past the patty edge */
+    var sag  = smooth(radius * .9, 0, r) * .035;               /* a little dip in the middle */
+    var wob  = fbm(n, v.x * 1.7, v.z * 1.7, 3) * .045;
+    pos.setY(i, -over * droop - sag + wob * (1 - over * .6));
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+  return g;
+}
+/* a ruffled annulus — one frill of lettuce */
+function ruffle(inner, outer, waves, amp, nSeed) {
+  var g = new THREE.RingGeometry(inner, outer, 96, 5);
+  g.rotateX(-Math.PI / 2);
+  var n = noise2D(nSeed || 3), pos = g.attributes.position, v = new THREE.Vector3();
+  for (var i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    var r = Math.sqrt(v.x * v.x + v.z * v.z);
+    var a = Math.atan2(v.z, v.x);
+    var t = sat((r - inner) / (outer - inner));
+    var lift = Math.sin(a * waves + fbm(n, Math.cos(a) * 2, Math.sin(a) * 2, 2) * 3) * amp * t * t;
+    var out  = 1 + Math.sin(a * waves * .5) * .05 * t;
+    pos.setXYZ(i, v.x * out, lift, v.z * out);
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+  return g;
+}
+
+/* =========================================================== 4 · the food
+   Five layers, bottom to top. Each one is a group so the explode can move a
+   whole assembly — patty plus its char, bun plus its seeds — as one thing.
+   Assembled Y is where the layer sits when the burger is closed; open Y/Z is
+   where it travels to at full explode.                                     */
+var LAYERS = [];
+var FOOD = new THREE.Group();
+
+function addLayer(name, group, closedY, openY, openZ, tilt) {
+  group.position.set(0, closedY, 0);
+  FOOD.add(group);
+  LAYERS.push({
+    name: name, g: group,
+    closedY: closedY, openY: openY, openZ: openZ,
+    tilt: tilt, spin: (LAYERS.length % 2 ? -1 : 1) * (.10 + LAYERS.length * .035),
+    focus: 0, want: 0
+  });
+  return group;
+}
+
+function buildFood() {
+  var g, m, i;
+
+  /* ---- bottom bun ---------------------------------------------------- */
+  var bunT = texBrioche(11);
+  var botMat = surface(bunT, [1.5, 1.1], { color: 0xe8c39a, roughness: .90, normal: .85 });
+  var bot = new THREE.Group();
+  g = lathe([
+    [.001, .19], [.34, .195], [.68, .185], [.90, .150], [1.00, .060],
+    [.995, -.030], [.90, -.115], [.62, -.170], [.30, -.192], [.001, -.198]
+  ], 72, 21, .022, 2.6);
+  m = new THREE.Mesh(g, botMat);
+  m.castShadow = m.receiveShadow = true;
+  bot.add(m);
+  addLayer('bun-bottom', bot, -0.62, -2.35, 0.34, .10);
+
+  /* ---- crisp greens: three frills at slightly different radii ---------- */
+  var leafT = texLeaf(31);
+  var leafMat = surface(leafT, [1, 1], { color: 0x9fc47a, roughness: .95, normal: 1.2 });
+  leafMat.side = THREE.DoubleSide;
+  var greens = new THREE.Group();
+  var frills = [[.42, 1.16, 9, .085, 41], [.36, 1.06, 13, .062, 42], [.48, 1.22, 7, .105, 43]];
+  for (i = 0; i < frills.length; i++) {
+    var f = frills[i];
+    m = new THREE.Mesh(ruffle(f[0], f[1], f[2], f[3], f[4]), leafMat);
+    m.position.y = i * .028;
+    m.rotation.y = i * 1.1;
+    m.castShadow = true; m.receiveShadow = true;
+    greens.add(m);
+  }
+  addLayer('greens', greens, -0.30, -1.12, -0.52, -.14);
+
+  /* ---- the patty: a coarse, irregular puck with a hard crust ----------- */
+  var charT = texChar(51);
+  var pattyMat = surface(charT, [2.6, 1.6], { color: 0xb08a72, roughness: .98, normal: 1.35 });
+  var patty = new THREE.Group();
+  g = lathe([
+    [.001, .155], [.46, .168], [.80, .162], [.97, .120], [1.045, .020],
+    [1.035, -.070], [.94, -.140], [.58, -.170], [.001, -.160]
+  ], 80, 52, .048, 3.1);
+  m = new THREE.Mesh(g, pattyMat);
+  m.castShadow = m.receiveShadow = true;
+  patty.add(m);
+  /* the heat still in it: a dull red gradient hugging the rim, additive */
+  var heat = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.0, 3.0),
+    new THREE.MeshBasicMaterial({
+      map: tx(texGlow('rgba(255,150,70,.5)', 'rgba(190,60,22,.16)')),
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: .2
+    })
+  );
+  heat.renderOrder = 3;
+  scene.add(heat);                       /* in the scene, not on the patty */
+  WORLD.heat = heat; WORLD.pattyGroup = patty;
+  addLayer('patty', patty, 0.02, 0.10, 0.62, .08);
+
+  /* ---- the melt ------------------------------------------------------- */
+  var chedT = texCheddar(71);
+  var chedMat = surface(chedT, [1, 1], { color: 0xefc48d, roughness: .70, normal: .85 });
+  chedMat.side = THREE.DoubleSide;
+  var cheese = new THREE.Group();
+  m = new THREE.Mesh(drapedSlab(2.02, 30, 1.02, .40, 72), chedMat);
+  m.castShadow = true; m.receiveShadow = true;
+  m.rotation.y = .38;
+  cheese.add(m);
+  addLayer('cheese', cheese, 0.235, 1.16, -0.44, -.10);
+
+  /* ---- the crown, with seeds ------------------------------------------ */
+  var crownMat = surface(texBrioche(91), [1.6, 1.2], { color: 0xeec69c, roughness: .86, normal: .95 });
+  var crown = new THREE.Group();
+  g = lathe([
+    [.001, .615], [.24, .600], [.47, .552], [.69, .468], [.865, .335],
+    [.965, .190], [1.005, .062], [.985, -.010], [.66, -.038], [.001, -.046]
+  ], 80, 92, .026, 2.4);
+  m = new THREE.Mesh(g, crownMat);
+  m.castShadow = m.receiveShadow = true;
+  crown.add(m);
+
+  /* sesame — one instanced ellipsoid, scattered over the dome */
+  var seedGeo = new THREE.SphereGeometry(.036, 8, 6);
+  var seedMat = new THREE.MeshStandardMaterial({ color: col(0xf3dcae), roughness: .62, metalness: .02 });
+  var SEEDS = LOW ? 42 : 86;
+  var seeds = new THREE.InstancedMesh(seedGeo, seedMat, SEEDS);
+  var rnd = mulberry32(777), M = new THREE.Matrix4(), Qt = new THREE.Quaternion(),
+      E = new THREE.Euler(), P = new THREE.Vector3(), S = new THREE.Vector3();
+  for (i = 0; i < SEEDS; i++) {
+    var phi = .18 + Math.pow(rnd(), .72) * 1.06, th = rnd() * TAU;
+    var rr = Math.sin(phi) * .975, yy = Math.cos(phi) * .615;
+    P.set(Math.cos(th) * rr, yy + .012, Math.sin(th) * rr);
+    E.set(rnd() * .5 - .25, th + rnd(), Math.PI * .5 - phi + (rnd() - .5) * .3);
+    Qt.setFromEuler(E);
+    S.set(1, .52, 1.55);
+    M.compose(P, Qt, S);
+    seeds.setMatrixAt(i, M);
+  }
+  seeds.instanceMatrix.needsUpdate = true;
+  seeds.castShadow = true;
+  crown.add(seeds);
+  addLayer('bun-crown', crown, 0.52, 2.34, 0.20, -.07);
+
+  scene.add(FOOD);
+
+  /* The slab the stack stands on. It exists to catch one shadow and give the
+     food something to sit against — so it is cut with a radial alpha rather
+     than a hard rim, and it ends in the dark instead of ending on an edge. */
+  var boardT = fbmCanvas(512, 512, 303, 5, 4, 1.1);
+  var boardA = cvs(256, 256), bax = boardA.getContext('2d');
+  var bg = bax.createRadialGradient(128, 128, 30, 128, 128, 128);
+  bg.addColorStop(0, '#ffffff'); bg.addColorStop(.52, '#c8c8c8');
+  bg.addColorStop(.84, '#2a2a2a'); bg.addColorStop(1, '#000000');
+  bax.fillStyle = bg; bax.fillRect(0, 0, 256, 256);
+  var board = new THREE.Mesh(
+    new THREE.CircleGeometry(2.55, 72),
+    new THREE.MeshStandardMaterial({
+      map: tx(boardT),
+      normalMap: tx(normalFromHeight(boardT, 1.4), { srgb: false }),
+      alphaMap: tx(boardA, { srgb: false }),
+      color: col(0x14100e), roughness: .96, metalness: .03,
+      transparent: true, depthWrite: false
+    })
+  );
+  board.rotation.x = -Math.PI / 2;
+  board.position.y = -0.86;
+  board.receiveShadow = true;
+  board.renderOrder = 1;
+  scene.add(board);
+  WORLD.board = board;
+}
+
+/* ========================================================= 5 · the room */
+var WORLD = { uT: { value: 0 } };
+
+function buildLights() {
+  scene.add(new THREE.HemisphereLight(col(0x2a3138), col(0x080607), .34));
+
+  /* key: a hard warm lamp above and slightly front-right — the only shadow */
+  var key = new THREE.DirectionalLight(col(0xffd8a4), 2.15);
+  key.position.set(3.4, 7.2, 4.0);
+  key.target.position.set(0, 0, 0); scene.add(key.target);
+  if (WANT_SHADOW) {
+    key.castShadow = true;
+    var SZ = LOW ? 1024 : 2048;
+    key.shadow.mapSize.set(SZ, SZ);
+    var c = key.shadow.camera;
+    c.left = -5; c.right = 5; c.top = 6; c.bottom = -6; c.near = 1; c.far = 20;
+    key.shadow.bias = -0.0011; key.shadow.normalBias = .022; key.shadow.radius = 2.4;
+  }
+  scene.add(key); WORLD.key = key;
+
+  /* the amber practicals: three warm points that do the actual modelling */
+  WORLD.lamps = [];
+  [[ 2.9, 1.7,  2.4, 0xffc27a, 4.6, 10 ],
+   [-3.4, 0.2,  2.4, 0xffa864, 3.0,  9 ],
+   [ 0.4, 3.4, -2.6, 0xffd9a8, 3.0, 12]].forEach(function (L) {
+    var p = new THREE.PointLight(col(L[3]), L[4], L[5], 2);
+    p.position.set(L[0], L[1], L[2]);
+    p.userData = { base: L[4], ph: Math.random() * TAU, sp: .7 + Math.random() * 1.1 };
+    scene.add(p); WORLD.lamps.push(p);
+  });
+
+  /* one cold rim from behind so the silhouette does not close up */
+  var rim = new THREE.DirectionalLight(col(0xa8c6e4), .62);
+  rim.position.set(-4.2, 2.6, -5.5);
+  rim.target.position.set(0, .2, 0); scene.add(rim.target);
+  scene.add(rim);
+
+  /* and a low bounce, the colour of the board */
+  var bounce = new THREE.PointLight(col(0xffa257), 1.7, 6.5, 2);
+  bounce.position.set(0, -2.75, 1.7);
+  scene.add(bounce);
+}
+
+/* ---- the lamp bloom sprites: what the bloom chain actually eats -------- */
+function buildLampGlows() {
+  var tex = tx(texGlow('rgba(255,190,120,.95)', 'rgba(255,120,45,.30)'));
+  WORLD.glows = [];
+  WORLD.lamps.forEach(function (p) {
+    var s = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending,
+        depthWrite: false, fog: false, opacity: .30, color: hdr(1.5, .9, .55) }));
+    s.position.copy(p.position);
+    s.renderOrder = 2;
+    scene.add(s);
+    WORLD.glows.push({ s: s, p: p });
+  });
+}
+
+/* ---- embers: the golden motes that fill the room ---------------------- */
+function buildEmbers() {
+  var N = LOW ? 260 : 620;
+  var pos = new Float32Array(N * 3), seed = new Float32Array(N);
+  var r = mulberry32(1234);
+  for (var i = 0; i < N; i++) {
+    pos[i * 3]     = (r() - .5) * 22;
+    pos[i * 3 + 1] = (r() - .5) * 16;
+    pos[i * 3 + 2] = -7 + r() * 14;
+    seed[i] = r();
+  }
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  var mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uT: WORLD.uT,
+      uTex: { value: tx(texGlow('rgba(255,205,150,1)', 'rgba(255,130,50,.38)')) },
+      uSize: { value: vpH() * .5 }
+    },
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    vertexShader: [
+      'attribute float aSeed; uniform float uT; uniform float uSize; varying float vA;',
+      'void main(){',
+      '  vec3 p = position;',
+      /* rise and wrap entirely on the GPU — the CPU never touches an ember */
+      '  p.y = mod(p.y + uT * (0.16 + aSeed * 0.42) + 8.0, 16.0) - 8.0;',
+      '  p.x += sin(uT * 0.31 + aSeed * 24.0) * 0.75;',
+      '  p.z += cos(uT * 0.24 + aSeed * 19.0) * 0.55;',
+      '  vec4 mv = modelViewMatrix * vec4(p, 1.0);',
+      /* fade in off the floor and out at the ceiling, and flicker */
+      '  float band = smoothstep(-8.0, -4.0, p.y) * smoothstep(8.0, 3.0, p.y);',
+      '  vA = band * (0.25 + aSeed * 0.75) * (0.62 + 0.38 * sin(uT * (1.7 + aSeed * 3.4) + aSeed * 40.0));',
+      '  gl_PointSize = uSize * (0.006 + aSeed * 0.017) / max(-mv.z, 0.6);',
+      '  gl_Position = projectionMatrix * mv;',
+      '}'
+    ].join('\n'),
+    fragmentShader: [
+      'uniform sampler2D uTex; varying float vA;',
+      'void main(){',
+      '  vec4 t = texture2D(uTex, gl_PointCoord);',
+      '  gl_FragColor = vec4(t.rgb * vec3(1.75, 0.92, 0.46), t.a * vA * 0.8);',
+      '}'
+    ].join('\n')
+  });
+  var pts = new THREE.Points(g, mat);
+  pts.frustumCulled = false; pts.renderOrder = 5;
+  scene.add(pts);
+  WORLD.embers = pts;
+}
+
+/* ---- steam: a few big camera-facing sheets climbing off the patty ------ */
+function buildSteam() {
+  var N = LOW ? 5 : 9;
+  var tex = tx(texSteam(88));
+  WORLD.steam = [];
+  var r = mulberry32(55);
+  for (var i = 0; i < N; i++) {
+    var s = 1.6 + r() * 2.6;
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(s, s * 1.25),
+      new THREE.MeshBasicMaterial({
+        map: tex, transparent: true, blending: THREE.AdditiveBlending,
+        depthWrite: false, fog: true, opacity: 0,
+        color: hdr(.60, .48, .40)
+      }));
+    m.renderOrder = 4;
+    m.userData = {
+      x0: (r() - .5) * 2.6, z0: (r() - .5) * 2.2,
+      y: r() * 6, sp: .30 + r() * .55, ph: r() * TAU, amp: .35 + r() * .7,
+      peak: .09 + r() * .13
+    };
+    scene.add(m);
+    WORLD.steam.push(m);
+  }
+}
+
+/* ================================================= 6 · post-processing */
+var POST = { levels: [] };
+var QUAD_VS = 'varying vec2 vUv;\nvoid main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+
+function initPost() {
+  POST.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  POST.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), null);
+  POST.quad.frustumCulled = false;
+  POST.qScene = new THREE.Scene(); POST.qScene.add(POST.quad);
+  POST.up = new THREE.ShaderMaterial({
+    uniforms: { tS: { value: null }, uAmt: { value: 1 } },
+    vertexShader: QUAD_VS,
+    fragmentShader: 'uniform sampler2D tS; uniform float uAmt; varying vec2 vUv;\n' +
+      'void main(){ gl_FragColor = vec4(texture2D(tS, vUv).rgb * uAmt, 1.0); }',
+    blending: THREE.AdditiveBlending, transparent: true, depthTest: false, depthWrite: false
+  });
+  if (!WANT_POST) return;
+
+  var w = renderer.domElement.width, h = renderer.domElement.height;
+  var O = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+            type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false };
+  POST.scene = new THREE.WebGLRenderTarget(w, h,
+    { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, type: THREE.HalfFloatType,
+      depthBuffer: true, stencilBuffer: false });
+
+  var lw = Math.max(2, w >> 1), lh = Math.max(2, h >> 1);
+  var N = LOW ? 3 : 4;
+  for (var i = 0; i < N; i++) {
+    POST.levels.push({ a: new THREE.WebGLRenderTarget(lw, lh, O), b: new THREE.WebGLRenderTarget(lw, lh, O), w: lw, h: lh });
+    lw = Math.max(2, lw >> 1); lh = Math.max(2, lh >> 1);
+  }
+
+  POST.bright = new THREE.ShaderMaterial({
+    uniforms: { tS: { value: null }, uThr: { value: .80 }, uKnee: { value: .45 } },
+    vertexShader: QUAD_VS,
+    fragmentShader: [
+      'uniform sampler2D tS; uniform float uThr; uniform float uKnee; varying vec2 vUv;',
+      'void main(){',
+      '  vec3 c = texture2D(tS, vUv).rgb;',
+      '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+      '  gl_FragColor = vec4(c * smoothstep(uThr, uThr + uKnee, l), 1.0);',
+      '}'
+    ].join('\n')
+  });
+  POST.blur = new THREE.ShaderMaterial({
+    uniforms: { tS: { value: null }, uDir: { value: new THREE.Vector2(1, 0) } },
+    vertexShader: QUAD_VS,
+    fragmentShader: [
+      'uniform sampler2D tS; uniform vec2 uDir; varying vec2 vUv;',
+      'void main(){',
+      '  vec3 c  = texture2D(tS, vUv).rgb * 0.2270270270;',
+      '  c += texture2D(tS, vUv + uDir * 1.3846153846).rgb * 0.3162162162;',
+      '  c += texture2D(tS, vUv - uDir * 1.3846153846).rgb * 0.3162162162;',
+      '  c += texture2D(tS, vUv + uDir * 3.2307692308).rgb * 0.0702702703;',
+      '  c += texture2D(tS, vUv - uDir * 3.2307692308).rgb * 0.0702702703;',
+      '  gl_FragColor = vec4(c, 1.0);',
+      '}'
+    ].join('\n')
+  });
+  POST.comp = new THREE.ShaderMaterial({
+    uniforms: {
+      tS: { value: null }, tB: { value: null }, uRes: { value: new THREE.Vector2(w, h) },
+      uT: { value: 0 }, uBloom: { value: .42 }, uCA: { value: 1 }, uGrain: { value: .022 },
+      uVig: { value: 1 }, uExp: { value: .92 }, uFade: { value: 1 }, uSat: { value: 1.06 }
+    },
+    vertexShader: QUAD_VS,
+    fragmentShader: [
+      'uniform sampler2D tS; uniform sampler2D tB; uniform vec2 uRes;',
+      'uniform float uT, uBloom, uCA, uGrain, uVig, uExp, uFade, uSat;',
+      'varying vec2 vUv;',
+      'vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }',
+      'void main(){',
+      '  vec2 d = vUv - 0.5; float r2 = dot(d, d);',
+      /* chromatic aberration, weakest in the middle of the frame */
+      '  float ca = uCA * (0.28 + r2 * 2.4) * 0.0014;',
+      '  vec3 c;',
+      '  c.r = texture2D(tS, vUv + d * ca).r;',
+      '  c.g = texture2D(tS, vUv).g;',
+      '  c.b = texture2D(tS, vUv - d * ca).b;',
+      '  c += texture2D(tB, vUv).rgb * uBloom;',
+      '  c *= uExp;',
+      '  c = aces(c);',
+      '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+      '  c = mix(vec3(l), c, uSat);',
+      /* split tone: the shadows go blue-charcoal, the highlights stay amber */
+      '  c = mix(c, c * vec3(0.80, 0.94, 1.12), smoothstep(0.50, 0.0, l) * 0.72);',
+      '  c = mix(c, c * vec3(1.06, 0.99, 0.93), smoothstep(0.45, 1.0, l) * 0.42);',
+      '  float v = smoothstep(1.24, 0.24, length(d * vec2(1.0, 0.95)) * 1.44);',
+      '  c *= mix(1.0, v, uVig);',
+      '  float g = fract(sin(dot(vUv * uRes + uT * 137.0, vec2(12.9898, 78.233))) * 43758.5453);',
+      '  c += (g - 0.5) * uGrain;',
+      '  c *= uFade;',
+      '  vec3 e = pow(max(c, 0.0), vec3(1.0 / 2.2));',
+      /* a little contrast, applied after the encode: in linear the same curve
+         mostly crushes the shadows, and this frame is nearly all shadow */
+      '  e = clamp((e - 0.26) * 1.06 + 0.26, 0.0, 1.0);',
+      '  gl_FragColor = vec4(e, 1.0);',
+      '}'
+    ].join('\n')
+  });
+}
+function pass(mat, target, additive) {
+  POST.quad.material = mat;
+  renderer.setRenderTarget(target || null);
+  if (!additive) renderer.clear(true, false, false);
+  renderer.render(POST.qScene, POST.cam);
+}
+function renderPost() {
+  var L = POST.levels, i;
+  POST.bright.uniforms.tS.value = POST.scene.texture;
+  pass(POST.bright, L[0].a);
+  for (i = 0; i < L.length; i++) {
+    if (i > 0) {
+      POST.up.blending = THREE.NoBlending; POST.up.uniforms.uAmt.value = 1;
+      POST.up.uniforms.tS.value = L[i - 1].a.texture; pass(POST.up, L[i].a);
+    }
+    POST.blur.uniforms.tS.value = L[i].a.texture; POST.blur.uniforms.uDir.value.set(1 / L[i].w, 0); pass(POST.blur, L[i].b);
+    POST.blur.uniforms.tS.value = L[i].b.texture; POST.blur.uniforms.uDir.value.set(0, 1 / L[i].h); pass(POST.blur, L[i].a);
+  }
+  POST.up.blending = THREE.AdditiveBlending; POST.up.uniforms.uAmt.value = .55;
+  for (i = L.length - 1; i > 0; i--) { POST.up.uniforms.tS.value = L[i].a.texture; pass(POST.up, L[i - 1].a, true); }
+  POST.comp.uniforms.tS.value = POST.scene.texture;
+  POST.comp.uniforms.tB.value = L[0].a.texture;
+  pass(POST.comp, null);
+}
+
+/* ============================================== 7 · the camera rig
+   One continuous descent. Every waypoint is composed for a wide frame; the
+   aspect fix below is what keeps it from cropping in half on a phone.     */
+var CAM = [
+  { p: [ 0.0,  0.95,  7.35 ], t: [ 0.0,  0.10,  0.0 ], fov: 34, off: 1.05 },  /* 0 hero  */
+  { p: [ 2.45, 3.15,  5.05 ], t: [ 0.0,  2.15,  0.0 ], fov: 38 },  /* 1 crown     */
+  { p: [-2.70, 1.55,  4.75 ], t: [ 0.1,  1.05,  0.0 ], fov: 41 },  /* 2 melt      */
+  { p: [ 2.95, 0.25,  4.30 ], t: [-0.1,  0.08,  0.0 ], fov: 43 },  /* 3 dry age   */
+  { p: [-2.55,-1.05,  4.70 ], t: [ 0.1, -1.10,  0.0 ], fov: 41 },  /* 4 garden    */
+  { p: [ 0.0, -2.85,  7.15 ], t: [ 0.0, -1.45,  0.0 ], fov: 35 },  /* 5 the build */
+  { p: [ 0.0, -3.45,  7.90 ], t: [ 0.0, -0.60,  0.0 ], fov: 33, off: -.55 }   /* 6 colophon */
+];
+var RIG = { prog: 0, smooth: 0, mx: 0, my: 0, tmx: 0, tmy: 0, intro: 0, focus: -1, focusAmt: 0 };
+var curveP, curveT, tmpV = new THREE.Vector3();
+
+function buildRig() {
+  curveP = new THREE.CatmullRomCurve3(CAM.map(function (c) { return new THREE.Vector3(c.p[0], c.p[1], c.p[2]); }), false, 'catmullrom', .38);
+  curveT = new THREE.CatmullRomCurve3(CAM.map(function (c) { return new THREE.Vector3(c.t[0], c.t[1], c.t[2]); }), false, 'catmullrom', .38);
+}
+var _p = new THREE.Vector3(), _t = new THREE.Vector3(), _d = new THREE.Vector3();
+var _rt = new THREE.Vector3(), _wup = new THREE.Vector3(0, 1, 0);
+/* how far below a 1.6 frame we are, 0…1 */
+function aspectFix() { return clamp((1.60 - vpW() / vpH()) / 1.05, 0, 1); }
+function fitAspect(p, t, fov) {
+  var nf = aspectFix();
+  if (nf <= 0) return fov;
+  _d.subVectors(p, t).normalize();
+  p.addScaledVector(_d, nf * 2.6);      /* step back along the view axis … */
+  p.y += nf * .30;
+  return fov * (1 + nf * .30);          /* … and open up rather than crop  */
+}
+function applyCamera() {
+  var N = CAM.length - 1;
+  var u = clamp(RIG.smooth / N, 0, 1);
+  curveP.getPoint(u, _p); curveT.getPoint(u, _t);
+  var i = clamp(Math.floor(RIG.smooth), 0, N - 1), f = clamp(RIG.smooth - i, 0, 1);
+  var fov = lerp(CAM[i].fov, CAM[i + 1].fov, f);
+
+  fov = fitAspect(_p, _t, fov);
+
+  /* Slide the whole frame sideways so the stack sits beside the reading
+     column instead of underneath it. Shifting position and target together
+     translates the shot rather than swinging it, and it eases out as the
+     frame narrows — on a phone there is no column to stand beside. */
+  var off = lerp(CAM[i].off || 0, CAM[i + 1].off || 0, f) * (1 - aspectFix() * .92);
+  if (Math.abs(off) > 1e-4) {
+    _rt.subVectors(_t, _p).normalize().cross(_wup).normalize();
+    _p.addScaledVector(_rt, -off);
+    _t.addScaledVector(_rt, -off);
+  }
+
+  /* the opening move: a longer lens easing in from further out */
+  var io = 1 - RIG.intro;
+  _p.z += io * 2.5; _p.y += io * .40; fov += io * 6;
+
+  /* pointer parallax — a hand-held drift, never enough to break the frame */
+  var par = 1 - smooth(0, 1.6, RIG.smooth) * .45;
+  _p.x += RIG.mx * .40 * par; _p.y += RIG.my * .24 * par;
+  _t.x -= RIG.mx * .10 * par; _t.y -= RIG.my * .06 * par;
+
+  camera.position.copy(_p);
+  camera.lookAt(_t);
+  if (Math.abs(camera.fov - fov) > 1e-4) { camera.fov = fov; camera.updateProjectionMatrix(); }
+}
+
+/* ============================================ 8 · scroll ↔ chapters */
+var SECS = [].slice.call(document.querySelectorAll('[data-cam]'));
+var anchors = [], maxScroll = 1, activeSec = 0;
+function measure() {
+  maxScroll = Math.max(1, document.documentElement.scrollHeight - vpH());
+  anchors = SECS.map(function (el, i) {
+    if (i === 0) return 0;
+    if (i === SECS.length - 1) return maxScroll;
+    return clamp(el.offsetTop + el.offsetHeight * .5 - vpH() * .5, 0, maxScroll);
+  });
+  for (var i = 1; i < anchors.length; i++) anchors[i] = Math.max(anchors[i], anchors[i - 1] + 1);
+}
+function progressFor(y) {
+  if (y <= anchors[0]) return 0;
+  for (var i = 0; i < anchors.length - 1; i++)
+    if (y <= anchors[i + 1]) return i + (y - anchors[i]) / (anchors[i + 1] - anchors[i]);
+  return anchors.length - 1;
+}
+/* The explode arc: closed at the hero, fully apart through the four chapters,
+   and drawn back together for "The Build". The reassembly is the payoff —
+   it is why the last two waypoints pull away rather than push in. */
+function explodeFor(prog) {
+  var open  = smooth(0.10, 2.05, prog);         /* opens across chapters 1–2 */
+  var close = smooth(4.15, 5.10, prog);         /* and closes again at the end */
+  return open * (1 - close * .94);
+}
+/* Which layer a given chapter is about. Index into LAYERS, bottom-up. */
+var CHAPTER_LAYER = { 1: 4, 2: 3, 3: 2, 4: 1, 5: 0 };
+
+/* ==================================================== 9 · page wiring */
+var $  = function (s) { return document.querySelector(s); };
+var $$ = function (s) { return [].slice.call(document.querySelectorAll(s)); };
+var nav = $('#nav'), preEl = $('#pre'), preFill = $('#pre-fill'), prePct = $('#pre-pct'), preJob = $('#pre-job');
+
+/* Word-level masks so every display heading arrives at a reading pace. The
+   original phrase stays the accessible label; the visual words are marked
+   presentational. */
+function splitHeadings() {
+  if (REDUCE) return;
+  $$('[data-split]').forEach(function (h) {
+    if (h.dataset.splitReady) return;
+    h.dataset.splitReady = '1';
+    var phrase = h.textContent.replace(/\s+/g, ' ').trim();
+    if (!phrase) return;
+    /* keep the <em> accents by re-reading them off the original markup */
+    /* the italic accents are read off the original markup before it is
+       cleared, and matched back per word once it has been re-split */
+    var ems = {}, key = function (w) { return w.replace(/[^\w'-]/g, '').toLowerCase(); };
+    [].slice.call(h.querySelectorAll('em')).forEach(function (e) {
+      e.textContent.trim().split(/\s+/).forEach(function (w) { if (w) ems[key(w)] = 1; });
+    });
+    h.setAttribute('aria-label', phrase);
+    h.textContent = '';
+    h.classList.add('word-split');
+    phrase.split(' ').forEach(function (word, i) {
+      if (i) h.appendChild(document.createTextNode(' '));
+      var mask = document.createElement('span');
+      var inner = document.createElement('span');
+      mask.className = 'word-mask'; mask.setAttribute('aria-hidden', 'true');
+      inner.className = 'word';
+      inner.style.setProperty('--wd', (i * 62) + 'ms');
+      if (ems[key(word)]) {
+        var em = document.createElement('em'); em.textContent = word; inner.appendChild(em);
+      } else inner.textContent = word;
+      mask.appendChild(inner); h.appendChild(mask);
+    });
+  });
+}
+
+function wireReveals() {
+  splitHeadings();
+  var groups = new Map();
+  var items = $$('[data-rv]');
+  items.forEach(function (el) {
+    var key = el.parentElement;
+    var arr = groups.get(key) || []; arr.push(el); groups.set(key, arr);
+  });
+  groups.forEach(function (arr) { arr.forEach(function (el, i) { el.dataset.rvd = i * 90; }); });
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      io.unobserve(e.target);
+      var d = parseFloat(e.target.dataset.rvd || 0);
+      setTimeout(function () { e.target.classList.add('rv-in'); }, REDUCE ? 0 : d);
+    });
+  }, { rootMargin: '0px 0px -12% 0px', threshold: .05 });
+  items.forEach(function (el) { if (!el.closest('#hero')) io.observe(el); });
+}
+
+/* The foreground collage. A stage belongs to its section until that chapter
+   is called; then it is lifted into #fg-sky and pinned to the viewport, and
+   its predecessor is kept just long enough to blur and fade out.
+
+   The lift matters: .page is a stacking context at z-index 10, so a badge
+   parented inside it can never pass in front of the nav. */
+function wireForeground() {
+  var pairs = $$('.sec .fg, .foot .fg, .hero .fg').map(function (stage) {
+    return { section: stage.closest('.sec, .foot, .hero'), stage: stage };
+  }).filter(function (p) { return p.section; });
+  if (!pairs.length) return;
+
+  var sky = $('#fg-sky');
+  var ratios = new Map(pairs.map(function (p) { return [p.section, 0]; }));
+  var homes  = new WeakMap(); pairs.forEach(function (p) { homes.set(p.stage, p.section); });
+  var timers = new WeakMap();
+  var active = null;
+
+  var lift = function (stage) {
+    if (!sky || stage.parentNode === sky) return;
+    sky.appendChild(stage);
+    /* a re-inserted element has no previous computed style, so without this
+       reflow the entrance would land already finished */
+    void stage.offsetWidth;
+  };
+  var park = function (stage) {
+    var home = homes.get(stage);
+    if (home && stage.parentNode !== home) home.insertBefore(stage, home.firstChild);
+  };
+  var retire = function (stage) {
+    if (!stage || stage === active) return;
+    var pending = timers.get(stage);
+    if (pending) clearTimeout(pending);
+    stage.classList.remove('is-active');
+    if (REDUCE) { park(stage); return; }
+    stage.classList.add('is-retiring');
+    timers.set(stage, setTimeout(function () {
+      stage.classList.remove('is-retiring');
+      timers.delete(stage);
+      park(stage);
+    }, 820));
+  };
+  var activate = function (stage) {
+    if (!stage || stage === active) return;
+    var pending = timers.get(stage);
+    if (pending) clearTimeout(pending);
+    stage.classList.remove('is-retiring');
+    lift(stage);
+    stage.classList.add('is-active');
+    var prior = active; active = stage; retire(prior);
+  };
+
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { ratios.set(e.target, e.isIntersecting ? e.intersectionRatio : 0); });
+    var next = pairs.reduce(function (best, p) {
+      return (ratios.get(p.section) || 0) > (ratios.get(best.section) || 0) ? p : best;
+    });
+    if ((ratios.get(next.section) || 0) > 0) activate(next.stage);
+    else if (active) { var prior = active; active = null; retire(prior); }
+  }, { rootMargin: '-14% 0px -14% 0px', threshold: [0, .12, .34, .6] });
+
+  pairs.forEach(function (p) { io.observe(p.section); });
+
+  /* Subtle parallax on the pinned pieces.
+     Measured against the owning section's own travel through the viewport,
+     not against raw scrollY: a stage is only on screen for one section, so a
+     global offset either barely moves or — with a modulo to keep it bounded —
+     snaps back to the top of its range mid-chapter. Section-relative gives
+     every piece the same −1…1 sweep no matter where the chapter sits in the
+     document, and the range is a fixed number of pixels rather than a
+     fraction of the page.
+
+     Written as custom properties because the drift keyframes and the entrance
+     transform both need the value; sharing it this way keeps them off the
+     transform property, where they would overwrite each other. */
+  var els = $$('.fg-el[data-par]').map(function (el) {
+    return { el: el, sec: el.closest('.sec, .foot, .hero'), par: parseFloat(el.dataset.par) || 0 };
+  }).filter(function (o) { return o.sec; });
+  var raf = 0;
+  var apply = function () {
+    raf = 0;
+    var vh = vpH();
+    for (var i = 0; i < els.length; i++) {
+      var o = els[i], r = o.sec.getBoundingClientRect();
+      if (r.bottom < -vh || r.top > vh * 2) continue;      /* nowhere near */
+      /* −1 as the section enters from below, +1 as it leaves off the top */
+      var t = clamp(1 - 2 * (r.top + r.height * .5) / (vh + r.height), -1, 1);
+      o.el.style.setProperty('--py', (t * o.par * 150).toFixed(1) + 'px');
+      o.el.style.setProperty('--px', (t * o.par * 42).toFixed(1) + 'px');
+    }
+  };
+  if (!REDUCE) {
+    addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(apply); }, { passive: true });
+    addEventListener('resize', function () { if (!raf) raf = requestAnimationFrame(apply); }, { passive: true });
+    apply();
+  }
+}
+
+/* Everything along the foot of the hero is spent the moment the walk starts.
+   Giving each piece its own window empties the foot one element at a time,
+   which reads as the hero standing down rather than the page moving. */
+function wireHeroExit() {
+  var hero = $('#hero'); if (!hero) return;
+  var seq = [
+    { el: $('.hero-cue'), at: .00, span: .30, shift: 1 },
+    { el: $('.hero-side'), at: .06, span: .30 }
+  ].concat($$('.chip').map(function (el, i) {
+    return { el: el, at: .16 + i * .09, span: .30, shift: 1 };
+  })).filter(function (o) { return o.el; });
+  var on = false;
+  var apply = function () {
+    var t = clamp(scrollY / Math.max(1, vpH() * .6), 0, 1);
+    if (t <= 0) {
+      if (!on) return;
+      seq.forEach(function (o) {
+        o.el.style.opacity = ''; o.el.style.transform = ''; o.el.style.transition = ''; o.el.style.pointerEvents = '';
+      });
+      on = false; return;
+    }
+    on = true;
+    seq.forEach(function (o) {
+      /* these carry the reveal's own 1s opacity transition, which would make
+         the fade trail the scroll by most of a second */
+      o.el.style.transition = 'none';
+      var a = 1 - smooth(o.at, o.at + o.span, t);
+      o.el.style.opacity = a.toFixed(3);
+      if (o.shift) o.el.style.transform = 'translate3d(0,' + ((1 - a) * 16).toFixed(1) + 'px,0)';
+      o.el.style.pointerEvents = a < .05 ? 'none' : '';
+    });
+  };
+  addEventListener('scroll', apply, { passive: true });
+  addEventListener('resize', apply, { passive: true });
+  apply();
+}
+
+function wireNav() {
+  var last = 0;
+  var rail = $('#rail');
+  var names = ['The House', 'The Crown', 'The Melt', 'The Dry Age', 'The Garden', 'The Build', 'Colophon'];
+  SECS.forEach(function (s, i) {
+    var b = document.createElement('button');
+    b.innerHTML = '<i></i>';
+    b.title = names[i] || '';
+    b.setAttribute('aria-label', names[i] || 'section');
+    b.addEventListener('click', function () { scrollTo({ top: anchors[i], behavior: REDUCE ? 'auto' : 'smooth' }); });
+    rail.appendChild(b);
+  });
+  var dots = $$('#rail button');
+  var links = $$('.nav-link');
+  var burger = $('.nav-burger');
+  var setMenu = function (open) {
+    if (open) nav.classList.remove('hide');
+    nav.classList.toggle('menu-open', open);
+    burger.classList.toggle('active', open);
+    burger.setAttribute('aria-expanded', String(open));
+  };
+  burger.setAttribute('aria-controls', 'navlinks');
+  burger.setAttribute('aria-expanded', 'false');
+  burger.addEventListener('click', function () {
+    if (vpW() > 820) return;
+    setMenu(!nav.classList.contains('menu-open'));
+  });
+  links.forEach(function (l) { l.addEventListener('click', function () { setMenu(false); }); });
+  addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
+  addEventListener('resize', function () { if (vpW() > 820) setMenu(false); }, { passive: true });
+
+  /* which section each link actually points at, read off its href — a
+     positional rule silently assumes one link per section in matching order */
+  var linkSec = links.map(function (l) {
+    var t = document.querySelector(l.getAttribute('href'));
+    return t ? SECS.indexOf(t) : -1;
+  });
+  addEventListener('scroll', function () {
+    var y = scrollY;
+    nav.classList.toggle('stuck', y > 40);
+    nav.classList.toggle('hide', !nav.classList.contains('menu-open') && y > last + 4 && y > vpH() * .85);
+    last = y;
+    var a = Math.round(progressFor(y));
+    if (a !== activeSec) {
+      activeSec = a;
+      dots.forEach(function (d, i) { d.classList.toggle('on', i === a); });
+      links.forEach(function (l, i) { l.classList.toggle('on', linkSec[i] === a); });
+    }
+  }, { passive: true });
+
+  $$('a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      var t = document.querySelector(a.getAttribute('href'));
+      if (!t) return;
+      e.preventDefault();
+      scrollTo({ top: a.getAttribute('href') === '#top' ? 0 : Math.max(0, t.offsetTop - 30), behavior: REDUCE ? 'auto' : 'smooth' });
+    });
+  });
+}
+
+/* Hovering a chapter chip warms the lamps and lifts that layer out a little
+   further — the one place the DOM drives the scene directly. */
+function wireFocus() {
+  $$('[data-chip]').forEach(function (el) {
+    el.addEventListener('mouseenter', function () { RIG.focus = CHAPTER_LAYER[+el.dataset.chip]; });
+    el.addEventListener('mouseleave', function () { RIG.focus = -1; });
+  });
+}
+
+function wireCursor() {
+  var dot = $('#cursor');
+  if (COARSE) { dot.style.display = 'none'; return; }
+  var x = vpW() / 2, y = vpH() / 2, tx2 = x, ty = y;
+  addEventListener('pointermove', function (e) {
+    tx2 = e.clientX; ty = e.clientY;
+    RIG.tmx = (e.clientX / vpW()) * 2 - 1;
+    RIG.tmy = -((e.clientY / vpH()) * 2 - 1);
+  }, { passive: true });
+  $$('[data-cursor]').forEach(function (el) {
+    el.addEventListener('mouseenter', function () { dot.classList.add('act'); });
+    el.addEventListener('mouseleave', function () { dot.classList.remove('act'); });
+  });
+  (function tick() {
+    x = lerp(x, tx2, .18); y = lerp(y, ty, .18);
+    dot.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0)';
+    requestAnimationFrame(tick);
+  })();
+}
+
+function makeGrain() {
+  var S = 170, c = cvs(S, S), x = c.getContext('2d');
+  var im = x.createImageData(S, S), d = im.data, r = mulberry32(9);
+  for (var i = 0; i < S * S; i++) {
+    var v = 108 + r() * 96;
+    d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255;
+  }
+  x.putImageData(im, 0, 0);
+  $('#grain').style.backgroundImage = 'url(' + c.toDataURL('image/png') + ')';
+}
+
+/* ================================================== 10 · the machine */
+var running = false, tPrev = 0, clock = 0, fadeIn = 0, FRAME = 0;
+var INTRO = { t0: 0 };
+
+function resize() {
+  var w = vpW(), h = vpH();
+  document.documentElement.style.setProperty('--vw', w + 'px');
+  if (!renderer) { measure(); return; }
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, DPR_CAP) * PERF.scale);
+  renderer.setSize(w, h, true);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  var pw = renderer.domElement.width, ph = renderer.domElement.height;
+  if (WANT_POST && POST.scene) {
+    POST.scene.setSize(pw, ph);
+    POST.comp.uniforms.uRes.value.set(pw, ph);
+    var lw = Math.max(2, pw >> 1), lh = Math.max(2, ph >> 1);
+    POST.levels.forEach(function (L) {
+      L.a.setSize(lw, lh); L.b.setSize(lw, lh); L.w = lw; L.h = lh;
+      lw = Math.max(2, lw >> 1); lh = Math.max(2, lh >> 1);
+    });
+  }
+  if (WORLD.embers) WORLD.embers.material.uniforms.uSize.value = h * renderer.getPixelRatio() * .5;
+  if (WANT_SHADOW && WORLD.key) WORLD.key.shadow.needsUpdate = true;
+  measure();
+}
+
+var _lp = new THREE.Vector3();
+function updateWorld(dt) {
+  WORLD.uT.value = clock;
+
+  /* ---- the explode ---------------------------------------------------- */
+  var ex = explodeFor(RIG.smooth);
+  RIG.focusAmt = damp(RIG.focusAmt, RIG.focus >= 0 ? 1 : 0, 5, dt);
+  /* which layer the current chapter is about, as a continuous index so the
+     highlight crossfades between chapters instead of snapping */
+  var chap = clamp(RIG.smooth, 0, 5);
+
+  for (var i = 0; i < LAYERS.length; i++) {
+    var L = LAYERS[i];
+    /* each layer opens on its own slightly delayed window, so the stack
+       peels apart from the top rather than jumping open all at once */
+    var stagger = sat((ex - (LAYERS.length - 1 - i) * .07) / (1 - (LAYERS.length - 1) * .07 * .5));
+    var e = easeOut(stagger);
+
+    /* chapter focus: distance from this layer to the chapter's own layer */
+    var wantIdx = CHAPTER_LAYER[Math.round(chap)] === undefined ? -1 : CHAPTER_LAYER[Math.round(chap)];
+    var hoverIdx = RIG.focus;
+    var isChap  = wantIdx === i ? 1 : 0;
+    var isHover = hoverIdx === i ? 1 : 0;
+    L.focus = damp(L.focus, Math.max(isChap * sat(chap - .2), isHover), 4.2, dt);
+
+    var y = lerp(L.closedY, L.openY, e) + L.focus * .14;
+    var z = lerp(0, L.openZ, e) + L.focus * .22;
+
+    L.g.position.set(0, y, z);
+    /* a slow turn while apart, so every layer shows its own texture and
+       thickness rather than one flat elevation */
+    L.g.rotation.y = clock * L.spin * .28 * (0.25 + e) + i * .7;
+    L.g.rotation.x = e * L.tilt + Math.sin(clock * .32 + i) * .012 * e;
+    L.g.rotation.z = e * L.tilt * -.6 + Math.cos(clock * .27 + i * 2) * .01 * e;
+    var s = 1 + L.focus * .035;
+    L.g.scale.setScalar(s);
+  }
+  WORLD.explode = ex;
+
+  /* the residual heat under the patty dies down as the stack comes apart
+     and comes back when it closes */
+  if (WORLD.heat) {
+    WORLD.heat.position.copy(WORLD.pattyGroup.position);
+    WORLD.heat.quaternion.copy(camera.quaternion);
+    WORLD.heat.material.opacity = (.10 + (1 - ex) * .16) * (.88 + .12 * Math.sin(clock * 2.1));
+  }
+
+  /* ---- the lamps breathe ---------------------------------------------- */
+  var f = RIG.focusAmt;
+  if (WORLD.lamps) WORLD.lamps.forEach(function (p) {
+    var u = p.userData;
+    p.intensity = u.base * (1 + f * .22) * (.90 + .10 * Math.sin(clock * u.sp + u.ph));
+  });
+  if (WORLD.glows) WORLD.glows.forEach(function (o) {
+    o.s.quaternion.copy(camera.quaternion);
+    o.s.material.opacity = .22 + f * .07 + Math.sin(clock * .7 + o.p.userData.ph) * .035;
+  });
+
+  /* ---- steam climbs off the stack ------------------------------------- */
+  if (WORLD.steam) WORLD.steam.forEach(function (m) {
+    var u = m.userData;
+    u.y += dt * u.sp;
+    if (u.y > 6.4) { u.y = -1.4; u.x0 = (Math.random() - .5) * 2.6; u.z0 = (Math.random() - .5) * 2.2; }
+    var k = sat((u.y + 1.4) / 7.8);
+    m.position.set(
+      u.x0 + Math.sin(clock * .35 + u.ph) * u.amp * (.4 + k),
+      u.y - .3,
+      u.z0 + Math.cos(clock * .28 + u.ph) * u.amp * .55
+    );
+    m.quaternion.copy(camera.quaternion);
+    var grow = .7 + k * 1.5;
+    m.scale.set(grow, grow, 1);
+    /* it is only really there over the hot chapters, and it thins out as it
+       rises — fully closed at the top of the frame */
+    m.material.opacity = Math.sin(k * Math.PI) * u.peak * (0.45 + 0.55 * smooth(0.4, 2.4, RIG.smooth)) * (1 - smooth(4.6, 5.8, RIG.smooth) * .7);
+  });
+
+  /* ---- the board follows the stack down ------------------------------- */
+  if (WORLD.board) WORLD.board.material.opacity = 1;
+}
+
+function render() {
+  FRAME++;
+  renderer.setRenderTarget(WANT_POST ? POST.scene : null);
+  renderer.clear(true, true, false);
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  if (WANT_POST) {
+    POST.comp.uniforms.uT.value = clock;
+    POST.comp.uniforms.uFade.value = fadeIn;
+    renderPost();
+  }
+}
+
+function frame(now) {
+  if (!running) return;
+  var raw = (now - tPrev) / 1000 || 0;
+  var dt = Math.min(raw, .05);            /* animation never jumps … */
+  tPrev = now; clock += dt;
+  fadeIn = INTRO.t0 ? sat((now - INTRO.t0) / 800) : 1;
+
+  /* … but the governor reads the truth. Resolution is the only knob worth
+     turning on hardware we know nothing about. */
+  if (!PERF.locked && clock > 2.2) {
+    PERF.acc += raw; PERF.n++;
+    if (PERF.n >= 40 || PERF.acc > .9) {
+      var avg = PERF.acc / PERF.n; PERF.acc = 0; PERF.n = 0;
+      if (avg > .0230 && PERF.scale > .55) { PERF.scale = Math.max(.55, PERF.scale * (avg > .05 ? .64 : .85)); resize(); }
+      else if (avg < .0138 && PERF.scale < 1) { PERF.scale = Math.min(1, PERF.scale + .08); resize(); }
+    }
+  }
+
+  RIG.prog   = progressFor(scrollY);
+  RIG.smooth = REDUCE ? RIG.prog : damp(RIG.smooth, RIG.prog, 4.6, dt);
+  RIG.mx = damp(RIG.mx, RIG.tmx, 2.4, dt);
+  RIG.my = damp(RIG.my, RIG.tmy, 2.4, dt);
+  if (INTRO.t0) RIG.intro = sat((now - INTRO.t0) / 2400);
+
+  applyCamera();
+  updateWorld(dt);
+  render();
+  queue();
+}
+var TIMER = qs('driver', 'raf') === 'timer';
+function queue() { TIMER ? setTimeout(function () { frame(performance.now()); }, 16) : requestAnimationFrame(frame); }
+
+/* ==================================================== 11 · booting */
+var JOBS = [
+  ['Lighting the room',    function () { initGL(); buildLights(); buildRig(); }],
+  ['Proofing the brioche', function () { buildFood(); }],
+  ['Firing the plancha',   function () { buildLampGlows(); buildEmbers(); }],
+  ['Raising the steam',    function () { buildSteam(); }],
+  ['Grading the frame',    function () { initPost(); measure(); }]
+];
+
+function boot() {
+  makeGrain();
+  wireReveals(); wireForeground(); wireNav(); wireHeroExit(); wireFocus(); wireCursor();
+  document.documentElement.style.setProperty('--vw', vpW() + 'px');
+  document.body.classList.add('is-locked');
+
+  var i = 0;
+  var step = function () {
+    var j = JOBS[i];
+    preJob.textContent = j[0];
+    var done = function () {
+      i++;
+      var p = i / JOBS.length;
+      preFill.style.right = ((1 - p) * 100).toFixed(1) + '%';
+      prePct.textContent = Math.round(p * 100);
+      if (i < JOBS.length) setTimeout(step, 16); else setTimeout(start, 240);
+    };
+    var r;
+    try { r = j[1](); }
+    catch (err) {
+      console.error('[mikes] job "' + j[0] + '" failed', err);
+      if (i <= 1) return fallback(err);       /* no renderer, no scene */
+    }
+    (r && r.then) ? r.then(done, done) : done();
+  };
+  setTimeout(step, 60);
+}
+
+/* If WebGL will not start the page stays a page: the canvas becomes a lit
+   gradient, the collage keeps its steam, and every reveal is force-applied. */
+function fallback(err) {
+  document.documentElement.classList.add('no-webgl');
+  document.body.classList.add('no-webgl');
+  document.body.classList.remove('is-locked');
+  preEl.classList.add('done');
+  $$('[data-rv]').forEach(function (e) { e.classList.add('rv-in'); });
+  window.__mikes = { fallback: true, error: String(err && err.message || err) };
+}
+
+function start() {
+  addEventListener('resize', resize, { passive: true });
+  addEventListener('orientationchange', function () { setTimeout(resize, 250); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) running = false;
+    else if (!running) { running = true; tPrev = performance.now(); queue(); }
+  });
+  resize();
+
+  var shot = Q.get('shot');
+  if (shot !== null) {                      /* deterministic states for review */
+    RIG.intro = 1; fadeIn = 1; INTRO.t0 = 0;
+    var n = clamp(parseInt(shot, 10) || 0, 0, SECS.length - 1);
+    scrollTo(0, anchors[n]);
+    RIG.smooth = RIG.prog = progressFor(anchors[n]);
+    $$('[data-rv]').forEach(function (e) { e.classList.add('rv-in'); });
+    document.body.classList.remove('is-locked');
+    preEl.classList.add('done');
+  } else {
+    preEl.classList.add('done');
+    setTimeout(function () {
+      document.body.classList.remove('is-locked');
+      $('#hero').querySelectorAll('[data-rv]').forEach(function (e, i) {
+        setTimeout(function () { e.classList.add('rv-in'); }, REDUCE ? 0 : 140 + i * 100);
+      });
+    }, REDUCE ? 0 : 360);
+  }
+
+  running = true; tPrev = performance.now();
+  INTRO.t0 = shot !== null ? 0 : (REDUCE ? performance.now() - 5000 : performance.now());
+  queue();
+
+  window.__mikes = {
+    RIG: RIG, WORLD: WORLD, LAYERS: LAYERS, CAM: CAM, POST: POST,
+    renderer: renderer, scene: scene, camera: camera, anchors: function () { return anchors; }
+  };
+}
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(boot, 0);
+else addEventListener('DOMContentLoaded', boot);
+})();
+</script>
+</body>
+</html>
