@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meridian Mechanical — multi-model rig</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ink:#080b0e; --ink-2:#0e1318; --panel:#121920;
+  --bone:#e7edf2; --dim:#9fb0bd; --muted:#65798a;
+  --line:rgba(231,237,242,.12); --line-soft:rgba(231,237,242,.06);
+  --cool:#4da3ff; --heat:#ff8a3c; --good:#4fd8a6;
+  --sans:'Inter',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --pad:clamp(18px,3.2vw,56px);
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+}
+*,*::before,*::after{ box-sizing:border-box; }
+body{
+  margin:0; background:var(--ink); color:var(--bone);
+  font-family:var(--sans); font-weight:300; font-size:16px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+a{ color:inherit; text-decoration:none; }
+button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; }
+h1,h2,h3{ margin:0; font-weight:400; letter-spacing:-.02em; }
+
+/* the one canvas everything is drawn into */
+#gl{ position:fixed; inset:0; width:100%; height:100%; display:block; z-index:0; }
+.page{ position:relative; z-index:2; pointer-events:none; }
+.page a,.page button,.page .card{ pointer-events:auto; }
+
+.k{ font-family:var(--mono); font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
+.k .on{ color:var(--cool); }
+.rule{ height:1px; background:var(--line); border:0; margin:0; }
+
+/* ---------------------------------------------------------------- nav */
+.nav{
+  position:fixed; top:0; left:0; width:var(--vw,100%); height:70px; z-index:40;
+  display:flex; align-items:center; gap:22px; padding:0 var(--pad);
+  background:linear-gradient(to bottom,rgba(8,11,14,.92),rgba(8,11,14,0));
+  pointer-events:auto;
+}
+.brand{ display:flex; align-items:baseline; gap:10px; margin-right:auto; }
+.brand b{ font-size:17px; font-weight:600; letter-spacing:-.01em; }
+.brand i{ font-style:normal; font-family:var(--mono); font-size:9.5px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase; }
+.nav a.lnk{ font-size:12.5px; color:var(--dim); transition:color .3s; }
+.nav a.lnk:hover{ color:var(--bone); }
+.nav .cta{ font-size:12px; border:1px solid var(--line); border-radius:999px; padding:8px 16px; transition:.35s var(--ease); }
+.nav .cta:hover{ border-color:var(--cool); color:var(--cool); }
+
+/* --------------------------------------------------------------- hero */
+.hero{ position:relative; min-height:100svh; padding:calc(70px + 4vh) var(--pad) 3vh; display:flex; flex-direction:column; }
+.hero-top{ max-width:min(560px,46vw); }
+.hero h1{ font-size:clamp(34px,4.6vw,68px); line-height:1.03; margin:18px 0 20px; }
+.hero h1 em{ font-style:normal; color:var(--cool); }
+.hero p{ font-size:clamp(14px,1.05vw,17px); color:var(--dim); max-width:44ch; }
+.hero-foot{ margin-top:auto; display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+.specs{ display:flex; gap:clamp(16px,2.6vw,44px); flex-wrap:wrap; }
+.spec b{ display:block; font-size:clamp(20px,2.1vw,30px); font-weight:400; font-variant-numeric:tabular-nums; }
+.spec b i{ font-style:normal; font-size:.5em; color:var(--dim); margin-left:.3em; }
+.spec span{ display:block; margin-top:6px; font-family:var(--mono); font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); }
+.hint{ font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+
+/* ------------------------------------------------------------- system */
+.sec{ padding:clamp(70px,11vh,150px) var(--pad); }
+.sec-head{ display:flex; align-items:center; gap:16px; margin-bottom:34px; }
+.sec-head .rule{ flex:1; max-width:220px; }
+.sec h2{ font-size:clamp(26px,3.1vw,46px); margin-bottom:14px; }
+.sec .sub{ color:var(--dim); max-width:52ch; font-size:14.5px; }
+
+.cards{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:clamp(14px,1.6vw,26px); margin-top:clamp(30px,5vh,56px); }
+.card{
+  border:1px solid var(--line); border-radius:6px; overflow:hidden;
+  background:linear-gradient(180deg,rgba(18,25,32,.72),rgba(10,14,18,.72));
+  transition:border-color .4s var(--ease), transform .5s var(--ease-out);
+}
+.card:hover{ border-color:rgba(77,163,255,.45); transform:translateY(-3px); }
+/* the hole the renderer paints a live view into */
+.view{ position:relative; aspect-ratio:4/3; display:block; }
+.view::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(78% 60% at 50% 42%,transparent 55%,rgba(6,9,12,.55) 100%);
+}
+.view.hero-view{
+  position:absolute; right:0; top:0; width:54vw; height:100svh;
+  aspect-ratio:auto; cursor:grab; z-index:1;
+}
+.view.hero-view::after{ background:radial-gradient(62% 52% at 56% 46%,transparent 58%,rgba(6,9,12,.44) 100%); }
+.view.hero-view:active{ cursor:grabbing; }
+.card-meta{ padding:14px 16px 16px; border-top:1px solid var(--line-soft); }
+.card-meta b{ display:block; font-size:14.5px; font-weight:500; margin-bottom:5px; }
+.card-meta p{ margin:0 0 10px; font-size:12.5px; color:var(--muted); line-height:1.55; }
+.card-meta .row{ display:flex; justify-content:space-between; font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--dim); text-transform:uppercase; }
+.card-meta .row span:last-child{ color:var(--cool); }
+.badge{
+  position:absolute; left:12px; top:12px; z-index:3; font-family:var(--mono);
+  font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);
+  border:1px solid var(--line); border-radius:3px; padding:5px 8px;
+  background:rgba(8,11,14,.6); backdrop-filter:blur(6px);
+}
+.badge.pending{ color:var(--muted); }
+.badge.live{ color:var(--good); border-color:rgba(79,216,166,.35); }
+
+/* ---------------------------------------------------------------- HUD */
+.hud{
+  position:fixed; right:14px; bottom:14px; z-index:45; pointer-events:auto;
+  font-family:var(--mono); font-size:10.5px; line-height:1.75; color:var(--dim);
+  border:1px solid var(--line); border-radius:5px; padding:10px 13px;
+  background:rgba(8,11,14,.82); backdrop-filter:blur(9px); min-width:210px;
+}
+.hud h4{ font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); margin:0 0 7px; font-weight:500; }
+.hud div{ display:flex; justify-content:space-between; gap:14px; }
+.hud b{ font-weight:500; color:var(--bone); font-variant-numeric:tabular-nums; }
+.hud .ok{ color:var(--good); }
+.hud .warn{ color:var(--heat); }
+.hud-toggle{ position:fixed; right:14px; bottom:14px; z-index:46; font-family:var(--mono); font-size:10px;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--muted); border:1px solid var(--line);
+  border-radius:5px; padding:8px 11px; background:rgba(8,11,14,.82); display:none; pointer-events:auto; }
+body.hud-off .hud{ display:none; } body.hud-off .hud-toggle{ display:block; }
+
+/* ------------------------------------------------------------- footer */
+.foot{ padding:60px var(--pad) 40px; border-top:1px solid var(--line-soft); }
+.foot .k{ display:block; margin-bottom:8px; }
+.foot p{ color:var(--muted); font-size:12.5px; max-width:60ch; margin:0; }
+
+/* --------------------------------------------------------- responsive */
+@media (max-width:1000px){
+  .cards{ grid-template-columns:1fr; }
+  .view.hero-view{ position:relative; width:100%; height:auto; aspect-ratio:4/3; right:auto; margin:26px 0 0; }
+  .hero{ min-height:auto; }
+  .hero-top{ max-width:none; }
+  .hero{ min-height:auto; padding-bottom:8vh; }
+  .hud{ display:none; } body.hud-off .hud-toggle{ display:none; }
+}
+@media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
+
+/* if WebGL never starts, the views become plates rather than holes */
+.no-webgl .view{ background:linear-gradient(150deg,#1a232c,#0c1116 60%); }
+.no-webgl .badge.pending{ display:none; }
+</style>
+</head>
+<body>
+
+<canvas id="gl" aria-hidden="true"></canvas>
+
+<header class="nav">
+  <a class="brand" href="#"><b>Meridian</b><i>Mechanical</i></a>
+  <a class="lnk" href="#system">Equipment</a>
+  <a class="lnk" href="#arch">Engineering</a>
+  <a class="cta" href="#">Book a survey</a>
+</header>
+
+<div class="page">
+
+  <section class="hero" id="top">
+    <div class="view hero-view" data-view="condenser" data-hero></div>
+    <div class="hero-top">
+      <div class="k">Reference rig<span style="color:var(--muted)"> — </span><span class="on">3 live models</span></div>
+      <h1>Every unit on the page is <em>geometry</em>, not a photograph.</h1>
+      <p>One WebGL context, three independent product scenes, each built the moment it is
+        needed and painted straight into its own card. Drag the condenser to orbit it.</p>
+    </div>
+    <div class="hero-foot">
+      <div class="specs">
+        <div class="spec"><b>1</b><span>WebGL context</span></div>
+        <div class="spec"><b id="s-models">0<i>/3</i></b><span>Models resident</span></div>
+        <div class="spec"><b id="s-tris">0<i>k</i></b><span>Triangles</span></div>
+        <div class="spec"><b id="s-calls">0</b><span>Draw calls / frame</span></div>
+      </div>
+      <div class="hint" id="hero-hint">Drag to orbit</div>
+    </div>
+  </section>
+
+  <section class="sec" id="system">
+    <div class="sec-head">
+      <span class="k">01 — The system</span><hr class="rule"><span class="k">Lazy built</span>
+    </div>
+    <h2>Three units, three scenes, one renderer.</h2>
+    <p class="sub">Each card is a hole in the page. Nothing is constructed until the card is
+      close enough to matter — watch the badges flip from queued to live as you scroll.</p>
+
+    <div class="cards">
+      <article class="card">
+        <div class="view" data-view="condenser"><span class="badge pending" data-badge="condenser">Queued</span></div>
+        <div class="card-meta">
+          <b>MX-40 Condenser</b>
+          <p>Outdoor unit. Micro-channel coil, variable-speed fan, corner service access.</p>
+          <div class="row"><span>Outdoor</span><span id="t-condenser">— tris</span></div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="view" data-view="furnace"><span class="badge pending" data-badge="furnace">Queued</span></div>
+        <div class="card-meta">
+          <b>AH-22 Air Handler</b>
+          <p>Indoor cabinet. Sealed blower deck, filter rack, top plenum collar.</p>
+          <div class="row"><span>Indoor</span><span id="t-furnace">— tris</span></div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="view" data-view="minisplit"><span class="badge pending" data-badge="minisplit">Queued</span></div>
+        <div class="card-meta">
+          <b>WS-9 Wall Head</b>
+          <p>Ductless head. Motorised louver, ionising filter, whisper mode at 19 dB.</p>
+          <div class="row"><span>Ductless</span><span id="t-minisplit">— tris</span></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="sec" id="arch">
+    <div class="sec-head">
+      <span class="k">02 — Engineering</span><hr class="rule"><span class="k">Budget</span>
+    </div>
+    <h2>The hard part was never the modelling.</h2>
+    <p class="sub">Multiple products on one page is a memory and draw-call problem, not a
+      geometry problem. One context, scissored viewports, lazy construction and explicit
+      disposal are what keep it from falling over on a mid-range phone.</p>
+  </section>
+
+  <footer class="foot">
+    <span class="k">Reference rig</span>
+    <p>Meridian Mechanical is a fictional company built to demonstrate a multi-model
+      architecture. Every unit here is procedural; a real deployment swaps them for the
+      manufacturer's own geometry through the same loader.</p>
+  </footer>
+</div>
+
+<div class="hud" id="hud">
+  <h4>Frame budget</h4>
+  <div><span>Contexts</span><b class="ok">1</b></div>
+  <div><span>Scenes built</span><b id="h-scenes">0</b></div>
+  <div><span>Draw calls</span><b id="h-calls">0</b></div>
+  <div><span>Triangles</span><b id="h-tris">0</b></div>
+  <div><span>Geometries</span><b id="h-geo">0</b></div>
+  <div><span>Textures</span><b id="h-tex">0</b></div>
+  <div><span>Frame</span><b id="h-ms">0.0 ms</b></div>
+  <div style="margin-top:6px"><span>Views drawn</span><b id="h-views">0</b></div>
+</div>
+<button class="hud-toggle" id="hud-toggle">Stats</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =====================================================================
+   A multi-model product rig.
+
+   The difference between this and a one-object page is not the modelling,
+   it is the bookkeeping. Three products on one page means:
+
+     · ONE WebGL context. Browsers cap live contexts somewhere around
+       8–16 and silently kill the oldest when you pass it, so a canvas per
+       card is the one architecture guaranteed to break on the fourth card.
+       Here every view is a scissored rectangle of a single canvas.
+     · One Scene per product, so a product can be built, framed, lit and
+       thrown away independently of the others.
+     · Nothing is constructed until its card is near. Building all three at
+       load is what turns a snappy page into four seconds of white.
+     · Explicit disposal. Geometries and textures live on the GPU and are
+       not garbage collected when the JS reference goes.
+   ===================================================================== */
+(function () {
+'use strict';
+
+var Q = new URLSearchParams(location.search);
+var qs = function (k, d) { var v = Q.get(k); return v === null ? d : v; };
+var REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+var COARSE = matchMedia('(hover: none)').matches;
+
+var clamp = function (v,a,b){ return v<a?a:(v>b?b:v); };
+var lerp  = function (a,b,t){ return a+(b-a)*t; };
+var damp  = function (c,to,r,dt){ return lerp(c,to,1-Math.exp(-r*dt)); };
+var TAU = Math.PI*2;
+
+function rng(s){ return function(){ s|=0; s=s+0x6D2B79F5|0; var t=Math.imul(s^s>>>15,1|s);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+/* ------------------------------------------------------------ textures */
+function cvs(w,h){ var c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
+
+/* stacked up-scaled value noise — cheap, and invisible once it modulates
+   a roughness map rather than an albedo */
+function noiseCanvas(W,H,seed,oct,cells,contrast){
+  var out=cvs(W,H), o=out.getContext('2d');
+  o.fillStyle='#808080'; o.fillRect(0,0,W,H);
+  var c=cells||4, a=1;
+  for(var i=0;i<(oct||4);i++){
+    var n=cvs(c,c), nx=n.getContext('2d');
+    var im=nx.createImageData(c,c), d=im.data, r=rng(seed+i*911);
+    for(var k=0;k<c*c;k++){ var v=128+(r()-.5)*255*(contrast||1);
+      d[k*4]=d[k*4+1]=d[k*4+2]=clamp(v,0,255); d[k*4+3]=255; }
+    nx.putImageData(im,0,0);
+    o.globalAlpha=a; o.globalCompositeOperation=i===0?'source-over':'overlay';
+    o.imageSmoothingEnabled=true; o.imageSmoothingQuality='high';
+    o.drawImage(n,0,0,W,H); c*=2; a*=.6;
+  }
+  o.globalAlpha=1; o.globalCompositeOperation='source-over';
+  return out;
+}
+/* remap noise into a roughness band — three multiplies material.roughness
+   by this, so a raw mid-grey field halves every value and turns powder
+   coat into a mirror */
+function roughFrom(h,lo,hi){
+  var W=h.width,H=h.height,c=cvs(W,H),x=c.getContext('2d');
+  var v=Math.round(hi*255);
+  x.fillStyle='rgb('+v+','+v+','+v+')'; x.fillRect(0,0,W,H);
+  x.globalAlpha=clamp(hi-lo,0,1)*1.7; x.drawImage(h,0,0); x.globalAlpha=1;
+  return c;
+}
+/* the orange-peel of a powder-coated sheet: fine, tight, low contrast */
+function texPowder(seed){
+  var S=512, n=noiseCanvas(S,S,seed,5,24,.9);
+  return { rough: roughFrom(n,.52,.86) };
+}
+/* brushed aluminium: directional streaks, which is the whole read */
+function texBrushed(seed){
+  var S=512,c=cvs(S,S),x=c.getContext('2d'), r=rng(seed);
+  x.fillStyle='#9a9a9a'; x.fillRect(0,0,S,S);
+  for(var i=0;i<2600;i++){
+    var y=r()*S, len=40+r()*380, x0=r()*S, g=170+r()*80;
+    x.strokeStyle='rgba('+(g|0)+','+(g|0)+','+(g|0)+','+(.03+r()*.07).toFixed(3)+')';
+    x.lineWidth=.5+r()*1.3;
+    x.beginPath(); x.moveTo(x0,y); x.lineTo(x0+len,y+(r()-.5)*1.2); x.stroke();
+  }
+  return { rough: c };
+}
+var LIB={}; var lib=function(k,f){ return LIB[k]||(LIB[k]=f()); };
+function tx(canvasEl,rep,srgb){
+  var t=new THREE.CanvasTexture(canvasEl);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  if(rep) t.repeat.set(rep[0],rep[1]);
+  t.anisotropy=Math.min(8,MAXA);
+  if(srgb) t.encoding=THREE.sRGBEncoding;
+  t.needsUpdate=true; TEX.push(t); return t;
+}
+/* r128 has no colour management: a hex on a material or a light is used
+   as a linear value, so every authored swatch goes through here */
+var col=function(h){ return new THREE.Color(h).convertSRGBToLinear(); };
+
+/* ------------------------------------------------------------ geometry */
+/* A rounded, bevelled slab. Chamfers are what make a box read as a folded
+   sheet-metal panel instead of a primitive: they catch a highlight along
+   every edge, which is most of what sells "manufactured". */
+function panel(w,h,d,r,bev){
+  r=Math.min(r===undefined?.02:r, w/2-.001, h/2-.001);
+  bev=bev===undefined?.006:bev;
+  var s=new THREE.Shape();
+  var x=-w/2,y=-h/2;
+  s.moveTo(x+r,y);
+  s.lineTo(x+w-r,y); s.quadraticCurveTo(x+w,y,x+w,y+r);
+  s.lineTo(x+w,y+h-r); s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  s.lineTo(x+r,y+h); s.quadraticCurveTo(x,y+h,x,y+h-r);
+  s.lineTo(x,y+r); s.quadraticCurveTo(x,y,x+r,y);
+  var g=new THREE.ExtrudeGeometry(s,{
+    depth:Math.max(.001,d-bev*2), bevelEnabled:bev>0, bevelThickness:bev,
+    bevelSize:bev, bevelSegments:2, curveSegments:6
+  });
+  g.translate(0,0,-(d-bev*2)/2);
+  g.computeVertexNormals();
+  return g;
+}
+function box(w,h,d){ return new THREE.BoxGeometry(w,h,d); }
+
+/* ============================================================ materials */
+var MAT={};
+function buildMaterials(){
+  var pw=lib('powder',function(){ return texPowder(11); });
+  var br=lib('brush', function(){ return texBrushed(23); });
+
+  MAT.shell = new THREE.MeshStandardMaterial({
+    color:col(0x39434c), roughness:.56, metalness:.10
+  });
+  MAT.shellLight = new THREE.MeshStandardMaterial({
+    color:col(0xb9c3cb), roughness:.50, metalness:.08
+  });
+  MAT.alu = new THREE.MeshStandardMaterial({
+    color:col(0x9fa8ad), roughness:.34, metalness:.95,
+    roughnessMap:tx(br.rough,[2,2])
+  });
+  /* the fin stack: bare aluminium, rough enough not to strobe as it turns */
+  MAT.fin = new THREE.MeshStandardMaterial({
+    color:col(0x6e777d), roughness:.58, metalness:.72, side:THREE.DoubleSide
+  });
+  MAT.dark = new THREE.MeshStandardMaterial({ color:col(0x14191e), roughness:.74, metalness:.10 });
+  MAT.plastic = new THREE.MeshStandardMaterial({ color:col(0x1a2027), roughness:.44, metalness:.05 });
+  MAT.white = new THREE.MeshStandardMaterial({ color:col(0xeef2f5), roughness:.46, metalness:.03 });
+  MAT.copper = new THREE.MeshStandardMaterial({ color:col(0xb87333), roughness:.35, metalness:.95 });
+  MAT.rubber = new THREE.MeshStandardMaterial({ color:col(0x0d1114), roughness:.95, metalness:.02 });
+  MAT.glassDark = new THREE.MeshStandardMaterial({ color:col(0x05080a), roughness:.18, metalness:.4 });
+  MAT.led = new THREE.MeshBasicMaterial({ color:new THREE.Color().setRGB(.2,1.6,1.1), toneMapped:false });
+  MAT.ledWarm = new THREE.MeshBasicMaterial({ color:new THREE.Color().setRGB(1.7,.8,.25), toneMapped:false });
+}
+
+/* ==================================================================
+   The products.
+
+   All three are hard-surface: folded panels, extruded slots, arrayed
+   fins, turned collars. That is the reason this scales where the food
+   in the last project would not — a condenser is boxes and repetition,
+   and repetition is what an InstancedMesh is for. The fin stack below
+   is 428 fins in one draw call.
+   ================================================================== */
+var PRODUCTS = {};
+
+/* ------------------------------------------- MX-40 outdoor condenser */
+PRODUCTS.condenser = {
+  label:'MX-40 Condenser',
+  cam:{ pos:[1.15,.78,1.32], target:[0,.36,0], fov:32 },
+  build:function(){
+    var g=new THREE.Group();
+    var W=.92,D=.92,H=.80;                         /* metres */
+
+    /* base pan, turned up at the edges */
+    var pan=new THREE.Mesh(panel(W,D,.055,.03), MAT.dark);
+    pan.rotation.x=-Math.PI/2; pan.position.y=.055; g.add(pan);
+    /* feet */
+    [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(function(s){
+      var f=new THREE.Mesh(box(.09,.055,.09), MAT.rubber);
+      f.position.set(s[0]*(W/2-.08), .028, s[1]*(D/2-.08)); g.add(f);
+    });
+
+    /* the four corner posts the panels hang off */
+    [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(function(s){
+      var p=new THREE.Mesh(box(.05,H,.05), MAT.shell);
+      p.position.set(s[0]*(W/2-.025), .055+H/2, s[1]*(D/2-.025)); g.add(p);
+    });
+
+    /* ---- the coil. One InstancedMesh wrapping three faces: this is the
+       single most recognisable thing about a condenser, and doing it with
+       real fins rather than a texture is what makes it survive a close
+       orbit. Fin pitch is ~1.6 mm in reality; at 4 mm it reads the same
+       on screen and costs a quarter of the instances. */
+    var FIN_H=H-.075, PITCH=.0085, FIN_D=.075;
+    /* Each face is: which axis it runs along, its length, and where it sits.
+       A fin's plane is perpendicular to the run — face-on you see the comb
+       of fin edges, off-axis you see down into the gaps. That contrast is
+       the entire visual signature of a condenser coil. */
+    var faces=[
+      { run:'x', len:W-.10, x:0,            z:-(D/2-.025-FIN_D/2), yaw:Math.PI/2 },
+      { run:'z', len:D-.10, x:-(W/2-.025-FIN_D/2), z:0,            yaw:0 },
+      { run:'z', len:D-.10, x:(W/2-.025-FIN_D/2),  z:0,            yaw:0 }
+    ];
+    var total=0, i;
+    faces.forEach(function(f){ total+=Math.floor(f.len/PITCH); });
+    var fins=new THREE.InstancedMesh(new THREE.PlaneGeometry(FIN_D,FIN_H), MAT.fin, total);
+    var M=new THREE.Matrix4(), Qt=new THREE.Quaternion(), Eu=new THREE.Euler(),
+        P=new THREE.Vector3(), S=new THREE.Vector3(1,1,1);
+    var idx=0;
+    faces.forEach(function(f){
+      var n=Math.floor(f.len/PITCH);
+      Eu.set(0,f.yaw,0); Qt.setFromEuler(Eu);
+      for(i=0;i<n;i++){
+        var t=(i/(n-1)-.5)*f.len;
+        if(f.run==='x') P.set(f.x+t,.045+FIN_H/2,f.z);
+        else            P.set(f.x,.045+FIN_H/2,f.z+t);
+        M.compose(P,Qt,S);
+        fins.setMatrixAt(idx++,M);
+      }
+    });
+    fins.instanceMatrix.needsUpdate=true;
+    g.add(fins);
+
+    /* the tube sheet the fins are pressed onto, sitting just inboard so the
+       coil reads as a slab rather than a floating comb */
+    faces.forEach(function(f){
+      var w = f.run==='x' ? f.len : f.len;
+      var b=new THREE.Mesh(new THREE.PlaneGeometry(w,FIN_H), MAT.dark);
+      b.rotation.y = f.run==='x' ? 0 : Math.PI/2;
+      b.position.set(
+        f.run==='x' ? f.x : f.x + (f.x>0 ? -FIN_D/2-.004 : FIN_D/2+.004),
+        .045+FIN_H/2,
+        f.run==='x' ? f.z + FIN_D/2 + .004 : f.z
+      );
+      g.add(b);
+    });
+
+    /* the compressor bay. Without something solid inside, a coil on three
+       sides is a box you can see straight through. */
+    var bay=new THREE.Mesh(box(W-.30,H-.20,D-.30), MAT.dark);
+    bay.position.y=.07+(H-.20)/2; g.add(bay);
+    var comp=new THREE.Mesh(new THREE.CylinderGeometry(.115,.115,.30,24), MAT.shell);
+    comp.position.set(-.08,.22,.06); g.add(comp);
+
+    /* the closed service face, with a recessed access panel */
+    var face=new THREE.Mesh(panel(W-.06,H-.08,.028,.012), MAT.shell);
+    face.position.set(0,.07+(H-.08)/2, D/2-.03); g.add(face);
+    var acc=new THREE.Mesh(panel(.30,.34,.010,.010), MAT.shellLight);
+    acc.position.set(-.22,.30,D/2-.012); g.add(acc);
+    /* louvered relief slots in the access panel */
+    var lv=new THREE.InstancedMesh(box(.24,.008,.006), MAT.dark, 9);
+    for(i=0;i<9;i++){ M.makeTranslation(-.22,.20+i*.022,D/2-.004); lv.setMatrixAt(i,M); }
+    lv.instanceMatrix.needsUpdate=true; g.add(lv);
+    /* badge */
+    var badge=new THREE.Mesh(panel(.16,.045,.004,.006), MAT.alu);
+    badge.position.set(.24,.56,D/2-.010); g.add(badge);
+
+    /* ---- the top deck: collar, fan guard, blades */
+    var deck=new THREE.Mesh(panel(W,D,.03,.03), MAT.shell);
+    deck.rotation.x=-Math.PI/2; deck.position.y=.055+H; g.add(deck);
+    var throat=new THREE.Mesh(new THREE.CylinderGeometry(.30,.32,.06,48,1,true), MAT.shell);
+    throat.material.side=THREE.DoubleSide;
+    throat.position.y=.055+H+.005; g.add(throat);
+
+    /* the guard: concentric rings plus radial spokes, both instanced */
+    var guard=new THREE.Group();
+    for(i=0;i<5;i++){
+      var rr=.075+i*.058;
+      var ring=new THREE.Mesh(new THREE.TorusGeometry(rr,.0035,6,64), MAT.alu);
+      ring.rotation.x=-Math.PI/2; guard.add(ring);
+    }
+    var SP=24;
+    var spokes=new THREE.InstancedMesh(box(.006,.006,.30), MAT.alu, SP);
+    for(i=0;i<SP;i++){
+      Eu.set(0,(i/SP)*TAU,0); Qt.setFromEuler(Eu);
+      P.set(Math.sin(Eu.y)*.16,0,Math.cos(Eu.y)*.16);
+      M.compose(P,Qt,S); spokes.setMatrixAt(i,M);
+    }
+    spokes.instanceMatrix.needsUpdate=true; guard.add(spokes);
+    var hub=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.012,24), MAT.alu);
+    hub.rotation.x=Math.PI; guard.add(hub);
+    guard.position.y=.055+H+.045; g.add(guard);
+
+    /* blades below the guard, pitched, and turning */
+    var fan=new THREE.Group();
+    var BL=5;
+    for(i=0;i<BL;i++){
+      var b2=new THREE.Mesh(panel(.26,.115,.006,.05,.003), MAT.plastic);
+      b2.position.set(Math.sin(i/BL*TAU)*.15,0,Math.cos(i/BL*TAU)*.15);
+      b2.rotation.set(-Math.PI/2 + .34, i/BL*TAU, 0, 'YXZ');
+      fan.add(b2);
+    }
+    var mh=new THREE.Mesh(new THREE.CylinderGeometry(.055,.055,.07,20), MAT.dark);
+    fan.add(mh);
+    fan.position.y=.055+H-.035; g.add(fan);
+    g.userData.fan=fan;
+
+    /* the line set leaving the service corner */
+    var curve=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(W/2-.10,.20,D/2-.02),
+      new THREE.Vector3(W/2+.06,.20,D/2+.04),
+      new THREE.Vector3(W/2+.16,.13,D/2+.02),
+      new THREE.Vector3(W/2+.22,.04,D/2-.10)
+    ]);
+    [.017,.011].forEach(function(r,ii){
+      var tube=new THREE.Mesh(new THREE.TubeGeometry(curve,26,r,10,false),
+        ii? MAT.copper : MAT.rubber);
+      tube.position.y = ii? .06 : 0;
+      g.add(tube);
+    });
+
+    g.position.y=-.42;
+    return g;
+  }
+};
+
+/* ---------------------------------------------- AH-22 indoor air handler */
+PRODUCTS.furnace = {
+  label:'AH-22 Air Handler',
+  cam:{ pos:[.92,.55,1.15], target:[0,.10,0], fov:32 },
+  build:function(){
+    var g=new THREE.Group();
+    var W=.56,D=.62,H=1.30, i;
+    var M=new THREE.Matrix4();
+
+    var body=new THREE.Mesh(panel(W,H,D,.018), MAT.shellLight);
+    body.position.y=H/2; g.add(body);
+
+    /* two doors with a shadow gap between them — the gap is the detail
+       that makes a cabinet read as a cabinet */
+    var upper=new THREE.Mesh(panel(W-.03,H*.46,.014,.012), MAT.white);
+    upper.position.set(0,H*.72,D/2+.002); g.add(upper);
+    var lower=new THREE.Mesh(panel(W-.03,H*.46,.014,.012), MAT.white);
+    lower.position.set(0,H*.245,D/2+.002); g.add(lower);
+
+    /* recessed pull, louvre bank, and a label plate */
+    var pull=new THREE.Mesh(panel(.13,.022,.008,.010), MAT.alu);
+    pull.position.set(.16,H*.50,D/2+.012); g.add(pull);
+    var lv=new THREE.InstancedMesh(box(.26,.007,.010), MAT.dark, 12);
+    for(i=0;i<12;i++){ M.makeTranslation(-.10,H*.16+i*.020,D/2+.012); lv.setMatrixAt(i,M); }
+    lv.instanceMatrix.needsUpdate=true; g.add(lv);
+    var plate=new THREE.Mesh(panel(.15,.085,.003,.004), MAT.alu);
+    plate.position.set(.14,H*.86,D/2+.011); g.add(plate);
+    /* a status window with two lit indicators */
+    var win=new THREE.Mesh(panel(.085,.032,.004,.006), MAT.glassDark);
+    win.position.set(-.16,H*.86,D/2+.011); g.add(win);
+    var l1=new THREE.Mesh(new THREE.CircleGeometry(.005,12), MAT.led);
+    l1.position.set(-.185,H*.86,D/2+.014); g.add(l1);
+    var l2=new THREE.Mesh(new THREE.CircleGeometry(.005,12), MAT.ledWarm);
+    l2.position.set(-.163,H*.86,D/2+.014); g.add(l2);
+
+    /* top plenum collar and the flue turning out the back */
+    var collar=new THREE.Mesh(new THREE.CylinderGeometry(.15,.15,.05,32,1,true), MAT.alu);
+    collar.material.side=THREE.DoubleSide;
+    collar.position.set(0,H+.024,0); g.add(collar);
+    var lip=new THREE.Mesh(new THREE.TorusGeometry(.15,.006,6,32), MAT.alu);
+    lip.rotation.x=-Math.PI/2; lip.position.set(0,H+.048,0); g.add(lip);
+
+    var flue=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-.16,H-.06,-.10),
+      new THREE.Vector3(-.16,H+.10,-.10),
+      new THREE.Vector3(-.16,H+.17,-.16),
+      new THREE.Vector3(-.16,H+.19,-.34)
+    ]);
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(flue,20,.035,12,false), MAT.alu));
+
+    /* gas line and condensate, entering low on the side */
+    var gas=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-W/2-.16,.30,.10),
+      new THREE.Vector3(-W/2-.03,.30,.10),
+      new THREE.Vector3(-W/2+.01,.30,.10)
+    ]);
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(gas,10,.012,10,false), MAT.dark));
+
+    /* plinth */
+    var base=new THREE.Mesh(panel(W+.02,.05,D+.02,.01), MAT.dark);
+    base.rotation.x=-Math.PI/2; base.position.y=.025; g.add(base);
+
+    g.position.y=-.62;
+    return g;
+  }
+};
+
+/* --------------------------------------------- WS-9 ductless wall head */
+PRODUCTS.minisplit = {
+  label:'WS-9 Wall Head',
+  cam:{ pos:[.72,.28,.86], target:[0,.02,0], fov:30 },
+  build:function(){
+    var g=new THREE.Group();
+    var W=.90,H=.30,D=.21, i;
+    var M=new THREE.Matrix4();
+
+    /* A wall head is one extruded profile: a rounded bar, flat at the back
+       where it meets the plate, bulged at the front. Drawn once in the
+       depth/height plane and swept along the width.
+
+       The first attempt closed the outline by walking the same points back
+       at a scaled offset, which self-intersects — ExtrudeGeometry does not
+       complain, it just triangulates the mess into a lump. A profile has to
+       be a single non-crossing loop. */
+    var sh=new THREE.Shape();
+    sh.moveTo(-D*.5,  H*.50);                                   /* back top   */
+    sh.lineTo( D*.06, H*.50);
+    sh.quadraticCurveTo(D*.50, H*.48,  D*.50,  H*.06);          /* front brow */
+    sh.lineTo( D*.50, -H*.10);
+    sh.quadraticCurveTo(D*.48, -H*.44, D*.02, -H*.50);          /* under-chin */
+    sh.lineTo(-D*.5, -H*.50);                                   /* back foot  */
+    sh.closePath();
+    var shellGeo=new THREE.ExtrudeGeometry(sh,{
+      depth:W, bevelEnabled:true, bevelThickness:.007, bevelSize:.007,
+      bevelSegments:2, curveSegments:12
+    });
+    /* extrusion runs +Z; swing it onto +X so the profile's depth axis
+       becomes the world Z the camera is looking down */
+    shellGeo.rotateY(-Math.PI/2);
+    shellGeo.translate(W/2,0,0);
+    shellGeo.computeVertexNormals();
+    var shell=new THREE.Mesh(shellGeo, MAT.white);
+    g.add(shell);
+
+    /* the discharge slot underneath, with a motorised louver blade in it */
+    var slot=new THREE.Mesh(box(W*.86,.05,.09), MAT.dark);
+    slot.position.set(0,-H*.30,D*.24); g.add(slot);
+    var blade=new THREE.Mesh(panel(W*.84,.075,.009,.018,.004), MAT.white);
+    blade.position.set(0,-H*.33,D*.30);
+    blade.rotation.x=-.55;                     /* open, angled down */
+    g.add(blade);
+    g.userData.louver=blade;
+
+    /* intake grille across the top face — instanced slats */
+    var SL=26;
+    var slats=new THREE.InstancedMesh(box(W*.80,.004,.030), MAT.white, SL);
+    for(i=0;i<SL;i++){ M.makeTranslation(0, H*.50 - i*.0016, -D*.30 + i*.0135); slats.setMatrixAt(i,M); }
+    slats.instanceMatrix.needsUpdate=true; g.add(slats);
+
+    /* display strip and a single running lamp */
+    var disp=new THREE.Mesh(panel(.13,.026,.004,.008), MAT.glassDark);
+    disp.position.set(W*.28,-H*.12,D*.47); g.add(disp);
+    var lamp=new THREE.Mesh(new THREE.CircleGeometry(.0045,12), MAT.led);
+    lamp.position.set(W*.28+.046,-H*.12,D*.492); g.add(lamp);
+
+    /* wall plate behind, so it reads as mounted rather than floating */
+    var plate=new THREE.Mesh(panel(W*.82,H*.62,.010,.01), MAT.shell);
+    plate.position.set(0,H*.02,-D*.56); g.add(plate);
+
+    /* the line set dropping out of the right end */
+    var line=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(W*.46,-H*.30,-D*.20),
+      new THREE.Vector3(W*.53,-H*.44,-D*.22),
+      new THREE.Vector3(W*.55,-H*.70,-D*.26)
+    ]);
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(line,14,.020,10,false), MAT.dark));
+
+    return g;
+  }
+};
+
+/* ================================================================== gl */
+var canvas=document.getElementById('gl');
+var vpW=function(){ return document.documentElement.clientWidth||innerWidth; };
+var vpH=function(){ return document.documentElement.clientHeight||innerHeight; };
+var renderer, MAXA=1, ENV=null, TEX=[];
+var LOW = (qs('q', COARSE?'low':'high')==='low');
+var DPR_CAP = parseFloat(qs('dpr', LOW?1.4:1.9));
+var PERF={ scale:1, acc:0, n:0, locked:qs('adapt','1')==='0' };
+
+function initGL(){
+  if(qs('nogl','0')!=='0'||!window.THREE) throw new Error('webgl unavailable');
+  renderer=new THREE.WebGLRenderer({ canvas:canvas, antialias:!LOW, alpha:true, powerPreference:'high-performance' });
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,DPR_CAP));
+  renderer.setSize(vpW(),vpH(),true);
+  renderer.outputEncoding=THREE.sRGBEncoding;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.05;
+  renderer.setClearColor(0x000000,0);
+  /* stats are per-render() by default; totals across four views are the
+     number that actually matters here, so accumulate manually */
+  renderer.info.autoReset=false;
+  MAXA=renderer.capabilities.getMaxAnisotropy();
+}
+
+/* A studio in a canvas. Two soft boxes and a rim, drawn as an equirect
+   strip and pushed through PMREM. Hard surfaces are almost entirely
+   reflection — without an environment, brushed aluminium is flat grey and
+   no amount of light rigging fixes it. */
+function buildEnv(){
+  var W=1024,H=512,c=cvs(W,H),x=c.getContext('2d');
+  var sky=x.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#20272e'); sky.addColorStop(.46,'#10151a');
+  sky.addColorStop(.55,'#0a0e12'); sky.addColorStop(1,'#05080a');
+  x.fillStyle=sky; x.fillRect(0,0,W,H);
+  function softbox(cx,cy,w,h,a,tint){
+    var gg=x.createRadialGradient(cx,cy,0,cx,cy,Math.max(w,h));
+    gg.addColorStop(0,'rgba('+tint+','+a+')');
+    gg.addColorStop(.45,'rgba('+tint+','+(a*.35).toFixed(2)+')');
+    gg.addColorStop(1,'rgba('+tint+',0)');
+    x.fillStyle=gg; x.save(); x.translate(cx,cy); x.scale(1,h/w);
+    x.beginPath(); x.arc(0,0,w,0,TAU); x.fill(); x.restore();
+  }
+  softbox(W*.26,H*.24,190,120,1,'255,255,255');    /* key */
+  softbox(W*.70,H*.30,150,110,.55,'186,214,255');  /* cool fill */
+  softbox(W*.92,H*.40,110,90,.40,'255,205,150');   /* warm rim */
+  softbox(W*.48,H*.10,240,70,.30,'255,255,255');   /* top strip */
+  var t=new THREE.CanvasTexture(c);
+  t.mapping=THREE.EquirectangularReflectionMapping;
+  t.encoding=THREE.sRGBEncoding; t.needsUpdate=true;
+  var pmrem=new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+  ENV=pmrem.fromEquirectangular(t).texture;
+  pmrem.dispose(); t.dispose();
+}
+
+/* a soft contact shadow, which is cheaper and steadier than a shadow map
+   once four viewports are drawing every frame */
+var SHADOW_TEX=null;
+function contactShadow(r){
+  if(!SHADOW_TEX){
+    var S=256,c=cvs(S,S),x=c.getContext('2d');
+    var gg=x.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+    gg.addColorStop(0,'rgba(0,0,0,.92)'); gg.addColorStop(.42,'rgba(0,0,0,.52)');
+    gg.addColorStop(1,'rgba(0,0,0,0)');
+    x.fillStyle=gg; x.fillRect(0,0,S,S);
+    SHADOW_TEX=new THREE.CanvasTexture(c); SHADOW_TEX.needsUpdate=true; TEX.push(SHADOW_TEX);
+  }
+  var m=new THREE.Mesh(new THREE.PlaneGeometry(r*2.9,r*2.9),
+    new THREE.MeshBasicMaterial({ map:SHADOW_TEX, transparent:true, depthWrite:false }));
+  m.rotation.x=-Math.PI/2;
+  return m;
+}
+
+/* ======================================================= scene registry
+   One Scene per product. Built on demand, disposable, and completely
+   independent of the others — which is the whole reason a fourth product
+   is a data entry rather than a refactor. */
+var SCENES={};
+function buildScene(id){
+  if(SCENES[id]) return SCENES[id];
+  var def=PRODUCTS[id]; if(!def) return null;
+  var s=new THREE.Scene();
+  s.environment=ENV;
+
+  s.add(new THREE.HemisphereLight(col(0x415260),col(0x090c0f),.5));
+  var key=new THREE.DirectionalLight(col(0xdce9f5),1.5); key.position.set(2.2,3.1,2.4); s.add(key);
+  var fill=new THREE.DirectionalLight(col(0x8fb6da),.55); fill.position.set(-2.6,1.2,1.4); s.add(fill);
+  var rim=new THREE.DirectionalLight(col(0xffc79a),.48); rim.position.set(-1.4,1.1,-2.6); s.add(rim);
+
+  var obj=def.build();
+  s.add(obj);
+
+  var bb=new THREE.Box3().setFromObject(obj);
+  var sz=new THREE.Vector3(); bb.getSize(sz);
+  var sh=contactShadow(Math.max(sz.x,sz.z)*.62);
+  sh.position.y=bb.min.y+.002; s.add(sh);
+
+  var rec={ scene:s, obj:obj, def:def, tris:0, spin:0 };
+  SCENES[id]=rec;
+  var badge=document.querySelector('[data-badge="'+id+'"]');
+  if(badge){ badge.textContent='Live'; badge.className='badge live'; }
+  return rec;
+}
+/* Geometries and textures live on the GPU and are not collected when the
+   JS reference drops. Anything built has to be walked and released. */
+function disposeScene(id){
+  var rec=SCENES[id]; if(!rec) return false;
+  rec.scene.traverse(function(o){
+    if(o.geometry) o.geometry.dispose();
+    if(o.material){
+      (Array.isArray(o.material)?o.material:[o.material]).forEach(function(m){
+        /* shared materials are owned by MAT, so only maps built per-scene
+           are released here; the material itself outlives the scene */
+        if(m.__perScene) m.dispose();
+      });
+    }
+  });
+  delete SCENES[id];
+  var badge=document.querySelector('[data-badge="'+id+'"]');
+  if(badge){ badge.textContent='Evicted'; badge.className='badge pending'; }
+  return true;
+}
+
+/* ============================================================== views
+   A view is a DOM rectangle the renderer paints into. Scissor + viewport
+   on one context, never a canvas per card. */
+var VIEWS=[];
+function collectViews(){
+  VIEWS=[].slice.call(document.querySelectorAll('[data-view]')).map(function(el){
+    var id=el.dataset.view;
+    var d=PRODUCTS[id];
+    var cam=new THREE.PerspectiveCamera(d.cam.fov,1,.05,60);
+    return {
+      el:el, id:id, cam:cam,
+      home:new THREE.Vector3(d.cam.pos[0],d.cam.pos[1],d.cam.pos[2]),
+      target:new THREE.Vector3(d.cam.target[0],d.cam.target[1],d.cam.target[2]),
+      hero:el.hasAttribute('data-hero'),
+      yaw:0, yawTo:0, pitch:0, pitchTo:0, seen:false
+    };
+  });
+}
+/* Frame any object off its own bounds, so a hand-guessed camera distance
+   stops mattering and a swapped-in GLB of unknown scale sits correctly.
+
+   Two things this has to get right. The radius is the bounding *sphere*,
+   not the largest dimension — an object framed by its width alone pokes
+   out of frame the moment it is turned. And the distance is solved against
+   whichever axis is tighter: these viewports are portrait, where the
+   horizontal field is far narrower than the vertical one, and solving
+   against vertical FOV alone parks the camera inside the cabinet. */
+function frameObject(view,obj,margin,aspect){
+  var bb=new THREE.Box3().setFromObject(obj), sz=new THREE.Vector3(), c=new THREE.Vector3();
+  bb.getSize(sz); bb.getCenter(c);
+  var radius=.5*Math.sqrt(sz.x*sz.x+sz.y*sz.y+sz.z*sz.z);
+  var vFov=view.cam.fov*Math.PI/180;
+  var asp=aspect||view.cam.aspect||1;
+  var hFov=2*Math.atan(Math.tan(vFov/2)*asp);
+  var dist=Math.max(radius/Math.sin(vFov/2), radius/Math.sin(hFov/2))*(margin||1.05);
+  var dir=view.home.clone().sub(view.target).normalize();
+  view.target.copy(c);
+  view.home.copy(c).addScaledVector(dir,dist);
+}
+
+var _v=new THREE.Vector3();
+function aimView(v,aspect){
+  v.cam.aspect=aspect; v.cam.updateProjectionMatrix();
+  var r=v.home.clone().sub(v.target);
+  var yaw=v.yaw, pitch=clamp(v.pitch,-.5,.7);
+  var len=r.length();
+  var ay=Math.atan2(r.x,r.z)+yaw, ap=Math.asin(clamp(r.y/len,-1,1))+pitch;
+  ap=clamp(ap,-.35,1.05);
+  _v.set(Math.sin(ay)*Math.cos(ap),Math.sin(ap),Math.cos(ay)*Math.cos(ap)).multiplyScalar(len);
+  v.cam.position.copy(v.target).add(_v);
+  v.cam.lookAt(v.target);
+}
+
+var drawn=0;
+function renderViews(){
+  drawn=0;
+  var H=vpH();
+  for(var i=0;i<VIEWS.length;i++){
+    var v=VIEWS[i], r=v.el.getBoundingClientRect();
+    if(r.width<4||r.bottom<-120||r.top>H+120) continue;
+    /* build on approach, not at load */
+    var rec=SCENES[v.id]||buildScene(v.id);
+    if(!rec) continue;
+    if(!v.seen){
+      v.seen=true; reportTris(v.id,rec);
+      /* frame off the real bounds rather than a guessed distance: the same
+         call is what lets a swapped-in GLB of unknown scale sit correctly */
+      frameObject(v, rec.obj, v.hero?1.06:1.12, r.width/r.height);
+    }
+    aimView(v,r.width/r.height);
+    renderer.setViewport(r.left,H-r.bottom,r.width,r.height);
+    renderer.setScissor(r.left,H-r.bottom,r.width,r.height);
+    renderer.setScissorTest(true);
+    renderer.render(rec.scene,v.cam);
+    drawn++;
+  }
+  renderer.setScissorTest(false);
+}
+function reportTris(id,rec){
+  var n=0;
+  rec.scene.traverse(function(o){
+    if(o.isMesh&&o.geometry&&o.geometry.index)
+      n+=(o.geometry.index.count/3)*(o.isInstancedMesh?o.count:1);
+    else if(o.isMesh&&o.geometry&&o.geometry.attributes.position)
+      n+=(o.geometry.attributes.position.count/3)*(o.isInstancedMesh?o.count:1);
+  });
+  rec.tris=Math.round(n);
+  var el=document.getElementById('t-'+id);
+  if(el) el.textContent=(rec.tris>=1000?(rec.tris/1000).toFixed(1)+'k':rec.tris)+' tris';
+}
+
+/* ============================================================== driver */
+var running=false,tPrev=0,clock=0,frameMs=0;
+function resize(){
+  var w=vpW(),h=vpH();
+  /* the framing solve depends on the viewport's aspect, so a resize that
+     flips a card from landscape to portrait has to re-solve it */
+  VIEWS.forEach(function(v){
+    var rec=SCENES[v.id]; if(!rec||!v.seen) return;
+    var r=v.el.getBoundingClientRect();
+    if(r.width>4&&r.height>4) frameObject(v,rec.obj,v.hero?1.06:1.12,r.width/r.height);
+  });
+  document.documentElement.style.setProperty('--vw',w+'px');
+  if(!renderer) return;
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,DPR_CAP)*PERF.scale);
+  renderer.setSize(w,h,true);
+}
+function tick(now){
+  if(!running) return;
+  var raw=(now-tPrev)/1000||0, dt=Math.min(raw,.05);
+  tPrev=now; clock+=dt;
+
+  if(!PERF.locked&&clock>2){
+    PERF.acc+=raw; PERF.n++;
+    if(PERF.n>=40){
+      var avg=PERF.acc/PERF.n; PERF.acc=0; PERF.n=0; frameMs=avg*1000;
+      if(avg>.023&&PERF.scale>.6){ PERF.scale=Math.max(.6,PERF.scale*.85); resize(); }
+      else if(avg<.0135&&PERF.scale<1){ PERF.scale=Math.min(1,PERF.scale+.08); resize(); }
+    }
+  }
+
+  for(var i=0;i<VIEWS.length;i++){
+    var v=VIEWS[i];
+    if(!v.hero&&!REDUCE) v.yawTo+=dt*.16;          /* cards turn on their own */
+    v.yaw=damp(v.yaw,v.yawTo,6,dt);
+    v.pitch=damp(v.pitch,v.pitchTo,6,dt);
+  }
+  var cond=SCENES.condenser;
+  if(cond&&cond.obj.userData.fan&&!REDUCE) cond.obj.userData.fan.rotation.y+=dt*3.4;
+  var mini=SCENES.minisplit;
+  if(mini&&mini.obj.userData.louver&&!REDUCE)
+    mini.obj.userData.louver.rotation.x=-.62+Math.sin(clock*.55)*.16;
+
+  renderer.info.reset();
+  renderViews();
+  updateHUD();
+  requestAnimationFrame(tick);
+}
+
+/* ================================================================= HUD */
+var hudEls={};
+function updateHUD(){
+  if(!hudEls.calls) return;
+  var inf=renderer.info;
+  var built=Object.keys(SCENES).length;
+  hudEls.calls.textContent=inf.render.calls;
+  hudEls.tris.textContent=inf.render.triangles>=1000?(inf.render.triangles/1000).toFixed(1)+'k':inf.render.triangles;
+  hudEls.geo.textContent=inf.memory.geometries;
+  hudEls.tex.textContent=inf.memory.textures;
+  hudEls.scenes.textContent=built;
+  hudEls.views.textContent=drawn;
+  hudEls.ms.textContent=frameMs.toFixed(1)+' ms';
+  hudEls.ms.className=frameMs>22?'warn':(frameMs>0?'ok':'');
+  var sm=document.getElementById('s-models');
+  if(sm) sm.innerHTML=built+'<i>/3</i>';
+  var st=document.getElementById('s-tris');
+  if(st) st.innerHTML=(inf.render.triangles/1000).toFixed(0)+'<i>k</i>';
+  var sc=document.getElementById('s-calls');
+  if(sc) sc.textContent=inf.render.calls;
+}
+
+/* ======================================================== interaction */
+function wireOrbit(){
+  var dragging=null,lx=0,ly=0;
+  function down(e){
+    var t=e.target.closest?e.target.closest('[data-view]'):null;
+    var el=document.elementFromPoint(e.clientX,e.clientY);
+    var host=null;
+    for(var i=0;i<VIEWS.length;i++){
+      var r=VIEWS[i].el.getBoundingClientRect();
+      if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom){ host=VIEWS[i]; break; }
+    }
+    if(!host) return;
+    dragging=host; lx=e.clientX; ly=e.clientY;
+    canvas.setPointerCapture&&canvas.setPointerCapture(e.pointerId);
+    document.body.style.cursor='grabbing';
+    var hint=document.getElementById('hero-hint');
+    if(hint) hint.textContent='Release to settle';
+  }
+  function move(e){
+    if(!dragging) return;
+    dragging.yawTo -= (e.clientX-lx)*.006;
+    dragging.pitchTo = clamp(dragging.pitchTo + (e.clientY-ly)*.004,-.35,.6);
+    lx=e.clientX; ly=e.clientY;
+  }
+  function up(){
+    if(!dragging) return;
+    dragging=null; document.body.style.cursor='';
+    var hint=document.getElementById('hero-hint');
+    if(hint) hint.textContent='Drag to orbit';
+  }
+  addEventListener('pointerdown',down,{passive:true});
+  addEventListener('pointermove',move,{passive:true});
+  addEventListener('pointerup',up,{passive:true});
+  addEventListener('pointercancel',up,{passive:true});
+}
+
+/* ==================================================== the GLB slot
+   Procedural units are a stand-in. A real deployment points this at the
+   manufacturer's own geometry and everything downstream — framing,
+   lighting, the viewport rig — is unchanged. */
+function loadModel(id,url,onDone){
+  if(!THREE.GLTFLoader){ console.warn('[rig] GLTFLoader not present'); onDone&&onDone(false); return; }
+  var rec=SCENES[id]||buildScene(id);
+  if(!rec){ onDone&&onDone(false); return; }
+  new THREE.GLTFLoader().load(url,function(gltf){
+    rec.scene.remove(rec.obj);
+    rec.scene.add(gltf.scene);
+    rec.obj=gltf.scene;
+    VIEWS.forEach(function(v){ if(v.id===id) frameObject(v,gltf.scene,1.15); });
+    reportTris(id,rec);
+    console.log('[rig] loaded',url,'into',id);
+    onDone&&onDone(true);
+  },undefined,function(err){ console.warn('[rig] load failed',err); onDone&&onDone(false); });
+}
+
+/* ============================================================== boot */
+function fallback(err){
+  document.documentElement.classList.add('no-webgl');
+  document.body.classList.add('no-webgl');
+  console.error('[rig]',err);
+  window.__rig={ fallback:true, error:String(err&&err.message||err) };
+}
+function boot(){
+  document.documentElement.style.setProperty('--vw',vpW()+'px');
+  try{
+    initGL(); buildMaterials(); buildEnv();
+  }catch(err){ return fallback(err); }
+
+  collectViews();
+  wireOrbit();
+  ['calls','tris','geo','tex','scenes','views','ms'].forEach(function(k){
+    hudEls[k]=document.getElementById('h-'+k);
+  });
+  var tgl=document.getElementById('hud-toggle');
+  document.getElementById('hud').addEventListener('click',function(){ document.body.classList.add('hud-off'); });
+  tgl.addEventListener('click',function(){ document.body.classList.remove('hud-off'); });
+
+  addEventListener('resize',resize,{passive:true});
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden) running=false;
+    else if(!running){ running=true; tPrev=performance.now(); requestAnimationFrame(tick); }
+  });
+  resize();
+  running=true; tPrev=performance.now();
+  requestAnimationFrame(tick);
+
+  window.__rig={
+    renderer:renderer, scenes:SCENES, views:VIEWS, products:PRODUCTS,
+    build:buildScene, dispose:disposeScene, load:loadModel, frame:frameObject,
+    info:function(){ return { built:Object.keys(SCENES), calls:renderer.info.render.calls,
+      tris:renderer.info.render.triangles, geo:renderer.info.memory.geometries,
+      tex:renderer.info.memory.textures, drawn:drawn }; }
+  };
+}
+if(document.readyState==='complete'||document.readyState==='interactive') setTimeout(boot,0);
+else addEventListener('DOMContentLoaded',boot);
+})();
+</script>
+</body>
+</html>
