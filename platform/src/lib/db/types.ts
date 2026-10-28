@@ -137,7 +137,7 @@ export const automationActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ai_score") }),
   z.object({ type: z.literal("ai_draft_reply") }),
   z.object({ type: z.literal("send_message"), body: z.string().min(1).max(2000) }),
-  z.object({ type: z.literal("webhook"), url: z.string().url().max(1000) }),
+  z.object({ type: z.literal("webhook"), url: z.string().url().max(1000).refine((u) => u.startsWith("https://"), "Use an https:// URL") }),
   z.object({ type: z.literal("only_if_temperature"), temperature: z.enum(["hot", "warm", "cold"]) }),
 ]);
 export type AutomationAction = z.infer<typeof automationActionSchema>;

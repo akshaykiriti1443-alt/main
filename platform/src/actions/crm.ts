@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { requireWorkspace } from "@/server/tenancy";
-import { addTag, removeTag, setStage, updateContactDetails, upsertContact } from "@/server/contacts";
+import { addTag, getContact, removeTag, setStage, updateContactDetails, upsertContact } from "@/server/contacts";
 import { draftReply } from "@/server/ai/replies";
 import { scoreContact } from "@/server/ai/scoring";
-import { markRead, sendReply, setConversationStatus } from "@/server/inbox";
+import { getConversation, markRead, sendReply, setConversationStatus } from "@/server/inbox";
 import { emitEvent } from "@/server/events";
 import { hasFeature } from "@/server/plans";
 import type { Stage } from "@/lib/db/schema";
@@ -65,6 +65,7 @@ export async function saveContactAction(wid: string, contactId: string, fd: Form
 
 export async function scoreContactAction(wid: string, contactId: string) {
   await requireWorkspace(wid);
+  if (!(await getContact(wid, contactId))) go(`/app/w/${wid}/leads`, { error: "Contact not found." });
   await scoreContact(contactId);
   go(`/app/w/${wid}/leads/${contactId}`, { ok: "Lead re-scored." });
 }
@@ -83,6 +84,7 @@ export async function sendReplyAction(wid: string, conversationId: string, fd: F
 
 export async function draftReplyAction(wid: string, conversationId: string) {
   await requireWorkspace(wid);
+  if (!(await getConversation(wid, conversationId))) go(`/app/w/${wid}/inbox`, { error: "Conversation not found." });
   await draftReply(conversationId);
   go(`/app/w/${wid}/inbox?c=${conversationId}`);
 }

@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
 //                                                         except app paths, which serve the
 //                                                         white-label dashboard for agencies.
 
-const APP_PATHS = ["/app", "/login", "/signup", "/logout", "/forgot", "/reset", "/api", "/s/", "/d/", "/_next", "/favicon"];
+const APP_PATHS = ["/app", "/login", "/signup", "/logout", "/forgot", "/reset", "/legal", "/api", "/s/", "/d/", "/_next", "/favicon"];
 
 export function middleware(req: NextRequest) {
   const url = req.nextUrl;

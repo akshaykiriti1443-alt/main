@@ -9,7 +9,7 @@ import { enqueue } from "./jobs/queue";
 import { sendMetaMessage } from "./meta/send";
 import { hasFeature } from "./plans";
 import { sendSms } from "./sms";
-import { chargeUsage } from "./wallet";
+import { canAfford, chargeUsage, InsufficientBalanceError } from "./wallet";
 
 type Connection = typeof channelConnections.$inferSelect;
 
@@ -182,8 +182,10 @@ export async function sendReply(workspaceId: string, conversationId: string, bod
 
   let externalId: string | null;
   if (connection.kind === "sms") {
-    await chargeUsage(workspaceId, "sms_segment", Math.max(1, Math.ceil(text.length / 153)), { description: "SMS reply" });
+    const segments = Math.max(1, Math.ceil(text.length / 153));
+    if (!(await canAfford(workspaceId, "sms_segment", segments))) throw new InsufficientBalanceError(0);
     externalId = await sendSms({ from: connection.externalId, to: conv.externalThreadId, body: text });
+    await chargeUsage(workspaceId, "sms_segment", segments, { description: "SMS reply" }).catch((err) => console.error("[sms] billing failed", err));
   } else {
     externalId = await sendMetaMessage({ connection, threadId: conv.externalThreadId, body: text, lastInboundAt: conv.lastInboundAt });
   }

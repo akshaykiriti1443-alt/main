@@ -303,3 +303,13 @@ describe("rules", () => {
     expect(p.data[0].event_id).toBe("e");
   });
 });
+
+describe("hardening", () => {
+  it("blocks private webhook targets", async () => {
+    const { isPublicHttpsUrl } = await import("@/lib/html");
+    expect(isPublicHttpsUrl("https://hooks.zapier.com/abc")).toBe(true);
+    for (const bad of ["http://hooks.zapier.com", "https://localhost/x", "https://169.254.169.254/latest", "https://10.0.0.5/", "https://192.168.1.1", "https://[::1]/"]) {
+      expect(isPublicHttpsUrl(bad)).toBe(false);
+    }
+  });
+});

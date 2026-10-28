@@ -4,6 +4,7 @@ import { automationRuns, automations, contacts, workspaces } from "@/lib/db/sche
 import { automationActionSchema, automationTriggerSchema, type AutomationAction, type AutomationTrigger } from "@/lib/db/types";
 import { env } from "@/lib/env";
 import { addMinutes } from "@/lib/util";
+import { isPublicHttpsUrl } from "@/lib/html";
 import { addTag, removeTag, setStage } from "./contacts";
 import type { DomainEvent } from "./events";
 import { enqueue } from "./jobs/queue";
@@ -170,10 +171,12 @@ async function executeAction(
       }
     }
     case "webhook": {
+      if (!isPublicHttpsUrl(action.url)) return { kind: "next", message: "Webhook skipped: use a public https:// URL" };
       const res = await fetch(action.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event: context, contact }),
+        redirect: "error",
         signal: AbortSignal.timeout(10_000),
       }).catch((e: Error) => ({ ok: false, status: 0, statusText: e.message }) as const);
       return { kind: "next", message: `Webhook ${res.ok ? "sent" : `failed (${res.status} ${res.statusText})`}` };

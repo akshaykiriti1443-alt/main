@@ -77,6 +77,11 @@ export default async function Home() {
           </ul>
         </div>
       </section>
+      <footer className="row small muted" style={{ gap: 16 }}>
+        <Link href="/legal/privacy">Privacy</Link>
+        <Link href="/legal/terms">Terms</Link>
+        <Link href="/legal/data-deletion">Data deletion</Link>
+      </footer>
     </main>
   );
 }

@@ -37,6 +37,8 @@ export async function connectDomain(workspaceId: string, siteId: string, rawDoma
   const domain = normalizeDomain(rawDomain);
   if (!domain) throw new Error("Enter a domain like join.yourbrand.com");
   const db = await getDb();
+  const [owned] = await db.select({ id: sites.id }).from(sites).where(and(eq(sites.id, siteId), eq(sites.workspaceId, workspaceId))).limit(1);
+  if (!owned) throw new Error("Site not found");
   const [taken] = await db.select({ id: sites.id }).from(sites).where(eq(sites.customDomain, domain)).limit(1);
   if (taken && taken.id !== siteId) throw new Error("That domain is already connected to another site.");
   if (vercelConfigured()) {

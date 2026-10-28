@@ -230,3 +230,6 @@ tr.clickable:hover td { background: var(--sunk); }
 .tier.featured { border: 2px solid var(--accent); }
 .tier ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 .price { font-size: 30px; font-weight: 800; }
+
+.legal h2 { margin-top: 12px; }
+.legal ul, .legal ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
