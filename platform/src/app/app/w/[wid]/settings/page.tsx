@@ -8,7 +8,9 @@ import { env } from "@/lib/env";
 import {
   buyNumberAction,
   disconnectChannelAction,
+  inviteMemberAction,
   listNumbers,
+  removeMemberAction,
   redeemCodeAction,
   saveBusinessAction,
   saveTrackingAction,
@@ -18,13 +20,14 @@ import { saveTemplateFromWorkspaceAction } from "@/actions/agency";
 import { Flash, PageHead } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 import { WhatsAppConnect } from "@/components/WhatsAppConnect";
+import { listMembers } from "@/server/team";
 
 const KIND: Record<string, string> = { facebook_page: "Facebook Page", instagram: "Instagram", whatsapp: "WhatsApp", sms: "SMS number" };
 
 export default async function SettingsPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
   const sp = await searchParams;
-  const { workspace, user, agency } = await requireWorkspace(wid);
+  const { workspace, user, agency, role } = await requireWorkspace(wid);
   const s = workspace.settings;
   const connections = await listConnections(wid);
   const growth = hasFeature(workspace.plan, "inbox");
@@ -32,6 +35,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
   const agencies = await listUserAgencies(user.id);
   const myAgency = agencies.find((a) => a.agency.id === agency.id);
   const viaSkool = workspace.accessSource === "skool_code" || workspace.accessSource === "skool_zapier";
+  const members = await listMembers(wid);
 
   return (
     <>
@@ -139,6 +143,34 @@ export default async function SettingsPage({ params, searchParams }: { params: P
             </div>
           </>
         )}
+      </div>
+
+      <div className="card stack" id="team">
+        <h2>Team</h2>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead>
+            <tbody>
+              {members.map((m) => (
+                <tr key={m.userId}>
+                  <td className="small">{m.name || "—"}</td>
+                  <td className="small">{m.email}</td>
+                  <td><span className="badge">{m.role}</span></td>
+                  <td>{m.role !== "owner" && m.userId !== user.id && role !== "user" ? <form action={removeMemberAction.bind(null, wid, m.userId)}><SubmitButton className="btn btn-sm btn-danger" confirm="Confirm">Remove</SubmitButton></form> : null}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {role !== "user" ? (
+          <form action={inviteMemberAction.bind(null, wid)} className="row" style={{ alignItems: "flex-end" }}>
+            <div className="field"><label htmlFor="iname">Name</label><input id="iname" name="name" /></div>
+            <div className="field"><label htmlFor="iemail">Email</label><input id="iemail" name="email" type="email" required /></div>
+            <div className="field"><label htmlFor="irole">Role</label><select id="irole" name="role" defaultValue="user"><option value="user">Team member</option><option value="admin">Admin</option></select></div>
+            <SubmitButton className="btn">Invite</SubmitButton>
+          </form>
+        ) : null}
+        <p className="tiny muted">Team members can work leads and the inbox. Admins can also edit funnels, emails, automations and settings.</p>
       </div>
 
       {user.isPlatformAdmin || (myAgency && agency.plan === "agency") ? (

@@ -109,7 +109,7 @@ export function normalizeKit(kit: LaunchKit): LaunchKit {
 // Deterministic copy used when no AI key is configured (local dev, demos, tests).
 export function fallbackKit(input: LaunchKitInput): LaunchKit {
   const first = input.ownerName.split(" ")[0];
-  const lm = input.leadMagnetIdea || `The 7-Day ${titleCase(input.niche)} Quick-Start Checklist`;
+  const lm = (input.leadMagnetIdea || `7-Day ${titleCase(input.niche)} Quick-Start Checklist`).replace(/^the\s+/i, "");
   return {
     leadMagnetName: lm,
     leadMagnetType: "checklist",
@@ -128,7 +128,7 @@ This checklist gives you one small action a day for 7 days. Each action takes ab
 Want help with every step? Join ${input.businessName}. We do this together.`,
     eyebrow: `Free for ${input.audience}`,
     headline: `${capitalize(input.outcome)}. Start today.`,
-    subheadline: `Grab the free ${lm}. It shows ${input.audience} the first steps that work.`,
+    subheadline: `Get the free ${lm}. It shows ${input.audience} the first steps that work.`,
     bullets: ["One small action a day", "Takes 10 minutes", "Free to download"],
     ctaText: "Send me the checklist",
     formTitle: "Where should I send it?",

@@ -4,7 +4,7 @@
 
 **Platform**
 - Multi-tenant model: platform → agencies → workspaces, with role checks on every action
-- Email/password auth, sessions, password reset links, invite links
+- Email/password auth, sessions, password reset links, invite links, team members with roles
 - Skool access: monthly member codes, Zapier auto-approval, 7-day grace, auto-pause
 - Postgres-backed job queue with retries, cron tick, maintenance
 - Pay-as-you-go wallet with monthly allowances, idempotent top-ups, usage ledger with real cost
@@ -37,22 +37,21 @@
 - White-label brand (name, logo, color) and app domain; resale price table
 
 **Quality**
-- 17 integration tests (`npm test`) and a 16-step browser E2E (`npm run e2e`)
+- 18 integration tests (`npm test`) and a 16-step browser E2E (`npm run e2e`)
 
 ## Next (in priority order)
 
 1. **Rate limiting and abuse controls** on public lead forms and signups.
 2. **WhatsApp template messages** (send approved templates outside the 24-hour window; template sync).
-3. **Team members**: invite staff to a workspace with roles (the data model supports it; UI needed).
-4. **Calendars and booking pages** (Google Calendar sync) for sales calls.
-5. **Stripe Connect rebilling** so agencies charge their clients directly with automatic markup.
-6. **Domain purchase** through a registrar API, charged to the wallet.
-7. **A2P 10DLC registration flow** inside the app for US SMS.
-8. **Inbound email in the inbox** (Postmark inbound webhook) and email open/click tracking.
-9. **Automation branches** (if/else paths), date-based triggers and "form submitted" triggers.
-10. **Forms and surveys builder**, checkout/order pages and payment links.
-11. **TikTok and LinkedIn posting** in the social planner (each needs its own app review).
-12. **Reviews/reputation, call tracking and a mobile app** for full GoHighLevel parity.
+3. **Calendars and booking pages** (Google Calendar sync) for sales calls.
+4. **Stripe Connect rebilling** so agencies charge their clients directly with automatic markup.
+5. **Domain purchase** through a registrar API, charged to the wallet.
+6. **A2P 10DLC registration flow** inside the app for US SMS.
+7. **Inbound email in the inbox** (Postmark inbound webhook) and email open/click tracking.
+8. **Automation branches** (if/else paths), date-based triggers and "form submitted" triggers.
+9. **Forms and surveys builder**, checkout/order pages and payment links.
+10. **TikTok and LinkedIn posting** in the social planner (each needs its own app review).
+11. **Reviews/reputation, call tracking and a mobile app** for full GoHighLevel parity.
 
 ## Known limits
 

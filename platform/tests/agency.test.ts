@@ -34,3 +34,20 @@ describe("agency tier", () => {
     expect((await getOrCreateWallet("agency", agency.id)).balanceMicros).toBe(9_500_000);
   });
 });
+
+describe("team", () => {
+  it("invites and removes members but never the owner", async () => {
+    const { makeWorkspace } = await import("./helpers");
+    const { inviteMember, listMembers, removeMember } = await import("@/server/team");
+    const { ws, user } = await makeWorkspace();
+    const res = await inviteMember({ workspaceId: ws.id, workspaceName: ws.name, email: `staff-${Date.now()}@example.com`, name: "Staff", role: "user" });
+    expect(res.isNew).toBe(true);
+    let members = await listMembers(ws.id);
+    expect(members).toHaveLength(2);
+    const staff = members.find((m) => m.role === "user")!;
+    await removeMember(ws.id, user.id); // owner: ignored
+    await removeMember(ws.id, staff.userId);
+    members = await listMembers(ws.id);
+    expect(members.map((m) => m.role)).toEqual(["owner"]);
+  });
+});

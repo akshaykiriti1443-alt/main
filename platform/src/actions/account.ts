@@ -129,3 +129,21 @@ export async function upgradeAction(wid: string) {
   }
   go(url);
 }
+
+export async function inviteMemberAction(wid: string, fd: FormData) {
+  const { workspace, agency } = await requireWorkspace(wid, "admin");
+  const email = field(fd, "email", 200);
+  if (!isEmail(email)) go(`/app/w/${wid}/settings#team`, { error: "Enter a valid email." });
+  const role = field(fd, "role") === "admin" ? "admin" : "user";
+  const { inviteMember } = await import("@/server/team");
+  await inviteMember({ workspaceId: wid, workspaceName: workspace.name, email, name: field(fd, "name", 80), role, brandName: agency.isPlatform ? undefined : agency.brand.name });
+  go(`/app/w/${wid}/settings`, { ok: `Invited ${email}.` });
+}
+
+export async function removeMemberAction(wid: string, userId: string) {
+  const { user } = await requireWorkspace(wid, "admin");
+  if (userId === user.id) go(`/app/w/${wid}/settings`, { error: "You can't remove yourself." });
+  const { removeMember } = await import("@/server/team");
+  await removeMember(wid, userId);
+  go(`/app/w/${wid}/settings`, { ok: "Removed." });
+}
