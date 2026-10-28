@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { walletTransactions } from "@/lib/db/schema";
@@ -84,6 +85,13 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
               </ul>
               <SubmitButton>Upgrade</SubmitButton>
             </form>
+          ) : null}
+          {!agencyPays ? (
+            <div className="card stack">
+              <h2>Run an agency?</h2>
+              <p className="small muted">Give each client their own account under your brand. Set your own prices.</p>
+              <Link className="btn" href="/app/agency/new">Start an agency</Link>
+            </div>
           ) : null}
         </div>
       </div>
