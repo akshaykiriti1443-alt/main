@@ -37,7 +37,7 @@
 - White-label brand (name, logo, color) and app domain; resale price table
 
 **Quality**
-- 31 integration tests (`npm test`) and a 16-step browser E2E (`npm run e2e`)
+- 32 integration tests (`npm test`) and a 16-step browser E2E (`npm run e2e`)
 - Independent security review, with every finding fixed and covered by a test:
   owner setup token, admin page guards, no owner demotion, domain ownership checks,
   pause rules (access vs. admin vs. agency), automation loop limits, charge-first

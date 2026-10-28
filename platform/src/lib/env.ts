@@ -6,9 +6,14 @@ const bool = (v: string | undefined, fallback: boolean) =>
 
 const isProd = process.env.NODE_ENV === "production";
 
+// Inside a GitHub Codespace the dev server is reached through a forwarded https URL.
+const codespaceUrl = process.env.CODESPACE_NAME
+  ? `https://${process.env.CODESPACE_NAME}-${process.env.PORT || "3000"}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev"}`
+  : undefined;
+
 export const env = {
   isProd,
-  appUrl: (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, ""),
+  appUrl: (process.env.APP_URL || codespaceUrl || "http://localhost:3000").replace(/\/$/, ""),
   // Sites are served at <slug>.<ROOT_DOMAIN>. Leave empty to use /s/<slug> paths only.
   rootDomain: process.env.ROOT_DOMAIN ?? "",
   platformName: process.env.PLATFORM_NAME ?? "OneX",

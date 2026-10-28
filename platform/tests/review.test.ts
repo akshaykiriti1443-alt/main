@@ -253,3 +253,21 @@ describe("domains and ids", () => {
     expect(await getContact(ws.id, "1; drop table contacts")).toBeNull();
   });
 });
+
+describe("host routing", () => {
+  it("serves the app on localhost and raw IPs, and customer sites on their domains", async () => {
+    const { NextRequest } = await import("next/server");
+    const { middleware } = await import("@/middleware");
+    const route = (host: string, path = "/") => {
+      const res = middleware(new NextRequest(`http://${host}${path}`, { headers: { host } }));
+      return res.headers.get("x-middleware-rewrite");
+    };
+    // The "Network" address from `npm run dev` and plain localhost reach the dashboard.
+    expect(route("192.168.1.5:3000")).toBeNull();
+    expect(route("localhost:3000")).toBeNull();
+    expect(route("[::1]:3000")).toBeNull();
+    // A customer's domain shows their site, but app paths stay the (white-label) dashboard.
+    expect(route("join.fitdads.com")).toContain("/d/join.fitdads.com");
+    expect(route("join.fitdads.com", "/login")).toBeNull();
+  });
+});

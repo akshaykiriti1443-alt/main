@@ -33,15 +33,46 @@ inside the paid Skool classroom:
 The first account ever created becomes the platform owner and needs no code. In
 production it also needs the setup link: `/signup?setup=<SETUP_TOKEN>`.
 
-## Quick start (local, zero accounts needed)
+## Try it (zero accounts needed)
+
+`localhost` means "this computer". The app has to run on the same computer as
+your browser. Pick one of these two ways.
+
+**A. In your browser, no install (GitHub Codespaces)**
+
+1. On GitHub, open this repo and switch to the `claude/onex-platform` branch.
+2. Click **Code › Codespaces › Create codespace on claude/onex-platform**.
+3. Wait about 3 minutes. The app opens in a new tab. If it doesn't, open the
+   **Ports** tab and click the globe next to port 3000.
+4. Click **Claim your account**. The first account becomes the platform owner.
+
+The first page takes up to a minute to load while it compiles. Your codespace
+link is private to your GitHub account. Stop the codespace when you're done
+(GitHub gives personal accounts free hours each month).
+
+**B. On your own computer**
+
+1. Install Node.js 22 (LTS) from https://nodejs.org.
+2. On GitHub, switch to the `claude/onex-platform` branch. Click
+   **Code › Download ZIP** and unzip it.
+3. Open a terminal in the unzipped folder:
+   - **Mac:** open Terminal, type `cd ` (with a space), drag the folder into the window, press Enter.
+   - **Windows:** open the folder, click the address bar, type `cmd`, press Enter.
+     (Use Command Prompt, not PowerShell.)
+4. Run:
 
 ```bash
 cd platform
 npm install
 npm run dev
-# open http://localhost:3000/signup  → the first user becomes platform owner
-# (set SETUP_TOKEN in production; then use /signup?setup=<token>)
 ```
+
+5. Keep that window open. On the same computer, open http://localhost:3000.
+   The first page takes about 20 seconds to load.
+
+To stop the app, press `Ctrl + C` in the terminal. Your data stays in
+`platform/.data/` for next time. In production, set `SETUP_TOKEN` and create the
+owner account at `/signup?setup=<token>`.
 
 Locally the database is embedded Postgres (PGlite) in `.data/`, emails print to
 the console and the launch kit uses a smart template until you add

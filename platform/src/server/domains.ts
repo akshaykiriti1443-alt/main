@@ -39,6 +39,7 @@ export function isReservedHost(domain: string): boolean {
   const extra = (process.env.APP_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
   const root = env.rootDomain.toLowerCase().split(":")[0];
   if (d === "localhost" || d.endsWith(".localhost") || d.endsWith(".vercel.app")) return true;
+  if (/^\d+$/.test(d.split(".").pop() ?? "")) return true; // raw IPs are never customer domains
   if (appHost && (d === appHost || d.endsWith(`.${appHost}`))) return true;
   if (root && (d === root || d.endsWith(`.${root}`))) return true;
   return extra.includes(d);

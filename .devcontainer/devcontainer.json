@@ -1,0 +1,13 @@
+{
+  // Opens the OneX platform in GitHub Codespaces: installs packages, starts the
+  // dev server and opens the app in a browser tab. No accounts or keys needed.
+  "name": "OneX platform",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "updateContentCommand": "cd platform && npm ci --no-audit --no-fund",
+  "postAttachCommand": { "app": "cd platform && npm run dev" },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "OneX app", "onAutoForward": "openBrowser" }
+  },
+  "hostRequirements": { "cpus": 2, "memory": "4gb" }
+}
