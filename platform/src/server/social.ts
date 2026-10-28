@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { channelConnections, socialPosts, workspaces } from "@/lib/db/schema";
+import { channelConnections, socialPosts } from "@/lib/db/schema";
+import { isWorkspaceLive } from "./liveness";
 import { safeUrl } from "@/lib/html";
 import { enqueue } from "./jobs/queue";
 import { publishToFacebookPage, publishToInstagram } from "./meta/send";
@@ -46,11 +47,20 @@ export async function publishPostJob(postId: string) {
   const db = await getDb();
   const [post] = await db.select().from(socialPosts).where(eq(socialPosts.id, postId)).limit(1);
   if (!post || post.status !== "scheduled") return;
-  const [ws] = await db.select({ status: workspaces.status }).from(workspaces).where(eq(workspaces.id, post.workspaceId)).limit(1);
-  if (!ws || ws.status === "paused") return;
+  if (!(await isWorkspaceLive(post.workspaceId))) return;
   await db.update(socialPosts).set({ status: "publishing" }).where(eq(socialPosts.id, postId));
+  // Only accounts still connected to this workspace.
   const conns = post.connectionIds.length
-    ? await db.select().from(channelConnections).where(inArray(channelConnections.id, post.connectionIds))
+    ? await db
+        .select()
+        .from(channelConnections)
+        .where(
+          and(
+            inArray(channelConnections.id, post.connectionIds),
+            eq(channelConnections.workspaceId, post.workspaceId),
+            eq(channelConnections.status, "active"),
+          ),
+        )
     : [];
   const results: Record<string, { ok: boolean; id?: string; error?: string }> = { ...post.results };
   for (const c of conns) {

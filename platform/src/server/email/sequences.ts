@@ -1,10 +1,11 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { contacts, emailEnrollments, emailSequences, emailSequenceSteps, workspaces } from "@/lib/db/schema";
-import { addMinutes } from "@/lib/util";
+import { addMinutes, isUuid } from "@/lib/util";
 import type { DomainEvent } from "../events";
 import { enqueue } from "../jobs/queue";
 import { buildVars, queueEmail } from "./send";
+import { isWorkspaceLive } from "../liveness";
 
 export async function enrollForEvent(event: DomainEvent) {
   if (event.type !== "lead_created" && event.type !== "tag_added") return;
@@ -22,6 +23,18 @@ export async function enrollForEvent(event: DomainEvent) {
 
 export async function enrollContact(workspaceId: string, sequenceId: string, contactId: string) {
   const db = await getDb();
+  // The sequence and the contact must both belong to this workspace.
+  const [seq] = await db
+    .select({ id: emailSequences.id })
+    .from(emailSequences)
+    .where(and(eq(emailSequences.id, sequenceId), eq(emailSequences.workspaceId, workspaceId)))
+    .limit(1);
+  const [contact] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.id, contactId), eq(contacts.workspaceId, workspaceId)))
+    .limit(1);
+  if (!seq || !contact) return null;
   const [enrollment] = await db
     .insert(emailEnrollments)
     .values({ workspaceId, sequenceId, contactId })
@@ -62,7 +75,7 @@ export async function processSequenceStep(enrollmentId: string) {
     await db.update(emailEnrollments).set({ status: "stopped" }).where(eq(emailEnrollments.id, enrollment.id));
     return;
   }
-  if (ws.status === "paused") {
+  if (!(await isWorkspaceLive(ws.id))) {
     // Try again tomorrow; access may be restored.
     await enqueue("email.sequence_step", { enrollmentId }, { runAt: addMinutes(new Date(), 60 * 24) });
     return;
@@ -90,6 +103,7 @@ export async function processSequenceStep(enrollmentId: string) {
 }
 
 export async function getSequenceWithSteps(workspaceId: string, sequenceId: string) {
+  if (!isUuid(sequenceId)) return null;
   const db = await getDb();
   const [seq] = await db
     .select()

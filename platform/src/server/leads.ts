@@ -7,6 +7,7 @@ import { upsertContact } from "./contacts";
 import { emitEvent } from "./events";
 import { enqueue } from "./jobs/queue";
 import { siteBaseUrl, thankYouPageFor } from "./sites";
+import { isWorkspaceLive } from "./liveness";
 
 export type LeadInput = {
   pageId: string;
@@ -38,7 +39,7 @@ export async function captureLead(input: LeadInput): Promise<LeadResult> {
     .where(eq(pages.id, input.pageId))
     .limit(1);
   if (!row || !row.site.published) return { ok: false, status: 404, error: "This page is not live." };
-  if (row.workspace.status === "paused") return { ok: false, status: 410, error: "This page is unavailable." };
+  if (!(await isWorkspaceLive(row.workspace.id))) return { ok: false, status: 410, error: "This page is unavailable." };
 
   const thankYou = await thankYouPageFor(row.site.id);
   const base = siteBaseUrl(row.site);

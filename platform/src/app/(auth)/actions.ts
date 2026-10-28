@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { isEmail, normalizeEmail } from "@/lib/util";
+import { safeEqual } from "@/lib/crypto";
+import { env } from "@/lib/env";
 import { checkCredentials, createSession, createUser, findUserByEmail, requestHost } from "@/server/auth";
 import { findApproval, findValidCode } from "@/server/access";
 import { getPlatformAgency } from "@/server/tenancy";
@@ -46,6 +48,13 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
   const db = await getDb();
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
   const firstUser = count === 0;
+  if (firstUser) {
+    // The first account becomes the platform owner, so it needs the setup token.
+    if (env.isProd && !env.setupToken) return { error: "Set SETUP_TOKEN on the server, then open /signup?setup=<token>.", values };
+    if (env.setupToken && !safeEqual(str(fd, "setup"), env.setupToken)) {
+      return { error: "Use the owner setup link (/signup?setup=<SETUP_TOKEN>) to create the first account.", values };
+    }
+  }
 
   let accessSource: "admin" | "skool_zapier" | "skool_code" = "admin";
   let until: Date | null = null;

@@ -44,7 +44,7 @@ describe("crypto", () => {
     expect(decrypt(encrypt("secret-token"))).toBe("secret-token");
     const s = sealState({ w: "abc" });
     expect(openState<{ w: string }>(s)?.w).toBe("abc");
-    expect(openState(s.replace(/.$/, "x"))).toBeNull();
+    expect(openState(s.slice(0, -1) + (s.endsWith("x") ? "y" : "x"))).toBeNull();
   });
 });
 

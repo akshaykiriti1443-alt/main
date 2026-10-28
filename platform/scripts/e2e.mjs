@@ -31,6 +31,8 @@ const env = {
   META_VERIFY_TOKEN: "e2e-verify",
   SKOOL_WEBHOOK_SECRET: "e2e-skool",
   CRON_SECRET: "e2e-cron",
+  APP_SECRET: "e2e-app-secret-0123456789abcdef0123456789abcdef",
+  SETUP_TOKEN: "e2e-setup",
   ANTHROPIC_API_KEY: "",
   NEXT_TELEMETRY_DISABLED: "1",
 };
@@ -73,8 +75,15 @@ try {
   let wid = "";
   let siteUrl = "";
 
-  await step("first signup becomes platform owner (no code needed)", async () => {
+  await step("first signup needs the setup token, then becomes platform owner", async () => {
     await page.goto(`${BASE}/signup`);
+    await page.getByText("Set up your platform").waitFor();
+    await page.fill("#name", "Not The Owner");
+    await page.fill("#email", "intruder@example.com");
+    await page.fill("#password", "supersecret0");
+    await page.click("button:has-text('Create my account')");
+    await page.getByText("owner setup link").waitFor();
+    await page.goto(`${BASE}/signup?setup=e2e-setup`);
     await page.getByText("Set up your platform").waitFor();
     await page.fill("#name", "Akshay Owner");
     await page.fill("#businessName", "0 to 1x Academy");

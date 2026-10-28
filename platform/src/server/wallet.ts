@@ -125,6 +125,22 @@ export async function chargeUsage(
   });
 }
 
+/**
+ * Undo a chargeUsage() when the paid work failed: gives back the allowance and,
+ * if money was taken, credits it back to the same wallet.
+ */
+export async function refundUsage(workspaceId: string, unit: UsageUnit, quantity: number, billedMicros: number, description = "Refund") {
+  const db = await getDb();
+  await db
+    .update(usageCounters)
+    .set({ used: sql`greatest(0, ${usageCounters.used} - ${quantity})` })
+    .where(and(eq(usageCounters.workspaceId, workspaceId), eq(usageCounters.unit, unit), eq(usageCounters.period, monthKey())));
+  if (billedMicros > 0) {
+    const { wallet } = await billingWalletFor(workspaceId, db);
+    await creditWallet(wallet.id, billedMicros, { type: "refund", description, workspaceId });
+  }
+}
+
 /** True when the action fits the monthly allowance or the wallet can pay for it. */
 export async function canAfford(workspaceId: string, unit: UsageUnit, quantity = 1): Promise<boolean> {
   const db = await getDb();

@@ -4,11 +4,11 @@ import { getDb } from "@/lib/db";
 import { aiGenerations, emailSequences, emailSequenceSteps, workspaces } from "@/lib/db/schema";
 import type { PageContent } from "@/lib/db/types";
 import { env } from "@/lib/env";
-import { aiCostMicros } from "../pricing";
 import { DEFAULT_SEQUENCE } from "../defaults";
 import { createSite, newSectionId } from "../sites";
-import { canAfford, chargeUsage } from "../wallet";
+import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
 import { describeAiError, generateStructured, VOICE_RULES } from "./client";
+import { isUuid } from "@/lib/util";
 
 export const launchKitInputSchema = z.object({
   businessName: z.string().min(2).max(80),
@@ -291,18 +291,22 @@ export async function runLaunchKit(workspaceId: string, rawInput: unknown): Prom
   let usage = { inputTokens: 0, outputTokens: 0, model: "template" };
 
   if (env.aiEnabled) {
-    const afford = await canAfford(workspaceId, "ai_generation", 1);
-    if (!afford) return { ok: false, error: "You've used this month's AI generations. Add funds in Wallet & Billing to generate more." };
+    let charge: { billedMicros: number };
+    try {
+      charge = await chargeUsage(workspaceId, "ai_generation", 1, { description: "AI launch kit" });
+    } catch (err) {
+      if (err instanceof InsufficientBalanceError) {
+        return { ok: false, error: "You've used this month's AI generations. Add funds in Plan & wallet to generate more." };
+      }
+      throw err;
+    }
     try {
       const res = await generateStructured({ system: SYSTEM, prompt: buildPrompt(input), schema: launchKitSchema, effort: "medium" });
       kit = normalizeKit(res.data);
       usage = res.usage;
       usedAi = true;
-      await chargeUsage(workspaceId, "ai_generation", 1, {
-        description: "AI launch kit",
-        costMicros: aiCostMicros(usage.inputTokens, usage.outputTokens),
-      }).catch((err) => console.error("[ai] could not bill launch kit", err));
     } catch (err) {
+      await refundUsage(workspaceId, "ai_generation", 1, charge.billedMicros, "Refund: AI launch kit failed");
       warning = `${describeAiError(err)} We used a template kit instead.`;
       kit = fallbackKit(input);
     }
@@ -390,6 +394,7 @@ async function replaceDefaultEmails(workspaceId: string, kit: LaunchKit, ownerNa
 }
 
 export async function getLaunchKit(workspaceId: string, generationId: string) {
+  if (!isUuid(generationId)) return null;
   const db = await getDb();
   const [row] = await db
     .select()

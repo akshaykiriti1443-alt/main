@@ -25,10 +25,11 @@ You get: a real database. Migrations run on every deploy (`vercel.json` runs
    - `APP_URL` = `https://app.yourdomain.com`
    - `PLATFORM_NAME` = your brand
    - `APP_SECRET` = a long random string (run `openssl rand -hex 32`). **Never change it later**: it encrypts saved tokens and signs links.
-   - `ADMIN_EMAILS` = your email
+   - `SETUP_TOKEN` = a random string. Only you know it.
    - `DATABASE_URL`
    - `CRON_SECRET` = another random string
-4. Deploy. Open `https://app.yourdomain.com/signup`. The first account becomes the platform owner.
+4. Deploy. Open `https://app.yourdomain.com/signup?setup=<SETUP_TOKEN>`. This first account becomes the
+   platform owner. Nobody else can claim it without the token.
 
 **Cron:** `vercel.json` calls `/api/cron/tick` every minute. Per-minute crons need a
 Vercel Pro plan. On other hosts, run `npm run worker` as a separate process.
@@ -46,9 +47,10 @@ pages allow 300 seconds. Keep Fluid Compute on (Vercel default).
   `VERCEL_TOKEN`, `VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID` (if the project is in a team).
   Customers type their domain in the funnel settings; the app adds it to your Vercel
   project and shows them the DNS record. Verification runs in the background.
-- **Agency white-label app domains:** agencies enter `app.theiragency.com` in
-  Branding. Add that domain to your Vercel project too (same API). Their clients
-  then log in at `https://app.theiragency.com/login` and see only the agency brand.
+- **Agency white-label app domains:** agencies on the Agency plan enter
+  `app.theiragency.com` in Branding. The app adds it to your Vercel project and
+  checks DNS in the background. Once it shows **Verified**, their clients log in
+  at `https://app.theiragency.com/login` and see only the agency brand.
 
 ## 4. Email sending (Postmark or Resend) — 20 minutes
 
@@ -97,7 +99,8 @@ of access added. Monthly codes still handle renewals, because Zapier has no
 1. Create two products with monthly prices: **Growth** and **Agency**. Copy the price IDs.
 2. Set `STRIPE_SECRET_KEY`, `STRIPE_PRICE_GROWTH`, `STRIPE_PRICE_AGENCY`.
 3. Add a webhook endpoint: `https://app.yourdomain.com/api/webhooks/stripe` with events
-   `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+   `customer.subscription.updated`, `customer.subscription.deleted`.
 4. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
 
 You get: Growth upgrades, Agency plans and wallet top-ups. Top-ups are idempotent

@@ -1,11 +1,11 @@
 import { createHmac } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { channelConnections } from "@/lib/db/schema";
 import { safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { monthKey } from "@/lib/util";
-import { chargeUsage, InsufficientBalanceError } from "./wallet";
+import { chargeUsage, InsufficientBalanceError, refundUsage } from "./wallet";
 
 // Twilio, on one platform account. Numbers are bought into the platform account
 // and assigned to a workspace. US numbers need A2P 10DLC registration before
@@ -37,11 +37,17 @@ export async function searchNumbers(country: string, areaCode?: string) {
 }
 
 export async function buyNumber(workspaceId: string, phoneNumber: string) {
-  // Charge the first month up front; fails cleanly when the wallet is empty.
-  await chargeUsage(workspaceId, "phone_number_month", 1, { description: `Phone number ${phoneNumber}` });
-  const bought = await twilio<{ sid: string; phone_number: string }>("/IncomingPhoneNumbers.json", {
-    form: { PhoneNumber: phoneNumber, SmsUrl: `${env.appUrl}/api/webhooks/twilio`, SmsMethod: "POST" },
-  });
+  // Charge the first month up front (fails cleanly when the wallet is empty); refund if Twilio fails.
+  const charge = await chargeUsage(workspaceId, "phone_number_month", 1, { description: `Phone number ${phoneNumber}` });
+  let bought: { sid: string; phone_number: string };
+  try {
+    bought = await twilio<{ sid: string; phone_number: string }>("/IncomingPhoneNumbers.json", {
+      form: { PhoneNumber: phoneNumber, SmsUrl: `${env.appUrl}/api/webhooks/twilio`, SmsMethod: "POST" },
+    });
+  } catch (err) {
+    await refundUsage(workspaceId, "phone_number_month", 1, charge.billedMicros, `Refund: couldn't buy ${phoneNumber}`);
+    throw err;
+  }
   const db = await getDb();
   await db
     .insert(channelConnections)
@@ -80,13 +86,23 @@ export async function billPhoneNumbers() {
   const conns = await db.select().from(channelConnections).where(and(eq(channelConnections.kind, "sms"), eq(channelConnections.status, "active")));
   for (const c of conns) {
     if (c.meta.billedPeriod === period) continue;
+    // Claim this month atomically so overlapping cron runs can't bill twice.
+    const claimed = await db
+      .update(channelConnections)
+      .set({ meta: sql`jsonb_set(${channelConnections.meta}, '{billedPeriod}', to_jsonb(${period}::text))` })
+      .where(and(eq(channelConnections.id, c.id), sql`coalesce(${channelConnections.meta} ->> 'billedPeriod', '') <> ${period}`))
+      .returning({ id: channelConnections.id });
+    if (claimed.length === 0) continue;
     try {
       await chargeUsage(c.workspaceId, "phone_number_month", 1, { description: `Phone number ${c.externalId}` });
-      await db.update(channelConnections).set({ meta: { ...c.meta, billedPeriod: period } }).where(eq(channelConnections.id, c.id));
     } catch (err) {
       if (err instanceof InsufficientBalanceError) {
         await db.update(channelConnections).set({ status: "error" }).where(eq(channelConnections.id, c.id));
-      } else throw err;
+      } else {
+        // Unclaim so the next tick retries.
+        await db.update(channelConnections).set({ meta: c.meta }).where(eq(channelConnections.id, c.id));
+        throw err;
+      }
     }
   }
 }

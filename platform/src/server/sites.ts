@@ -4,7 +4,7 @@ import { pages, sites, type PageKind } from "@/lib/db/schema";
 import { pageContentSchema, siteThemeSchema, type PageContent, type Section, type SectionType, type SiteTheme } from "@/lib/db/types";
 import { env } from "@/lib/env";
 import { safeUrl } from "@/lib/html";
-import { shortId, slugify } from "@/lib/util";
+import { shortId, slugify, isUuid } from "@/lib/util";
 import { RESERVED_SLUGS } from "./defaults";
 
 export type Site = typeof sites.$inferSelect;
@@ -102,6 +102,7 @@ export async function listSites(workspaceId: string) {
 }
 
 export async function getSite(workspaceId: string, siteId: string) {
+  if (!isUuid(siteId)) return null;
   const db = await getDb();
   const [site] = await db
     .select()
@@ -117,6 +118,7 @@ export async function listPages(siteId: string) {
 }
 
 export async function getPage(workspaceId: string, pageId: string) {
+  if (!isUuid(pageId)) return null;
   const db = await getDb();
   const [page] = await db
     .select()
@@ -202,7 +204,10 @@ export async function deletePage(workspaceId: string, pageId: string) {
 
 export async function findPublicSite(by: { slug?: string; domain?: string }) {
   const db = await getDb();
-  const where = by.domain ? eq(sites.customDomain, by.domain.toLowerCase()) : eq(sites.slug, (by.slug ?? "").toLowerCase());
+  // Custom domains serve only after verification, so nobody can squat on a domain.
+  const where = by.domain
+    ? and(eq(sites.customDomain, by.domain.toLowerCase()), eq(sites.domainStatus, "verified"))
+    : eq(sites.slug, (by.slug ?? "").toLowerCase());
   const [site] = await db.select().from(sites).where(where).limit(1);
   return site ?? null;
 }

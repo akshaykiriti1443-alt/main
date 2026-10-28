@@ -79,7 +79,6 @@ export async function createUser(input: { email: string; name: string; password:
       email,
       name: input.name.trim(),
       passwordHash: await hashPassword(input.password),
-      isPlatformAdmin: env.adminEmails.includes(email),
     })
     .returning();
   return row;

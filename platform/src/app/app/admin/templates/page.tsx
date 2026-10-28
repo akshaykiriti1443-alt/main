@@ -1,3 +1,4 @@
+import { requirePlatformAdmin } from "@/server/auth";
 import { listTemplates } from "@/server/templates";
 import { deleteTemplateAction } from "@/actions/agency";
 import { relativeTime } from "@/lib/util";
@@ -5,6 +6,7 @@ import { Empty, Flash, PageHead } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 
 export default async function AdminTemplates({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  await requirePlatformAdmin();
   const templates = await listTemplates(null);
   return (
     <>

@@ -30,7 +30,8 @@ inside the paid Skool classroom:
    pages go offline, automations and emails stop. Everything comes back when they
    enter a valid code.
 
-The first account ever created becomes the platform owner and needs no code.
+The first account ever created becomes the platform owner and needs no code. In
+production it also needs the setup link: `/signup?setup=<SETUP_TOKEN>`.
 
 ## Quick start (local, zero accounts needed)
 
@@ -39,6 +40,7 @@ cd platform
 npm install
 npm run dev
 # open http://localhost:3000/signup  → the first user becomes platform owner
+# (set SETUP_TOKEN in production; then use /signup?setup=<token>)
 ```
 
 Locally the database is embedded Postgres (PGlite) in `.data/`, emails print to

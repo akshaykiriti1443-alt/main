@@ -23,10 +23,13 @@ export async function inviteMember(input: { workspaceId: string; workspaceName: 
   const isNew = !user;
   if (!user) user = await createUser({ email, name: input.name, password: randomToken(24) });
   const db = await getDb();
-  await db
+  // Never change an existing member's role here (that would let an admin demote the owner).
+  const added = await db
     .insert(workspaceMembers)
     .values({ workspaceId: input.workspaceId, userId: user.id, role: input.role })
-    .onConflictDoUpdate({ target: [workspaceMembers.workspaceId, workspaceMembers.userId], set: { role: input.role } });
+    .onConflictDoNothing()
+    .returning({ userId: workspaceMembers.userId });
+  if (added.length === 0) return { isNew: false, alreadyMember: true };
   const link = isNew ? await passwordLinkFor(user.id, 24 * 7) : `${env.appUrl}/login`;
   await sendSystemEmail({
     to: email,
@@ -34,7 +37,7 @@ export async function inviteMember(input: { workspaceId: string; workspaceName: 
     body: `Hi ${input.name || "there"},\n\nYou now have access to ${input.workspaceName}.\n\n[${isNew ? "Set your password" : "Log in"}](${link})${isNew ? "\n\nThe link works for 7 days." : ""}`,
     brandName: input.brandName,
   }).catch((err) => console.error("[team] invite email failed", err));
-  return { isNew };
+  return { isNew, alreadyMember: false };
 }
 
 export async function removeMember(workspaceId: string, userId: string) {

@@ -1,9 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { automationRuns, automations, contacts, workspaces } from "@/lib/db/schema";
+import { agencies, automationRuns, automations, contacts, emailSequences, workspaces } from "@/lib/db/schema";
 import { automationActionSchema, automationTriggerSchema, type AutomationAction, type AutomationTrigger } from "@/lib/db/types";
 import { env } from "@/lib/env";
-import { addMinutes } from "@/lib/util";
+import { addMinutes, isUuid } from "@/lib/util";
 import { isPublicHttpsUrl } from "@/lib/html";
 import { addTag, removeTag, setStage } from "./contacts";
 import type { DomainEvent } from "./events";
@@ -11,6 +11,9 @@ import { enqueue } from "./jobs/queue";
 import { hasFeature } from "./plans";
 
 export type Automation = typeof automations.$inferSelect;
+
+const MAX_RUNS_PER_AUTOMATION_HOUR = 3;
+const MAX_RUNS_PER_CONTACT_10MIN = 20;
 
 function matches(trigger: AutomationTrigger, event: DomainEvent): boolean {
   if (trigger.type !== event.type) return false;
@@ -31,14 +34,40 @@ function matches(trigger: AutomationTrigger, event: DomainEvent): boolean {
 
 export async function startAutomationsForEvent(event: DomainEvent) {
   const db = await getDb();
-  const [ws] = await db.select({ plan: workspaces.plan, status: workspaces.status }).from(workspaces).where(eq(workspaces.id, event.workspaceId)).limit(1);
-  if (!ws || ws.status === "paused" || !hasFeature(ws.plan, "automations")) return;
+  const [ws] = await db
+    .select({ plan: workspaces.plan, status: workspaces.status, agencyStatus: agencies.status })
+    .from(workspaces)
+    .innerJoin(agencies, eq(agencies.id, workspaces.agencyId))
+    .where(eq(workspaces.id, event.workspaceId))
+    .limit(1);
+  if (!ws || ws.status === "paused" || ws.agencyStatus === "paused" || !hasFeature(ws.plan, "automations")) return;
   const list = await db
     .select()
     .from(automations)
     .where(and(eq(automations.workspaceId, event.workspaceId), eq(automations.active, true)));
+  // Loop guard: automations that re-trigger each other (tag add/remove, stage flips)
+  // stop after a few runs instead of flooding the queue.
+  const [recentForContact] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(automationRuns)
+    .where(and(eq(automationRuns.contactId, event.contactId), gt(automationRuns.createdAt, new Date(Date.now() - 10 * 60_000))));
+  if ((recentForContact?.n ?? 0) >= MAX_RUNS_PER_CONTACT_10MIN) {
+    console.warn(`[automations] loop guard: contact ${event.contactId} hit ${MAX_RUNS_PER_CONTACT_10MIN} runs in 10 min`);
+    return;
+  }
   for (const a of list) {
     if (!matches(a.trigger, event)) continue;
+    const [recent] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(automationRuns)
+      .where(
+        and(
+          eq(automationRuns.automationId, a.id),
+          eq(automationRuns.contactId, event.contactId),
+          gt(automationRuns.createdAt, new Date(Date.now() - 60 * 60_000)),
+        ),
+      );
+    if ((recent?.n ?? 0) >= MAX_RUNS_PER_AUTOMATION_HOUR) continue;
     const [run] = await db
       .insert(automationRuns)
       .values({
@@ -49,7 +78,7 @@ export async function startAutomationsForEvent(event: DomainEvent) {
         status: "running",
       })
       .returning({ id: automationRuns.id });
-    await db.update(automations).set({ runsCount: a.runsCount + 1 }).where(eq(automations.id, a.id));
+    await db.update(automations).set({ runsCount: sql`${automations.runsCount} + 1` }).where(eq(automations.id, a.id));
     await enqueue("automation.step", { runId: run.id });
   }
 }
@@ -71,7 +100,15 @@ export async function processAutomationStep(runId: string) {
   let index = run.stepIndex;
   while (index < automation.actions.length) {
     const action = automation.actions[index];
-    const result = await executeAction(run.workspaceId, run.contactId, run.context, action);
+    let result: ActionResult;
+    try {
+      result = await executeAction(run.workspaceId, run.contactId, run.context, action);
+    } catch (err) {
+      // Stop instead of retrying: a retry would repeat the emails/messages already sent.
+      note(index, `Failed: ${err instanceof Error ? err.message : String(err)}`);
+      await db.update(automationRuns).set({ status: "failed", stepIndex: index, log }).where(eq(automationRuns.id, runId));
+      return;
+    }
     note(index, result.message);
     if (result.kind === "stop") {
       await db.update(automationRuns).set({ status: "completed", stepIndex: index + 1, log }).where(eq(automationRuns.id, runId));
@@ -83,6 +120,8 @@ export async function processAutomationStep(runId: string) {
       return;
     }
     index++;
+    // Save progress after every action so a crash never replays finished steps.
+    await db.update(automationRuns).set({ stepIndex: index, log }).where(eq(automationRuns.id, runId));
   }
   await db.update(automationRuns).set({ status: "completed", stepIndex: index, log }).where(eq(automationRuns.id, runId));
 }
@@ -190,6 +229,7 @@ export async function listAutomations(workspaceId: string) {
 }
 
 export async function getAutomation(workspaceId: string, id: string) {
+  if (!isUuid(id)) return null;
   const db = await getDb();
   const [a] = await db.select().from(automations).where(and(eq(automations.id, id), eq(automations.workspaceId, workspaceId))).limit(1);
   return a ?? null;
@@ -207,8 +247,17 @@ export async function recentRuns(workspaceId: string, automationId: string) {
 
 export async function saveAutomation(workspaceId: string, id: string | null, input: { name: string; trigger: unknown; actions: unknown; active: boolean }) {
   const trigger = automationTriggerSchema.parse(input.trigger);
-  const actions = (Array.isArray(input.actions) ? input.actions : []).map((a) => automationActionSchema.parse(a));
+  const actions = (Array.isArray(input.actions) ? input.actions : []).slice(0, 30).map((a) => automationActionSchema.parse(a));
   const db = await getDb();
+  for (const a of actions) {
+    if (a.type !== "enroll_sequence") continue;
+    const [seq] = await db
+      .select({ id: emailSequences.id })
+      .from(emailSequences)
+      .where(and(eq(emailSequences.id, a.sequenceId), eq(emailSequences.workspaceId, workspaceId)))
+      .limit(1);
+    if (!seq) throw new Error("Pick an email sequence from this account.");
+  }
   if (id) {
     await db
       .update(automations)

@@ -5,7 +5,8 @@ import { env } from "@/lib/env";
 import { logActivity } from "../activity";
 import { enqueue } from "../jobs/queue";
 import { siteVars, type Site } from "../sites";
-import { canAfford, chargeUsage } from "../wallet";
+import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
+import { isWorkspaceLive } from "../liveness";
 import { EmailProviderError, sendEmail } from "./providers";
 import { renderEmail, unsubscribeUrl } from "./render";
 
@@ -100,17 +101,27 @@ export async function processEmailSend(emailMessageId: string) {
   const skip = async (reason: string) =>
     db.update(emailMessages).set({ status: "skipped", error: reason }).where(eq(emailMessages.id, msg.id));
 
-  if (!ws || ws.status === "paused") return void (await skip("workspace paused"));
+  if (!ws || !(await isWorkspaceLive(ws.id))) return void (await skip("workspace paused"));
   if (msg.contactId) {
     const [c] = await db.select({ unsubscribed: contacts.unsubscribed }).from(contacts).where(eq(contacts.id, msg.contactId)).limit(1);
     if (c?.unsubscribed) return void (await skip("contact unsubscribed"));
   }
-  if (!(await canAfford(ws.id, "email", 1))) {
-    await db
-      .update(emailMessages)
-      .set({ status: "failed", error: "Monthly email allowance used and wallet is empty." })
-      .where(eq(emailMessages.id, msg.id));
-    return;
+  // Bill exactly once, before sending. Retries see billedMicros and skip billing.
+  let billed = msg.billedMicros;
+  if (billed === null) {
+    try {
+      billed = (await chargeUsage(ws.id, "email", 1)).billedMicros;
+    } catch (err) {
+      if (err instanceof InsufficientBalanceError) {
+        await db
+          .update(emailMessages)
+          .set({ status: "failed", error: "Monthly email allowance used and wallet is empty." })
+          .where(eq(emailMessages.id, msg.id));
+        return;
+      }
+      throw err;
+    }
+    await db.update(emailMessages).set({ billedMicros: billed }).where(eq(emailMessages.id, msg.id));
   }
 
   const replyTo = ws.settings.replyToEmail || (await workspaceOwnerEmail(ws.id)) || undefined;
@@ -136,11 +147,11 @@ export async function processEmailSend(emailMessageId: string) {
   } catch (err) {
     if (err instanceof EmailProviderError && err.permanent) {
       await db.update(emailMessages).set({ status: "failed", error: err.message }).where(eq(emailMessages.id, msg.id));
+      await refundUsage(ws.id, "email", 1, billed ?? 0, "Refund: email not delivered");
       return;
     }
     throw err;
   }
-  await chargeUsage(ws.id, "email", 1).catch((err) => console.error("[email] billing failed", err));
   await logActivity({
     workspaceId: ws.id,
     contactId: msg.contactId,

@@ -80,27 +80,35 @@ export async function createSubAccount(input: {
   return ws;
 }
 
-export async function setSubAccountStatus(agencyId: string, workspaceId: string, status: "active" | "paused") {
+export async function setSubAccountStatus(agencyId: string, workspaceId: string, status: "active" | "paused"): Promise<boolean> {
   const db = await getDb();
-  await db
+  const changed = await db
     .update(workspaces)
-    .set({ status, pausedAt: status === "paused" ? new Date() : null, graceEndsAt: null })
-    .where(and(eq(workspaces.id, workspaceId), eq(workspaces.agencyId, agencyId)));
+    .set({ status, pausedAt: status === "paused" ? new Date() : null, pauseReason: status === "paused" ? "agency" : null, graceEndsAt: null })
+    // A pause set by the platform admin outranks the agency: leave it alone.
+    .where(and(eq(workspaces.id, workspaceId), eq(workspaces.agencyId, agencyId), sql`coalesce(${workspaces.pauseReason}, '') <> 'admin'`))
+    .returning({ id: workspaces.id });
+  return changed.length > 0;
 }
 
 export async function updateAgencySettings(agencyId: string, input: { brand: BrandSettings; appDomain: string | null; markupPercent: number }) {
   const db = await getDb();
-  const domain = input.appDomain?.trim().toLowerCase() || null;
-  if (domain && !/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) throw new Error("Enter a domain like app.youragency.com");
   await db
     .update(agencies)
-    .set({ brand: input.brand, appDomain: domain, markupPercent: Math.max(0, Math.min(500, Math.round(input.markupPercent))) })
+    .set({ brand: input.brand, markupPercent: Math.max(0, Math.min(500, Math.round(input.markupPercent))) })
     .where(and(eq(agencies.id, agencyId), eq(agencies.isPlatform, false)));
+  const { setAgencyAppDomain } = await import("./domains");
+  await setAgencyAppDomain(agencyId, input.appDomain?.trim() || null);
 }
 
+/** The agency whose verified, active white-label domain this is (if any). */
 export async function agencyForHost(host: string) {
   if (!host) return null;
   const db = await getDb();
-  const [agency] = await db.select().from(agencies).where(eq(agencies.appDomain, host.split(":")[0])).limit(1);
+  const [agency] = await db
+    .select()
+    .from(agencies)
+    .where(and(eq(agencies.appDomain, host.split(":")[0].toLowerCase()), eq(agencies.appDomainStatus, "verified"), eq(agencies.plan, "agency")))
+    .limit(1);
   return agency ?? null;
 }

@@ -1,3 +1,4 @@
+import { requirePlatformAdmin } from "@/server/auth";
 import { listCodes } from "@/server/access";
 import { createCodeAction } from "@/actions/admin";
 import { env } from "@/lib/env";
@@ -12,6 +13,7 @@ function monthRange() {
 }
 
 export default async function CodesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  await requirePlatformAdmin();
   const codes = await listCodes();
   const r = monthRange();
   const now = Date.now();

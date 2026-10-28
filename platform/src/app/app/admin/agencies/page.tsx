@@ -1,3 +1,4 @@
+import { requirePlatformAdmin } from "@/server/auth";
 import Link from "next/link";
 import { listAllAgencies } from "@/server/admin";
 import { adjustWalletAction, setAgencyAction } from "@/actions/admin";
@@ -6,6 +7,7 @@ import { Empty, Flash, PageHead } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 
 export default async function AdminAgencies({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  await requirePlatformAdmin();
   const rows = await listAllAgencies();
   return (
     <>

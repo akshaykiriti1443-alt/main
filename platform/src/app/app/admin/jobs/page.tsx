@@ -1,3 +1,4 @@
+import { requirePlatformAdmin } from "@/server/auth";
 import { recentJobs, recentWebhooks } from "@/server/admin";
 import { retryJobAction, runTickAction } from "@/actions/admin";
 import { relativeTime, truncate } from "@/lib/util";
@@ -5,6 +6,7 @@ import { Flash, PageHead } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 
 export default async function AdminJobs({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  await requirePlatformAdmin();
   const [failed, pending, hooks] = await Promise.all([recentJobs("failed"), recentJobs("pending"), recentWebhooks()]);
   return (
     <>

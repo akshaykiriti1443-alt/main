@@ -2,8 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { aiGenerations, contacts, conversations, messages, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
-import { aiCostMicros } from "../pricing";
-import { canAfford, chargeUsage } from "../wallet";
+import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
 import { generateText, VOICE_RULES } from "./client";
 
 export function fallbackReply(input: { firstName: string; businessName: string; skoolUrl: string; lastInbound: string }) {
@@ -32,7 +31,13 @@ export async function draftReply(conversationId: string): Promise<string | null>
   const businessName = ws.settings.businessName || ws.name;
 
   let reply = fallbackReply({ firstName: contact.firstName, businessName, skoolUrl: ws.settings.skoolUrl ?? "", lastInbound });
-  if (env.aiEnabled && (await canAfford(ws.id, "ai_assist"))) {
+  const charge = env.aiEnabled
+    ? await chargeUsage(ws.id, "ai_assist", 1, { description: "AI reply draft" }).catch((err) => {
+        if (err instanceof InsufficientBalanceError) return null;
+        throw err;
+      })
+    : null;
+  if (charge) {
     try {
       const res = await generateText({
         effort: "low",
@@ -56,11 +61,8 @@ Return only the message text.`,
         inputTokens: res.usage.inputTokens,
         outputTokens: res.usage.outputTokens,
       });
-      await chargeUsage(ws.id, "ai_assist", 1, {
-        description: "AI reply draft",
-        costMicros: aiCostMicros(res.usage.inputTokens, res.usage.outputTokens),
-      }).catch(() => undefined);
     } catch (err) {
+      await refundUsage(ws.id, "ai_assist", 1, charge.billedMicros, "Refund: AI reply draft failed");
       console.error("[ai] reply draft fell back to template", err);
     }
   }

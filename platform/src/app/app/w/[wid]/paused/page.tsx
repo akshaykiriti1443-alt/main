@@ -16,6 +16,8 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
       </p>
       {viaAgency ? (
         <p>Contact {agency.brand.name || agency.name} to turn your account back on.</p>
+      ) : workspace.pauseReason === "admin" ? (
+        <p>The platform team paused this account. Reply to any email from us to turn it back on.</p>
       ) : (
         <form action={redeemCodeAction.bind(null, wid)} className="stack">
           <input type="hidden" name="back" value={`/app/w/${wid}/paused`} />

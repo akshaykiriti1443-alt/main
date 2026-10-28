@@ -33,11 +33,12 @@ export function LoginForm({ next }: { next?: string }) {
   );
 }
 
-export function SignupForm({ needsCode, defaultCode }: { needsCode: boolean; defaultCode?: string }) {
+export function SignupForm({ needsCode, defaultCode, setup }: { needsCode: boolean; defaultCode?: string; setup?: string }) {
   const [state, action, pending] = useActionState(signupAction, {});
   return (
     <form action={action} className="stack">
       <Msg state={state} />
+      {setup ? <input type="hidden" name="setup" value={setup} /> : null}
       <div className="field">
         <label htmlFor="name">Your name</label>
         <input id="name" name="name" autoComplete="name" required defaultValue={state.values?.name} />

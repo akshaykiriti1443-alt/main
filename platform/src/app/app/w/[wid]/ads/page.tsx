@@ -4,6 +4,7 @@ import { aiGenerations } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
 import type { AdReview } from "@/server/ai/adReview";
 import { adReviewAction } from "@/actions/marketing";
+import { isUuid } from "@/lib/util";
 import { Flash, PageHead } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 
@@ -17,7 +18,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
   const [row] = await db
     .select()
     .from(aiGenerations)
-    .where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_review"), ...(sp.review ? [eq(aiGenerations.id, sp.review)] : [])))
+    .where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_review"), ...(isUuid(sp.review) ? [eq(aiGenerations.id, sp.review)] : [])))
     .orderBy(desc(aiGenerations.createdAt))
     .limit(1);
   const review = row?.output as unknown as AdReview | undefined;

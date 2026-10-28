@@ -12,7 +12,8 @@ export type JobType =
   | "ai.reply_draft"
   | "social.publish"
   | "inbox.webhook"
-  | "domain.check";
+  | "domain.check"
+  | "agency_domain.check";
 
 export async function enqueue(
   type: JobType,

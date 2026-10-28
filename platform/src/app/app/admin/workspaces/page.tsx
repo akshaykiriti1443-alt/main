@@ -1,3 +1,4 @@
+import { requirePlatformAdmin } from "@/server/auth";
 import Link from "next/link";
 import { listAllWorkspaces } from "@/server/admin";
 import { adjustWalletAction, setWorkspaceAction } from "@/actions/admin";
@@ -6,6 +7,7 @@ import { Flash, PageHead } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 
 export default async function AdminWorkspaces({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  await requirePlatformAdmin();
   const rows = await listAllWorkspaces();
   return (
     <>

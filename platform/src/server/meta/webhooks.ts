@@ -35,7 +35,7 @@ async function findConnection(kind: "facebook_page" | "instagram" | "whatsapp", 
   const [conn] = await db
     .select()
     .from(channelConnections)
-    .where(and(eq(channelConnections.kind, kind), eq(channelConnections.externalId, externalId)))
+    .where(and(eq(channelConnections.kind, kind), eq(channelConnections.externalId, externalId), eq(channelConnections.status, "active")))
     .limit(1);
   return conn ?? null;
 }

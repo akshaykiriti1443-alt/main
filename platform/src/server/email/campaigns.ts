@@ -1,9 +1,11 @@
 import { and, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { contacts, emailCampaigns, workspaces } from "@/lib/db/schema";
+import { contacts, emailCampaigns, emailMessages, workspaces } from "@/lib/db/schema";
+import { isWorkspaceLive } from "../liveness";
 import type { CampaignAudience } from "@/lib/db/types";
 import { enqueue } from "../jobs/queue";
 import { buildVars, queueEmail } from "./send";
+import { isUuid } from "@/lib/util";
 
 export function audienceWhere(workspaceId: string, audience: CampaignAudience): SQL {
   const conds: SQL[] = [eq(contacts.workspaceId, workspaceId), isNotNull(contacts.email), eq(contacts.unsubscribed, false)];
@@ -25,6 +27,7 @@ export async function listCampaigns(workspaceId: string) {
 }
 
 export async function getCampaign(workspaceId: string, campaignId: string) {
+  if (!isUuid(campaignId)) return null;
   const db = await getDb();
   const [c] = await db
     .select()
@@ -51,14 +54,18 @@ export async function scheduleCampaign(workspaceId: string, campaignId: string, 
 export async function processCampaignSend(campaignId: string) {
   const db = await getDb();
   const [campaign] = await db.select().from(emailCampaigns).where(eq(emailCampaigns.id, campaignId)).limit(1);
-  if (!campaign || campaign.status !== "scheduled") return;
+  // "sending" means a previous attempt stopped partway: resume it.
+  if (!campaign || (campaign.status !== "scheduled" && campaign.status !== "sending")) return;
   const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, campaign.workspaceId)).limit(1);
-  if (!ws || ws.status === "paused") return;
+  if (!ws || !(await isWorkspaceLive(ws.id))) return;
 
   await db.update(emailCampaigns).set({ status: "sending" }).where(eq(emailCampaigns.id, campaignId));
   const recipients = await db.select().from(contacts).where(audienceWhere(ws.id, campaign.audience));
+  const alreadyQueued = new Set(
+    (await db.select({ contactId: emailMessages.contactId }).from(emailMessages).where(eq(emailMessages.campaignId, campaign.id))).map((r) => r.contactId),
+  );
   for (const c of recipients) {
-    if (!c.email) continue;
+    if (!c.email || alreadyQueued.has(c.id)) continue;
     await queueEmail({
       workspaceId: ws.id,
       contactId: c.id,

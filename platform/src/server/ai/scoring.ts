@@ -4,8 +4,7 @@ import { getDb } from "@/lib/db";
 import { activities, aiGenerations, contacts, conversations, messages, workspaces, type Temperature } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { hasFeature } from "../plans";
-import { aiCostMicros } from "../pricing";
-import { canAfford, chargeUsage } from "../wallet";
+import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
 import { setTemperature } from "../contacts";
 import { generateStructured } from "./client";
 
@@ -99,8 +98,14 @@ export async function scoreContact(contactId: string): Promise<ScoreResult | nul
   });
 
   let result = rules;
-  const useAi = env.aiEnabled && hasFeature(ws.plan, "ai_scoring") && history.length > 0 && (await canAfford(ws.id, "ai_assist"));
-  if (useAi) {
+  const wantsAi = env.aiEnabled && hasFeature(ws.plan, "ai_scoring") && history.length > 0;
+  const charge = wantsAi
+    ? await chargeUsage(ws.id, "ai_assist", 1, { description: "AI lead score" }).catch((err) => {
+        if (err instanceof InsufficientBalanceError) return null;
+        throw err;
+      })
+    : null;
+  if (charge) {
     try {
       const transcript = history.map((m) => `${m.direction === "in" ? "LEAD" : "BUSINESS"}: ${m.body}`).join("\n");
       const res = await generateStructured({
@@ -128,11 +133,8 @@ ${transcript}`,
         inputTokens: res.usage.inputTokens,
         outputTokens: res.usage.outputTokens,
       });
-      await chargeUsage(ws.id, "ai_assist", 1, {
-        description: "AI lead score",
-        costMicros: aiCostMicros(res.usage.inputTokens, res.usage.outputTokens),
-      }).catch(() => undefined);
     } catch (err) {
+      await refundUsage(ws.id, "ai_assist", 1, charge.billedMicros, "Refund: AI lead score failed");
       console.error("[ai] scoring fell back to rules", err);
     }
   }

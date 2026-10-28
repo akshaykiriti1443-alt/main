@@ -63,7 +63,9 @@ export async function createSubAccountAction(aid: string, fd: FormData) {
 
 export async function setSubAccountStatusAction(aid: string, wid: string, status: "active" | "paused") {
   await requireAgency(aid);
-  await setSubAccountStatus(aid, wid, status);
+  if (!(await setSubAccountStatus(aid, wid, status))) {
+    go(`/app/agency/${aid}`, { error: "The platform paused this account. Contact platform support to turn it back on." });
+  }
   go(`/app/agency/${aid}`, { ok: status === "paused" ? "Account paused. Its pages and automations are off." : "Account active again." });
 }
 

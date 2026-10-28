@@ -61,8 +61,8 @@ export async function adminSetWorkspace(workspaceId: string, patch: { plan?: "st
     .update(workspaces)
     .set({
       ...patch,
-      ...(patch.status === "active" ? { graceEndsAt: null, pausedAt: null } : {}),
-      ...(patch.status === "paused" ? { pausedAt: new Date() } : {}),
+      ...(patch.status === "active" ? { graceEndsAt: null, pausedAt: null, pauseReason: null } : {}),
+      ...(patch.status === "paused" ? { pausedAt: new Date(), pauseReason: "admin" as const } : {}),
     })
     .where(eq(workspaces.id, workspaceId));
 }

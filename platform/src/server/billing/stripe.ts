@@ -79,6 +79,7 @@ export function verifyStripeSignature(payload: string, header: string | null, se
 type StripeObject = {
   id: string;
   mode?: string;
+  payment_status?: "paid" | "unpaid" | "no_payment_required";
   amount_total?: number;
   subscription?: string;
   customer?: string;
@@ -108,8 +109,12 @@ export async function handleStripeEvent(event: { id: string; type: string; data:
   const ownerId = meta.owner_id;
   const db = await getDb();
 
-  if (event.type === "checkout.session.completed" && ownerType && ownerId) {
-    if (meta.kind === "topup" && obj.amount_total) {
+  const isCheckout = event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded";
+  if (isCheckout && ownerType && ownerId) {
+    // Delayed payment methods complete checkout before the money arrives; wait for
+    // checkout.session.async_payment_succeeded in that case.
+    const paid = obj.payment_status !== "unpaid";
+    if (meta.kind === "topup" && obj.amount_total && paid) {
       const wallet = await getOrCreateWallet(ownerType, ownerId);
       await creditWallet(wallet.id, obj.amount_total * 10_000, {
         type: "topup",
@@ -119,11 +124,12 @@ export async function handleStripeEvent(event: { id: string; type: string; data:
       });
     }
     if ((meta.kind === "growth" || meta.kind === "agency") && obj.subscription) {
+      const status = paid ? "active" : "incomplete";
       await db
         .insert(subscriptions)
-        .values({ ownerType, ownerId, plan: meta.kind, externalId: obj.subscription, customerId: obj.customer ?? null, status: "active" })
-        .onConflictDoUpdate({ target: subscriptions.externalId, set: { status: "active", updatedAt: new Date() } });
-      await applyPlan(ownerType, ownerId, meta.kind, true);
+        .values({ ownerType, ownerId, plan: meta.kind, externalId: obj.subscription, customerId: obj.customer ?? null, status })
+        .onConflictDoUpdate({ target: subscriptions.externalId, set: { status, updatedAt: new Date() } });
+      if (paid) await applyPlan(ownerType, ownerId, meta.kind, true);
     }
     return;
   }

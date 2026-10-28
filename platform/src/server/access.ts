@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, lt, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { accessCodes, skoolApprovals, users, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { addDays, normalizeEmail } from "@/lib/util";
@@ -45,18 +45,29 @@ export async function findApproval(email: string, at = new Date()) {
 
 export async function extendWorkspaceAccess(workspaceId: string, until: Date) {
   const db = await getDb();
+  // Dates in raw SQL go in as ISO strings: postgres.js can't serialize a JS Date here.
   await db
     .update(workspaces)
-    .set({
-      status: "active",
-      accessVerifiedUntil: sql`greatest(coalesce(${workspaces.accessVerifiedUntil}, now()), ${until})`,
-      graceEndsAt: null,
-      pausedAt: null,
-    })
+    .set({ accessVerifiedUntil: sql`greatest(coalesce(${workspaces.accessVerifiedUntil}, now()), ${until.toISOString()}::timestamptz)` })
     .where(eq(workspaces.id, workspaceId));
+  // Only lift a lapse-of-access pause. Pauses set by an admin or agency stay.
+  await db
+    .update(workspaces)
+    .set({ status: "active", graceEndsAt: null, pausedAt: null, pauseReason: null })
+    .where(
+      and(
+        eq(workspaces.id, workspaceId),
+        or(eq(workspaces.status, "grace"), and(eq(workspaces.status, "paused"), eq(workspaces.pauseReason, "access"))),
+      ),
+    );
 }
 
 export async function redeemCode(workspaceId: string, code: string): Promise<{ ok: true; until: Date } | { ok: false; error: string }> {
+  const db = await getDb();
+  const [ws] = await db.select({ accessSource: workspaces.accessSource }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+  if (!ws || (ws.accessSource !== "skool_code" && ws.accessSource !== "skool_zapier")) {
+    return { ok: false, error: "This account's access isn't managed with member codes." };
+  }
   const valid = await findValidCode(code);
   if (!valid) return { ok: false, error: "That code isn't valid right now. Copy this month's code from the Skool classroom." };
   await extendWorkspaceAccess(workspaceId, valid.validUntil);
@@ -99,7 +110,7 @@ export async function enforceAccess(now = new Date()) {
     .returning({ id: workspaces.id });
   const toPaused = await db
     .update(workspaces)
-    .set({ status: "paused", pausedAt: now })
+    .set({ status: "paused", pausedAt: now, pauseReason: "access" })
     .where(and(eq(workspaces.status, "grace"), lt(workspaces.graceEndsAt, now)))
     .returning({ id: workspaces.id });
   return { grace: toGrace.length, paused: toPaused.length };

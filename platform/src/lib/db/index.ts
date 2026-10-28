@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { env } from "../env";
+import { assertProductionSecrets, env } from "../env";
 import * as schema from "./schema";
 
 export type Schema = typeof schema;
@@ -13,6 +13,7 @@ const holder: Holder = (g.__onexDb ??= {});
 const migrationsFolder = () => path.join(process.cwd(), "drizzle");
 
 async function connect(): Promise<DB> {
+  assertProductionSecrets();
   if (env.databaseUrl) {
     // Production: real Postgres (Supabase, Neon, RDS...). Migrations run at deploy time
     // with `npm run db:migrate`, never on a request path.

@@ -15,10 +15,9 @@ export const env = {
   appSecret: process.env.APP_SECRET ?? "dev-only-secret-change-me-in-production-0000",
   databaseUrl: process.env.DATABASE_URL ?? "",
   pgliteDir: process.env.PGLITE_DIR ?? ".data/pglite",
-  adminEmails: (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean),
+  // Required (in production) to create the very first, platform-owner account:
+  // open /signup?setup=<SETUP_TOKEN>. Nobody else can claim the owner seat.
+  setupToken: process.env.SETUP_TOKEN ?? "",
   jobsInline: bool(process.env.JOBS_INLINE, !isProd),
   cronSecret: process.env.CRON_SECRET ?? "",
   skoolWebhookSecret: process.env.SKOOL_WEBHOOK_SECRET ?? "",
@@ -52,7 +51,9 @@ export const env = {
 };
 
 export function assertProductionSecrets() {
-  if (env.isProd && env.appSecret.startsWith("dev-only")) {
-    throw new Error("APP_SECRET must be set in production.");
+  if (!env.isProd) return;
+  const s = env.appSecret;
+  if (s.startsWith("dev-only") || s.startsWith("change-me") || s.length < 32) {
+    throw new Error("Set APP_SECRET to a random string of at least 32 characters (openssl rand -hex 32).");
   }
 }

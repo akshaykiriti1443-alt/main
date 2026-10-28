@@ -1,13 +1,14 @@
 import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { activities, contacts, type ContactSource, type Stage, type Temperature } from "@/lib/db/schema";
-import { normalizeEmail, normalizePhone } from "@/lib/util";
+import { normalizeEmail, normalizePhone, isUuid } from "@/lib/util";
 import { logActivity } from "./activity";
 import { emitEvent } from "./events";
 
 export type Contact = typeof contacts.$inferSelect;
 
 export async function getContact(workspaceId: string, contactId: string) {
+  if (!isUuid(contactId)) return null;
   const db = await getDb();
   const [c] = await db
     .select()
@@ -62,7 +63,7 @@ export async function upsertContact(input: {
       )
       .limit(1);
   }
-  if (!existing && phone && input.channel?.kind === "whatsapp") {
+  if (!existing && phone && (input.channel?.kind === "whatsapp" || input.source === "sms")) {
     [existing] = await db
       .select()
       .from(contacts)

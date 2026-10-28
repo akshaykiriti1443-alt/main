@@ -1,3 +1,4 @@
+import { requirePlatformAdmin } from "@/server/auth";
 import { env } from "@/lib/env";
 import { platformStats } from "@/server/admin";
 import { metaConfigured } from "@/server/meta/graph";
@@ -18,6 +19,7 @@ function Check({ ok, label, hint }: { ok: boolean; label: string; hint: string }
 }
 
 export default async function AdminHome() {
+  await requirePlatformAdmin();
   const s = await platformStats();
   const margin = s.usageRevenue30d - s.usageCost30d;
   const urls = [

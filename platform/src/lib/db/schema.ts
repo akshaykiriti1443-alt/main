@@ -33,6 +33,7 @@ const emptyTextArray = sql`'{}'::text[]`;
 // ---------------------------------------------------------------------------
 
 export type AgencyPlan = "platform" | "none" | "agency";
+export type DomainStatus = "none" | "pending" | "verified" | "error";
 export type AgencyStatus = "active" | "paused";
 
 export const agencies = pgTable("agencies", {
@@ -44,6 +45,7 @@ export const agencies = pgTable("agencies", {
   status: text("status").$type<AgencyStatus>().notNull().default("active"),
   brand: jsonb("brand").$type<BrandSettings>().notNull().default({}),
   appDomain: text("app_domain").unique(),
+  appDomainStatus: text("app_domain_status").$type<DomainStatus>().notNull().default("none"),
   markupPercent: integer("markup_percent").notNull().default(30),
   createdAt: createdAt(),
 });
@@ -97,6 +99,8 @@ export const workspaces = pgTable(
     accessVerifiedUntil: ts("access_verified_until"),
     graceEndsAt: ts("grace_ends_at"),
     pausedAt: ts("paused_at"),
+    // Why a workspace is paused: only "access" pauses lift when a member code is entered.
+    pauseReason: text("pause_reason").$type<"access" | "admin" | "agency">(),
     settings: jsonb("settings").$type<WorkspaceSettings>().notNull().default({}),
     createdAt: createdAt(),
   },
@@ -138,8 +142,6 @@ export const skoolApprovals = pgTable("skool_approvals", {
 // ---------------------------------------------------------------------------
 // Sites and pages
 // ---------------------------------------------------------------------------
-
-export type DomainStatus = "none" | "pending" | "verified" | "error";
 
 export const sites = pgTable(
   "sites",
@@ -309,6 +311,8 @@ export const emailMessages = pgTable(
     text: text("text").notNull(),
     provider: text("provider").notNull().default("console"),
     providerMessageId: text("provider_message_id"),
+    // null = not billed yet; 0 = covered by the plan allowance; >0 = charged to the wallet
+    billedMicros: bigint("billed_micros", { mode: "number" }),
     status: text("status").$type<EmailStatus>().notNull().default("queued"),
     error: text("error"),
     campaignId: uuid("campaign_id"),

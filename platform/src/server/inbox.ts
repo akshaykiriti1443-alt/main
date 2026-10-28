@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { channelConnections, contacts, conversations, messages, workspaces, type ConversationChannel } from "@/lib/db/schema";
-import { truncate } from "@/lib/util";
+import { truncate, isUuid } from "@/lib/util";
 import { logActivity } from "./activity";
 import { upsertContact } from "./contacts";
 import { emitEvent } from "./events";
@@ -9,7 +9,7 @@ import { enqueue } from "./jobs/queue";
 import { sendMetaMessage } from "./meta/send";
 import { hasFeature } from "./plans";
 import { sendSms } from "./sms";
-import { canAfford, chargeUsage, InsufficientBalanceError } from "./wallet";
+import { chargeUsage, refundUsage } from "./wallet";
 
 type Connection = typeof channelConnections.$inferSelect;
 
@@ -143,6 +143,7 @@ export async function listConversations(workspaceId: string, filter: { status?: 
 }
 
 export async function getConversation(workspaceId: string, conversationId: string) {
+  if (!isUuid(conversationId)) return null;
   const db = await getDb();
   const [row] = await db
     .select({ conversation: conversations, contact: contacts })
@@ -177,15 +178,24 @@ export async function sendReply(workspaceId: string, conversationId: string, bod
     .limit(1);
   if (!conv) throw new Error("Conversation not found");
   if (!conv.connectionId) throw new Error("This conversation's channel is disconnected.");
-  const [connection] = await db.select().from(channelConnections).where(eq(channelConnections.id, conv.connectionId)).limit(1);
+  // The channel must still belong to this workspace (a reconnect can move it elsewhere).
+  const [connection] = await db
+    .select()
+    .from(channelConnections)
+    .where(and(eq(channelConnections.id, conv.connectionId), eq(channelConnections.workspaceId, workspaceId)))
+    .limit(1);
   if (!connection || connection.status !== "active") throw new Error("Reconnect this channel in Settings first.");
 
   let externalId: string | null;
   if (connection.kind === "sms") {
     const segments = Math.max(1, Math.ceil(text.length / 153));
-    if (!(await canAfford(workspaceId, "sms_segment", segments))) throw new InsufficientBalanceError(0);
-    externalId = await sendSms({ from: connection.externalId, to: conv.externalThreadId, body: text });
-    await chargeUsage(workspaceId, "sms_segment", segments, { description: "SMS reply" }).catch((err) => console.error("[sms] billing failed", err));
+    const charge = await chargeUsage(workspaceId, "sms_segment", segments, { description: "SMS reply" });
+    try {
+      externalId = await sendSms({ from: connection.externalId, to: conv.externalThreadId, body: text });
+    } catch (err) {
+      await refundUsage(workspaceId, "sms_segment", segments, charge.billedMicros, "Refund: SMS not sent");
+      throw err;
+    }
   } else {
     externalId = await sendMetaMessage({ connection, threadId: conv.externalThreadId, body: text, lastInboundAt: conv.lastInboundAt });
   }

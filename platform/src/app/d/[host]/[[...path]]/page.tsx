@@ -16,11 +16,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 export default async function DomainPage({ params, searchParams }: { params: Params; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { host, path = [] } = await params;
   const domain = decodeURIComponent(host);
+  // A verified white-label agency app domain wins: send visitors to the branded login.
+  if (await agencyForHost(domain)) redirect("/login");
   const site = await findPublicSite({ domain });
-  if (!site) {
-    // A white-label agency's app domain: send visitors to the branded login.
-    if (await agencyForHost(domain)) redirect("/login");
-    notFound();
-  }
+  if (!site) notFound();
   return <PublicPage site={site} path={path} searchParams={await searchParams} />;
 }

@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { walletTransactions } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
@@ -18,9 +18,15 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
   const { wallet, plan } = await billingWalletFor(wid);
   const usage = await usageThisMonth(wid);
   const db = await getDb();
-  const tx = await db.select().from(walletTransactions).where(eq(walletTransactions.walletId, wallet.id)).orderBy(desc(walletTransactions.createdAt)).limit(25);
-  const p = PLANS[plan];
   const agencyPays = !agency.isPlatform;
+  // Clients of an agency share its wallet: show only their own usage, never the balance.
+  const tx = await db
+    .select()
+    .from(walletTransactions)
+    .where(agencyPays ? and(eq(walletTransactions.walletId, wallet.id), eq(walletTransactions.workspaceId, wid)) : eq(walletTransactions.walletId, wallet.id))
+    .orderBy(desc(walletTransactions.createdAt))
+    .limit(25);
+  const p = PLANS[plan];
   return (
     <>
       <PageHead title="Plan & wallet" sub="Your plan covers the basics each month. Extra usage comes out of your wallet, so you only pay for what you use." />
@@ -28,7 +34,11 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
       {sp.checkout === "success" ? <div className="alert alert-ok">Payment received. It can take a few seconds to show up.</div> : null}
       <div className="grid-3">
         <Stat label="Plan" value={p.label} hint={p.priceNote} />
-        <Stat label={agencyPays ? "Agency wallet" : "Wallet balance"} value={formatMoney(wallet.balanceMicros)} hint={agencyPays ? `Managed by ${agency.brand.name || agency.name}` : "Used for pay-as-you-go"} />
+        {agencyPays ? (
+          <Stat label="Billing" value="Managed" hint={`By ${agency.brand.name || agency.name}`} />
+        ) : (
+          <Stat label="Wallet balance" value={formatMoney(wallet.balanceMicros)} hint="Used for pay-as-you-go" />
+        )}
         <Stat label="Status" value={workspace.status === "active" ? "Active" : workspace.status === "grace" ? "Needs code" : "Paused"} hint={workspace.accessVerifiedUntil ? `Access confirmed to ${workspace.accessVerifiedUntil.toDateString()}` : workspace.accessSource === "admin" ? "Lifetime access" : undefined} />
       </div>
 
@@ -79,7 +89,7 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
       </div>
 
       <div className="card">
-        <div className="card-head"><h2>Wallet history</h2></div>
+        <div className="card-head"><h2>{agencyPays ? "Your usage" : "Wallet history"}</h2></div>
         {tx.length === 0 ? (
           <p className="muted small">No transactions yet.</p>
         ) : (
