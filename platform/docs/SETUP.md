@@ -1,7 +1,7 @@
 # Going live: setup guide
 
 Do these in order. Each step says what you get when it's done. You can launch
-the Member tier after steps 1–5 and add the rest later.
+the Member tier after steps 1–6 and add the rest later.
 
 Time needed: about 2 hours of setup, plus waiting time for Meta approvals.
 
