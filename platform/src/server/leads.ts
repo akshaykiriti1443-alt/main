@@ -74,6 +74,7 @@ export async function captureLead(input: LeadInput): Promise<LeadResult> {
   if (created) {
     await emitEvent({ type: "lead_created", workspaceId: row.workspace.id, contactId: contact.id, siteId: row.site.id });
   }
+  await enqueue("ai.score", { contactId: contact.id }, { dedupeKey: `score:${contact.id}:${Math.floor(Date.now() / 120_000)}` });
 
   if (row.workspace.settings.metaPixelId && row.workspace.settings.metaCapiTokenEnc) {
     await enqueue("meta.capi", {

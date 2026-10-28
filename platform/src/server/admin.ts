@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { agencies, jobs, subscriptions, users, walletTransactions, wallets, webhookEvents, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { agencies, jobs, subscriptions, users, walletTransactions, webhookEvents, workspaces } from "@/lib/db/schema";
 import { creditWallet, getOrCreateWallet } from "./wallet";
 
 export async function platformStats() {
@@ -33,8 +33,8 @@ export async function listAllWorkspaces(limit = 200) {
       workspace: workspaces,
       agencyName: agencies.name,
       isPlatformAgency: agencies.isPlatform,
-      owner: sql<string | null>`(select ${users.email} from ${workspaceMembers} join ${users} on ${users.id} = ${workspaceMembers.userId} where ${workspaceMembers.workspaceId} = ${workspaces.id} and ${workspaceMembers.role} = 'owner' limit 1)`,
-      balance: sql<number | null>`(select ${wallets.balanceMicros} from ${wallets} where ${wallets.ownerType} = 'workspace' and ${wallets.ownerId} = ${workspaces.id})`,
+      owner: sql<string | null>`(select u.email from workspace_members wm join users u on u.id = wm.user_id where wm.workspace_id = "workspaces"."id" and wm.role = 'owner' limit 1)`,
+      balance: sql<number | null>`(select w.balance_micros from wallets w where w.owner_type = 'workspace' and w.owner_id = "workspaces"."id")`,
     })
     .from(workspaces)
     .innerJoin(agencies, eq(agencies.id, workspaces.agencyId))
@@ -47,8 +47,8 @@ export async function listAllAgencies() {
   return db
     .select({
       agency: agencies,
-      workspaces: sql<number>`(select count(*)::int from ${workspaces} where ${workspaces.agencyId} = ${agencies.id})`,
-      balance: sql<number | null>`(select ${wallets.balanceMicros} from ${wallets} where ${wallets.ownerType} = 'agency' and ${wallets.ownerId} = ${agencies.id})`,
+      workspaces: sql<number>`(select count(*)::int from workspaces ws where ws.agency_id = "agencies"."id")`,
+      balance: sql<number | null>`(select w.balance_micros from wallets w where w.owner_type = 'agency' and w.owner_id = "agencies"."id")`,
     })
     .from(agencies)
     .where(eq(agencies.isPlatform, false))

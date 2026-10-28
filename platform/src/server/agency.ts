@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { agencies, agencyMembers, contacts, users, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { agencies, agencyMembers, workspaceMembers, workspaces } from "@/lib/db/schema";
 import type { BrandSettings } from "@/lib/db/types";
 import { randomToken } from "@/lib/crypto";
 import { normalizeEmail, shortId, slugify } from "@/lib/util";
@@ -28,8 +28,8 @@ export async function listSubAccounts(agencyId: string) {
   return db
     .select({
       workspace: workspaces,
-      contacts: sql<number>`(select count(*)::int from ${contacts} where ${contacts.workspaceId} = ${workspaces.id})`,
-      owner: sql<string | null>`(select ${users.email} from ${workspaceMembers} join ${users} on ${users.id} = ${workspaceMembers.userId} where ${workspaceMembers.workspaceId} = ${workspaces.id} and ${workspaceMembers.role} = 'owner' limit 1)`,
+      contacts: sql<number>`(select count(*)::int from contacts c where c.workspace_id = "workspaces"."id")`,
+      owner: sql<string | null>`(select u.email from workspace_members wm join users u on u.id = wm.user_id where wm.workspace_id = "workspaces"."id" and wm.role = 'owner' limit 1)`,
     })
     .from(workspaces)
     .where(eq(workspaces.agencyId, agencyId))

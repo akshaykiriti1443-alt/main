@@ -149,3 +149,11 @@ export async function processEmailSend(emailMessageId: string) {
     data: { subject: msg.subject },
   });
 }
+
+/** Account emails (password links, invites) sent right away, outside any workspace. */
+export async function sendSystemEmail(input: { to: string; subject: string; body: string; brandName?: string }) {
+  const { renderEmail } = await import("./render");
+  const brand = input.brandName || env.platformName;
+  const r = renderEmail({ subject: input.subject, body: input.body, vars: {}, businessName: brand });
+  return sendEmail({ from: `"${brand.replace(/["<>]/g, "")}" <${env.emailFrom}>`, to: input.to, subject: r.subject, html: r.html, text: r.text });
+}

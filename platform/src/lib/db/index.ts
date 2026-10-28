@@ -28,6 +28,10 @@ async function connect(): Promise<DB> {
   const { drizzle } = await import("drizzle-orm/pglite");
   const { migrate } = await import("drizzle-orm/pglite/migrator");
   const dataDir = env.pgliteDir === "memory" ? undefined : path.resolve(env.pgliteDir);
+  if (dataDir) {
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(dataDir, { recursive: true });
+  }
   const client = dataDir ? new PGlite(dataDir) : new PGlite();
   const db = drizzle(client, { schema });
   await migrate(db, { migrationsFolder: migrationsFolder() });
