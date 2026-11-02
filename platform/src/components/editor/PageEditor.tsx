@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
+import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, EyeIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import type { Section, SectionType, SiteTheme } from "@/lib/db/types";
 import { LandingSections } from "@/components/landing/LandingSections";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 const TYPE_LABEL: Record<SectionType, string> = {
   hero: "Hero + form",
@@ -84,71 +94,93 @@ export function PageEditor({ initialTitle, initialSections, theme, vars, busines
     });
 
   return (
-    <div className="stack">
-      <div className="card row-between">
-        <div className="field" style={{ flex: 1, minWidth: 220 }}>
-          <label htmlFor="page-title">Page title</label>
-          <input id="page-title" value={title} onChange={(e) => (setTitle(e.target.value), setStatus({ kind: "dirty" }))} />
-        </div>
-        <div className="row" style={{ alignSelf: "flex-end" }}>
-          {status.kind === "dirty" ? <span className="small muted">Unsaved changes</span> : null}
-          {status.kind === "saved" ? <span className="small" style={{ color: "var(--good)" }}>{status.text}</span> : null}
-          {status.kind === "error" ? <span className="small" style={{ color: "var(--bad)" }}>{status.text}</span> : null}
-          <button type="button" className="btn btn-primary" onClick={onSave} disabled={pending}>
-            {pending ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </div>
-      <div className="editor">
-        <div className="editor-panel">
+    <div className="flex flex-col gap-4">
+      <Card size="sm">
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <Field className="flex-1">
+            <FieldLabel htmlFor="page-title">Page title</FieldLabel>
+            <Input id="page-title" value={title} onChange={(e) => (setTitle(e.target.value), setStatus({ kind: "dirty" }))} />
+          </Field>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {status.kind === "dirty" ? (
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <span className="size-1.5 rounded-full bg-warning" aria-hidden />
+                Unsaved changes
+              </span>
+            ) : null}
+            {status.kind === "saved" ? <span className="text-sm text-success">{status.text}</span> : null}
+            {status.kind === "error" ? <span className="text-sm text-destructive">{status.text}</span> : null}
+            <Button type="button" onClick={onSave} disabled={pending}>
+              {pending ? <Spinner data-icon="inline-start" /> : null}
+              {pending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[400px_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-2.5 lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto lg:pr-1">
           {sections.map((s, i) => (
-            <details key={s.id} className="section-card" open={i === 0}>
-              <summary>
-                <span>
-                  {TYPE_LABEL[s.type]} <span className="small muted">· {summary(s).slice(0, 40)}</span>
+            <details key={s.id} className="group rounded-xl bg-card ring-1 ring-foreground/10" open={i === 0}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2.5 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
+                <span className="flex min-w-0 items-center gap-2">
+                  <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" aria-hidden />
+                  <span className="min-w-0 truncate text-sm">
+                    <span className="font-medium">{TYPE_LABEL[s.type]}</span>
+                    {summary(s) ? <span className="text-muted-foreground"> · {summary(s).slice(0, 40)}</span> : null}
+                  </span>
                 </span>
-                <span className="row" style={{ gap: 4 }} onClick={(e) => e.preventDefault()}>
-                  <button type="button" className="btn btn-sm" aria-label="Move up" onClick={() => move(i, -1)} disabled={i === 0}>
-                    ↑
-                  </button>
-                  <button type="button" className="btn btn-sm" aria-label="Move down" onClick={() => move(i, 1)} disabled={i === sections.length - 1}>
-                    ↓
-                  </button>
-                  <button type="button" className="btn btn-sm btn-danger" aria-label="Delete section" onClick={() => remove(i)}>
-                    ✕
-                  </button>
+                <span className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.preventDefault()}>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Move up" onClick={() => move(i, -1)} disabled={i === 0}>
+                    <ArrowUpIcon />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Move down" onClick={() => move(i, 1)} disabled={i === sections.length - 1}>
+                    <ArrowDownIcon />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label="Delete section" onClick={() => remove(i)}>
+                    <Trash2Icon />
+                  </Button>
                 </span>
               </summary>
-              <div className="section-body">
+              <div className="flex flex-col gap-3 border-t px-3 pt-3 pb-3.5">
                 <SectionFields s={s} onChange={(patch) => update(i, patch)} />
               </div>
             </details>
           ))}
-          <div className="card row">
-            <select value={addType} onChange={(e) => setAddType(e.target.value as SectionType)} aria-label="Section type">
+          <div className="flex items-center gap-2 rounded-xl border border-dashed p-2.5">
+            <NativeSelect value={addType} onChange={(e) => setAddType(e.target.value as SectionType)} aria-label="Section type" className="min-w-0 flex-1">
               {(Object.keys(TYPE_LABEL) as SectionType[]).map((t) => (
-                <option key={t} value={t}>
+                <NativeSelectOption key={t} value={t}>
                   {TYPE_LABEL[t]}
-                </option>
+                </NativeSelectOption>
               ))}
-            </select>
-            <button
+            </NativeSelect>
+            <Button
               type="button"
-              className="btn"
+              variant="outline"
               onClick={() => {
                 setSections((prev) => [...prev, blank(addType)]);
                 setStatus({ kind: "dirty" });
               }}
             >
+              <PlusIcon data-icon="inline-start" />
               Add section
-            </button>
+            </Button>
           </div>
-          <p className="tiny muted">
-            Tip: type {"{{skool_url}}"} in any button link to use your Skool link, and {"{{lead_magnet_url}}"} for your free guide.
+          <p className="px-1 text-xs text-muted-foreground">
+            Tip: type <code className="rounded bg-muted px-1 py-0.5 font-mono">{"{{skool_url}}"}</code> in any button link to use your Skool link, and{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono">{"{{lead_magnet_url}}"}</code> for your free guide.
           </p>
         </div>
-        <div className="editor-preview" aria-label="Live preview">
-          <LandingSections sections={sections} theme={theme} vars={vars} businessName={businessName} form={{ action: "#", pageId: "preview", eventId: "preview", preview: true }} />
+        <div className="flex min-w-0 flex-col gap-2 lg:sticky lg:top-4">
+          <div className="flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+            <EyeIcon className="size-3.5" aria-hidden />
+            Live preview
+          </div>
+          {/* Funnels carry their own theme, so the preview always sits on white. */}
+          <div className="editor-preview overflow-hidden overflow-y-auto rounded-xl border bg-white shadow-sm lg:max-h-[calc(100vh-170px)]" aria-label="Live preview">
+            <LandingSections sections={sections} theme={theme} vars={vars} businessName={businessName} form={{ action: "#", pageId: "preview", eventId: "preview", preview: true }} />
+          </div>
         </div>
       </div>
     </div>
@@ -156,19 +188,38 @@ export function PageEditor({ initialTitle, initialSections, theme, vars, busines
 }
 
 function Text({ label, value, onChange, area, placeholder }: { label: string; value: string; onChange: (v: string) => void; area?: boolean; placeholder?: string }) {
+  const id = useId();
   return (
-    <label className="field">
-      <span className="label">{label}</span>
-      {area ? <textarea value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} /> : <input type="text" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />}
-    </label>
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={id} className="text-xs text-muted-foreground">
+        {label}
+      </FieldLabel>
+      {area ? (
+        <Textarea id={id} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      ) : (
+        <Input id={id} type="text" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      )}
+    </Field>
+  );
+}
+
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  const id = useId();
+  return (
+    <div className="flex items-center gap-2.5 py-0.5">
+      <Switch id={id} checked={checked} onCheckedChange={onChange} />
+      <Label htmlFor={id} className="font-normal">
+        {label}
+      </Label>
+    </div>
   );
 }
 
 function Items<T extends Record<string, string>>({ items, keys, labels, onChange, add }: { items: T[]; keys: (keyof T)[]; labels: string[]; onChange: (items: T[]) => void; add: T }) {
   return (
-    <div className="stack" style={{ gap: 8 }}>
+    <div className="flex flex-col gap-2">
       {items.map((it, i) => (
-        <div key={i} className="item-box">
+        <div key={i} className="flex flex-col gap-2.5 rounded-lg border bg-muted/40 p-2.5">
           {keys.map((k, ki) => (
             <Text
               key={String(k)}
@@ -178,14 +229,15 @@ function Items<T extends Record<string, string>>({ items, keys, labels, onChange
               onChange={(v) => onChange(items.map((x, j) => (j === i ? { ...x, [k]: v } : x)))}
             />
           ))}
-          <button type="button" className="link-btn small" style={{ alignSelf: "flex-start", color: "var(--bad)" }} onClick={() => onChange(items.filter((_, j) => j !== i))}>
+          <Button type="button" variant="ghost" size="xs" className="self-start text-destructive hover:text-destructive" onClick={() => onChange(items.filter((_, j) => j !== i))}>
             Remove
-          </button>
+          </Button>
         </div>
       ))}
-      <button type="button" className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => onChange([...items, { ...add }])}>
+      <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => onChange([...items, { ...add }])}>
+        <PlusIcon data-icon="inline-start" />
         Add item
-      </button>
+      </Button>
     </div>
   );
 }
@@ -199,9 +251,7 @@ function SectionFields({ s, onChange }: { s: Section; onChange: (patch: Partial<
           <Text label="Headline" value={s.headline} onChange={(v) => onChange({ headline: v })} area />
           <Text label="Subheadline" value={s.subheadline} onChange={(v) => onChange({ subheadline: v })} area />
           <Text label="Bullets (one per line)" value={s.bullets.join("\n")} onChange={(v) => onChange({ bullets: v.split("\n").slice(0, 8) })} area />
-          <label className="check">
-            <input type="checkbox" checked={s.showForm} onChange={(e) => onChange({ showForm: e.target.checked })} /> Show the signup form here
-          </label>
+          <Toggle label="Show the signup form here" checked={s.showForm} onChange={(v) => onChange({ showForm: v })} />
           <Text label="Form title" value={s.formTitle} onChange={(v) => onChange({ formTitle: v })} />
           <Text label="Button text" value={s.ctaText} onChange={(v) => onChange({ ctaText: v })} />
           <Text label="Image link (optional)" value={s.imageUrl} placeholder="https://…" onChange={(v) => onChange({ imageUrl: v })} />
@@ -244,9 +294,7 @@ function SectionFields({ s, onChange }: { s: Section; onChange: (patch: Partial<
           <Text label="Title" value={s.title} onChange={(v) => onChange({ title: v })} />
           <Text label="Text" value={s.body} onChange={(v) => onChange({ body: v })} />
           <Text label="Button text" value={s.buttonText} onChange={(v) => onChange({ buttonText: v })} />
-          <label className="check">
-            <input type="checkbox" checked={s.collectPhone} onChange={(e) => onChange({ collectPhone: e.target.checked })} /> Ask for a phone number
-          </label>
+          <Toggle label="Ask for a phone number" checked={s.collectPhone} onChange={(v) => onChange({ collectPhone: v })} />
         </>
       );
     case "video":

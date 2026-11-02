@@ -1,47 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { getAutomation, recentRuns } from "@/server/automations";
+import { presetByKey } from "@/server/automationPresets";
 import { listSequences } from "@/server/email/sequences";
 import { hasFeature } from "@/server/plans";
 import { deleteAutomationAction, saveAutomationAction } from "@/actions/marketing";
 import type { AutomationAction, AutomationTrigger } from "@/lib/db/types";
 import { relativeTime } from "@/lib/util";
-import { Locked, PageHead } from "@/components/ui";
+import { cn } from "@/lib/utils";
+import { Locked, PageHead, Panel } from "@/components/ui";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SubmitButton } from "@/components/client";
 import { AutomationBuilder } from "@/components/AutomationBuilder";
-
-const PRESETS: Record<string, { name: string; trigger: AutomationTrigger; actions: AutomationAction[] }> = {
-  hot: {
-    name: "Hot lead alert",
-    trigger: { type: "message_received", value: "" },
-    actions: [
-      { type: "ai_score" },
-      { type: "only_if_temperature", temperature: "hot" },
-      { type: "add_tag", tag: "hot-lead" },
-      { type: "ai_draft_reply" },
-      { type: "notify_owner", message: "A hot lead just messaged you. Your AI reply draft is ready." },
-    ],
-  },
-  "welcome-dm": {
-    name: "Instant DM reply",
-    trigger: { type: "message_received", value: "instagram" },
-    actions: [{ type: "send_message", body: "Hey {{first_name}}! Thanks for the message. Here's my free guide to get you started: [paste your funnel link]. What's your #1 goal right now?" }],
-  },
-  nurture: {
-    name: "Warm-up new leads",
-    trigger: { type: "lead_created", value: "" },
-    actions: [{ type: "add_tag", tag: "new-lead" }, { type: "wait", minutes: 1440 }, { type: "set_stage", stage: "engaged" }],
-  },
-  member: {
-    name: "New member welcome",
-    trigger: { type: "stage_changed", value: "member" },
-    actions: [
-      { type: "add_tag", tag: "member" },
-      { type: "send_email", subject: "Welcome in, {{first_name}} 🎉", body: "Hey {{first_name}},\n\nWelcome to {{business_name}}! Start with the Start Here lesson today.\n\nSee you inside." },
-    ],
-  },
-};
 
 export default async function AutomationPage({ params, searchParams }: { params: Promise<{ wid: string; id: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid, id } = await params;
@@ -51,12 +24,19 @@ export default async function AutomationPage({ params, searchParams }: { params:
   const isNew = id === "new";
   const existing = isNew ? null : await getAutomation(wid, id);
   if (!isNew && !existing) notFound();
-  const preset = isNew ? (PRESETS[sp.preset ?? ""] ?? { name: "New automation", trigger: { type: "lead_created", value: "" } as AutomationTrigger, actions: [] }) : null;
+  const preset = isNew ? (presetByKey(sp.preset)?.def ?? { name: "New automation", trigger: { type: "lead_created", value: "" } as AutomationTrigger, actions: [] as AutomationAction[] }) : null;
   const sequences = (await listSequences(wid)).map((s) => ({ id: s.id, name: s.name }));
   const runs = existing ? await recentRuns(wid, existing.id) : [];
   return (
     <>
-      <PageHead eyebrow={<Link href={`/app/w/${wid}/automations`} className="muted">← Automations</Link>} title={existing?.name ?? preset!.name} />
+      <PageHead
+        eyebrow={
+          <Link href={`/app/w/${wid}/automations`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
+            <ArrowLeftIcon className="size-3.5" /> Automations
+          </Link>
+        }
+        title={existing?.name ?? preset!.name}
+      />
       <AutomationBuilder
         workspaceId={wid}
         id={existing?.id ?? null}
@@ -66,29 +46,48 @@ export default async function AutomationPage({ params, searchParams }: { params:
       />
       {existing ? (
         <>
-          <div className="card">
-            <div className="card-head"><h2>Recent runs</h2></div>
-            {runs.length === 0 ? <p className="muted small">No runs yet.</p> : (
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>Started</th><th>Status</th><th>Log</th></tr></thead>
-                  <tbody>
-                    {runs.map((r) => (
-                      <tr key={r.id}>
-                        <td className="small muted">{relativeTime(r.createdAt)}</td>
-                        <td><span className={`badge ${r.status === "completed" ? "badge-good" : r.status === "failed" ? "badge-bad" : "badge-warm"}`}>{r.status}</span></td>
-                        <td className="tiny">{r.log.map((l) => l.message).join(" → ")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <Panel title="Recent runs">
+            {runs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No runs yet.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Started</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Log</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {runs.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="text-muted-foreground">{relativeTime(r.createdAt)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            "capitalize",
+                            r.status === "completed" ? "bg-success-soft text-success" : r.status === "failed" ? "bg-destructive/10 text-destructive" : "bg-warning-soft text-warning",
+                          )}
+                        >
+                          {r.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="min-w-64 text-xs whitespace-normal text-muted-foreground">{r.log.map((l) => l.message).join(" → ")}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-          </div>
-          <form action={deleteAutomationAction.bind(null, wid, existing.id)} className="card row-between">
-            <span className="small muted">Delete this automation. Running steps stop.</span>
-            <SubmitButton className="btn btn-danger" confirm="Yes, delete">Delete</SubmitButton>
-          </form>
+          </Panel>
+          <Panel>
+            <form action={deleteAutomationAction.bind(null, wid, existing.id)} className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">Delete this automation. Running steps stop.</span>
+              <SubmitButton variant="destructive" confirm="Yes, delete">
+                Delete
+              </SubmitButton>
+            </form>
+          </Panel>
         </>
       ) : null}
     </>

@@ -2,11 +2,14 @@ import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { conversations } from "@/lib/db/schema";
+import { env } from "@/lib/env";
 import { getWorkspaceContext, listUserAgencies, listUserWorkspaces } from "@/server/tenancy";
 import { hasFeature, PLANS } from "@/server/plans";
-import { AppShell, UserFooter, type NavGroup } from "@/components/AppShell";
+import { AppShell, type NavGroup, type Place } from "@/components/AppShell";
 import { redeemCodeAction } from "@/actions/account";
 import { SubmitButton } from "@/components/client";
+import { Callout } from "@/components/ui";
+import { Input } from "@/components/ui/input";
 
 export default async function WorkspaceLayout({ children, params }: { children: React.ReactNode; params: Promise<{ wid: string }> }) {
   const { wid } = await params;
@@ -24,98 +27,74 @@ export default async function WorkspaceLayout({ children, params }: { children: 
   const groups: NavGroup[] = [
     {
       items: [
-        { href: base, label: "Dashboard", exact: true },
-        { href: `${base}/launch`, label: "AI launch kit" },
+        { href: base, label: "Dashboard", icon: "dashboard", exact: true },
+        { href: `${base}/launch`, label: "AI launch kit", icon: "sparkles" },
       ],
     },
     {
       title: "Grow",
       items: [
-        { href: `${base}/sites`, label: "Funnels & pages" },
-        { href: `${base}/leads`, label: "Leads" },
-        { href: `${base}/inbox`, label: "Inbox", badge: unread || undefined, locked: !growth },
-        { href: `${base}/emails`, label: "Emails" },
-        { href: `${base}/automations`, label: "Automations", locked: !growth },
-        { href: `${base}/social`, label: "Social planner", locked: !growth },
-        { href: `${base}/ads`, label: "Ad review" },
+        { href: `${base}/sites`, label: "Funnels & pages", icon: "globe" },
+        { href: `${base}/leads`, label: "Leads", icon: "users" },
+        { href: `${base}/skool`, label: "Skool members", icon: "skool" },
+        { href: `${base}/inbox`, label: "Inbox", icon: "inbox", badge: unread || undefined, locked: !growth },
+        { href: `${base}/emails`, label: "Emails", icon: "mail" },
+        { href: `${base}/automations`, label: "Automations", icon: "workflow", locked: !growth },
+        { href: `${base}/social`, label: "Social planner", icon: "calendar", locked: !growth },
+        { href: `${base}/ads`, label: "Ad review", icon: "megaphone" },
       ],
     },
     {
       title: "Account",
       items: [
-        { href: `${base}/billing`, label: "Plan & wallet" },
-        { href: `${base}/settings`, label: "Settings" },
+        { href: `${base}/billing`, label: "Plan & wallet", icon: "billing" },
+        { href: `${base}/settings`, label: "Settings", icon: "settings" },
       ],
     },
   ];
 
-  const switcher =
-    mine.length > 1 ? (
-      <details className="ws-switch">
-        <summary className="btn btn-sm" style={{ width: "100%", justifyContent: "space-between" }}>
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{workspace.name}</span> ▾
-        </summary>
-        <div className="stack" style={{ gap: 2, marginTop: 6 }}>
-          {mine.map((m) => (
-            <Link key={m.workspace.id} className="nav-link" href={`/app/w/${m.workspace.id}`}>
-              {m.workspace.name}
-            </Link>
-          ))}
-        </div>
-      </details>
-    ) : (
-      <div className="ws-switch small muted" style={{ padding: "0 8px" }}>
-        {workspace.name} · {PLANS[workspace.plan].label}
-      </div>
-    );
-
-  const footerExtra = (
-    <>
-      {agencies.map((a) => (
-        <Link key={a.agency.id} href={`/app/agency/${a.agency.id}`} className="small">
-          Agency: {a.agency.name}
-        </Link>
-      ))}
-      {user.isPlatformAdmin ? (
-        <Link href="/app/admin" className="small">
-          Platform admin
-        </Link>
-      ) : null}
-    </>
-  );
+  const places: Place[] = [
+    ...mine
+      .filter((m) => m.workspace.id !== wid)
+      .map((m) => ({ href: `/app/w/${m.workspace.id}`, label: m.workspace.name, sub: PLANS[m.workspace.plan].label, icon: "boxes" as const })),
+    ...agencies.map((a) => ({ href: `/app/agency/${a.agency.id}`, label: a.agency.name, sub: "Agency", icon: "clients" as const })),
+    ...(user.isPlatformAdmin ? [{ href: "/app/admin", label: "Platform admin", icon: "shield" as const }] : []),
+  ];
 
   let banner: React.ReactNode = null;
   const viaSkool = workspace.accessSource === "skool_code" || workspace.accessSource === "skool_zapier";
   if (ctx.effectiveStatus === "grace") {
     banner = (
-      <div className="alert alert-warn">
-        <div className="row-between">
-          <span>
-            <strong>Your member access needs this month's code.</strong> Your pages stay live until{" "}
-            {workspace.graceEndsAt?.toDateString() ?? "soon"}.
-          </span>
-          <form action={redeemCodeAction.bind(null, wid)} className="row">
-            <input name="code" placeholder="Member code" aria-label="Member code" style={{ width: 160 }} required />
-            <SubmitButton className="btn btn-sm btn-primary">Confirm</SubmitButton>
+      <Callout
+        tone="warn"
+        title="Your member access needs this month's code"
+        action={
+          <form action={redeemCodeAction.bind(null, wid)} className="flex gap-2">
+            <Input name="code" placeholder="Member code" aria-label="Member code" className="w-40 uppercase" required />
+            <SubmitButton>Confirm</SubmitButton>
           </form>
-        </div>
-      </div>
+        }
+      >
+        Your pages stay live until {workspace.graceEndsAt?.toDateString() ?? "soon"}.
+      </Callout>
     );
   } else if (viaSkool && workspace.accessVerifiedUntil && workspace.accessVerifiedUntil.getTime() - Date.now() < 5 * 86_400_000) {
     banner = (
-      <div className="alert alert-info">
-        Your member code renews on {workspace.accessVerifiedUntil.toDateString()}. Grab next month's code from the Skool classroom and enter it in Settings.
-      </div>
+      <Callout tone="info">
+        Your member code renews on {workspace.accessVerifiedUntil.toDateString()}. Grab next month's code from the Skool classroom and enter it in{" "}
+        <Link href={`${base}/settings`}>Settings</Link>.
+      </Callout>
     );
   }
 
+  const brand = agency.isPlatform ? null : agency.brand;
   return (
     <AppShell
-      brand={agency.isPlatform ? null : agency.brand}
-      switcher={switcher}
+      brand={{ name: workspace.name, sub: `${PLANS[workspace.plan].label} plan · ${brand?.name || env.platformName}`, logoUrl: brand?.logoUrl, color: brand?.color }}
       groups={groups}
+      places={places}
+      user={{ email: user.email, name: user.name }}
       banner={banner}
-      footer={<UserFooter email={user.email} extra={footerExtra} />}
     >
       {children}
     </AppShell>

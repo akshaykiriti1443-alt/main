@@ -1,33 +1,67 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { CheckIcon, CopyIcon } from "lucide-react";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Spinner } from "@/components/ui/spinner";
 
-export function SubmitButton({ children, className = "btn btn-primary", pendingText, confirm }: { children: ReactNode; className?: string; pendingText?: string; confirm?: string }) {
+type ButtonProps = ComponentProps<typeof Button>;
+
+export function SubmitButton({
+  children,
+  className,
+  variant,
+  size,
+  pendingText,
+  confirm,
+  disabled,
+}: {
+  children: ReactNode;
+  className?: string;
+  variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
+  pendingText?: string;
+  /** Ask for a second click, showing this text, before submitting. */
+  confirm?: string;
+  disabled?: boolean;
+}) {
   const { pending } = useFormStatus();
   const [armed, setArmed] = useState(false);
+  const props = { variant, size, className };
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(false), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
+
   if (confirm && !armed) {
     return (
-      <button type="button" className={className} onClick={() => setArmed(true)}>
+      <Button type="button" {...props} disabled={disabled} onClick={() => setArmed(true)}>
         {children}
-      </button>
+      </Button>
     );
   }
   return (
-    <button type="submit" className={className} disabled={pending} aria-disabled={pending}>
-      {pending ? (pendingText ?? "Working…") : confirm && armed ? confirm : children}
-    </button>
+    <Button type="submit" {...props} variant={confirm ? "destructive" : props.variant} disabled={pending || disabled} aria-disabled={pending}>
+      {pending ? <Spinner data-icon="inline-start" /> : null}
+      {pending ? (pendingText ?? "Working…") : confirm ? confirm : children}
+    </Button>
   );
 }
 
-export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+export function CopyButton({ text, label = "Copy", className }: { text: string; label?: string; className?: string }) {
   const [done, setDone] = useState(false);
   return (
-    <button
+    <Button
       type="button"
-      className="btn btn-sm copy-btn"
+      variant="outline"
+      size="sm"
+      className={cn("bg-background", className)}
       onClick={() => {
         navigator.clipboard
           ?.writeText(text)
@@ -38,30 +72,33 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
           .catch(() => setDone(false));
       }}
     >
+      {done ? <CheckIcon data-icon="inline-start" /> : <CopyIcon data-icon="inline-start" />}
       {done ? "Copied" : label}
-    </button>
-  );
-}
-
-export function NavLink({ href, children, exact, badge, locked }: { href: string; children: ReactNode; exact?: boolean; badge?: number; locked?: boolean }) {
-  const pathname = usePathname();
-  const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
-  return (
-    <Link href={href} className={`nav-link${active ? " active" : ""}`}>
-      <span>{children}</span>
-      {locked ? <span className="lock">Growth</span> : badge ? <span className="nav-count">{badge}</span> : null}
-    </Link>
+    </Button>
   );
 }
 
 export function AutoSubmitSelect({ name, defaultValue, options, className }: { name: string; defaultValue: string; options: { value: string; label: string }[]; className?: string }) {
   return (
-    <select name={name} defaultValue={defaultValue} className={className} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
+    <NativeSelect name={name} defaultValue={defaultValue} className={className} onChange={(e) => e.currentTarget.form?.requestSubmit()}>
       {options.map((o) => (
-        <option key={o.value} value={o.value}>
+        <NativeSelectOption key={o.value} value={o.value}>
           {o.label}
-        </option>
+        </NativeSelectOption>
       ))}
-    </select>
+    </NativeSelect>
   );
+}
+
+/** Shows a success message from the URL once, then removes it so a refresh doesn't repeat it. */
+export function FlashToast({ message }: { message: string }) {
+  useEffect(() => {
+    toast.success(message, { id: `flash:${message}` });
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("ok")) {
+      url.searchParams.delete("ok");
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }, [message]);
+  return null;
 }

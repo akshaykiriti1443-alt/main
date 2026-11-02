@@ -1,15 +1,15 @@
 import Link from "next/link";
+import { ArrowRightIcon, PlusIcon, WorkflowIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { listAutomations, TRIGGER_LABELS } from "@/server/automations";
+import { AUTOMATION_PRESETS } from "@/server/automationPresets";
 import { hasFeature } from "@/server/plans";
-import { Empty, Flash, Locked, PageHead } from "@/components/ui";
+import { Empty, Flash, Locked, PageHead, Panel } from "@/components/ui";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const PRESETS = [
-  { key: "hot", title: "Hot lead alert", body: "Score every new message. If the lead is hot, tag it, draft a reply and email you." },
-  { key: "welcome-dm", title: "Instant DM reply", body: "Reply to new DMs within seconds with your free guide." },
-  { key: "nurture", title: "Warm-up new leads", body: "Tag new leads, wait a day, then move them to Engaged." },
-  { key: "member", title: "New member welcome", body: "When a lead becomes a member, tag them and send a welcome email." },
-];
+const PRESET_GROUPS = ["Skool members", "Leads"] as const;
 
 export default async function AutomationsPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
@@ -25,38 +25,88 @@ export default async function AutomationsPage({ params, searchParams }: { params
   const list = await listAutomations(wid);
   return (
     <>
-      <PageHead title="Automations" sub="When something happens, do something. They run 24/7." actions={<Link className="btn btn-primary" href={`/app/w/${wid}/automations/new`}>New automation</Link>} />
+      <PageHead
+        title="Automations"
+        sub="When something happens, do something. They run 24/7."
+        actions={
+          <Button asChild>
+            <Link href={`/app/w/${wid}/automations/new`}>
+              <PlusIcon data-icon="inline-start" />
+              New automation
+            </Link>
+          </Button>
+        }
+      />
       <Flash searchParams={await searchParams} />
       {list.length === 0 ? (
-        <Empty title="No automations yet" body="Start from a recipe below." />
+        <Empty icon={WorkflowIcon} title="No automations yet" body="Start from a recipe below." />
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Name</th><th>Trigger</th><th>Steps</th><th>Runs</th><th>Status</th></tr></thead>
-            <tbody>
+        <Panel>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Trigger</TableHead>
+                <TableHead className="text-right">Steps</TableHead>
+                <TableHead className="text-right">Runs</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {list.map((a) => (
-                <tr key={a.id} className="clickable">
-                  <td><Link href={`/app/w/${wid}/automations/${a.id}`}><strong>{a.name}</strong></Link></td>
-                  <td className="small">{TRIGGER_LABELS[a.trigger.type]}{a.trigger.value ? `: ${a.trigger.value}` : ""}</td>
-                  <td className="num">{a.actions.length}</td>
-                  <td className="num">{a.runsCount}</td>
-                  <td>{a.active ? <span className="badge badge-good">On</span> : <span className="badge">Off</span>}</td>
-                </tr>
+                <TableRow key={a.id}>
+                  <TableCell>
+                    <Link href={`/app/w/${wid}/automations/${a.id}`} className="font-medium text-foreground hover:text-primary">
+                      {a.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {TRIGGER_LABELS[a.trigger.type]}
+                    {a.trigger.value ? `: ${a.trigger.value}` : ""}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{a.actions.length}</TableCell>
+                  <TableCell className="text-right tabular-nums">{a.runsCount}</TableCell>
+                  <TableCell>
+                    {a.active ? (
+                      <Badge variant="secondary" className="bg-success-soft text-success">
+                        On
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">Off</Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Panel>
       )}
-      <h2>Recipes</h2>
-      <div className="grid-2">
-        {PRESETS.map((p) => (
-          <div key={p.key} className="card stack">
-            <h3>{p.title}</h3>
-            <p className="muted small">{p.body}</p>
-            <Link className="btn btn-sm" style={{ alignSelf: "flex-start" }} href={`/app/w/${wid}/automations/new?preset=${p.key}`}>Use recipe</Link>
+      <section className="flex flex-col gap-5">
+        {PRESET_GROUPS.map((group) => (
+          <div key={group} className="flex flex-col gap-3">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">{group === "Skool members" ? "Skool member recipes" : "Lead recipes"}</h2>
+              <p className="text-sm text-muted-foreground">
+                {group === "Skool members"
+                  ? "The lifecycle in four flows: welcome, convert, save, win back. They fire off your Skool sync."
+                  : "Turn new leads and DMs into conversations automatically."}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {AUTOMATION_PRESETS.filter((p) => p.group === group).map((p) => (
+                <Panel key={p.key} title={p.title} sub={p.body}>
+                  <Button variant="outline" size="sm" className="self-start" asChild>
+                    <Link href={`/app/w/${wid}/automations/new?preset=${p.key}`}>
+                      Use recipe
+                      <ArrowRightIcon data-icon="inline-end" />
+                    </Link>
+                  </Button>
+                </Panel>
+              ))}
+            </div>
           </div>
         ))}
-      </div>
+      </section>
     </>
   );
 }

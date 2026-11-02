@@ -11,10 +11,15 @@ import { PermanentJobError } from "../jobs/runner";
 
 export type CapiEventInput = {
   workspaceId: string;
-  eventName: "Lead" | "CompleteRegistration" | "Purchase" | "PageView";
+  // Subscribe + StartTrial let ad campaigns optimize for paying members, not just signups.
+  eventName: "Lead" | "CompleteRegistration" | "Purchase" | "PageView" | "Subscribe" | "StartTrial";
   eventId: string;
   eventTime: number; // unix seconds
   eventSourceUrl: string;
+  // Default "website"; a server-confirmed conversion with no browser uses "system_generated".
+  actionSource?: "website" | "system_generated";
+  value?: number | null;
+  currency?: string | null;
   email?: string | null;
   phone?: string | null;
   firstName?: string | null;
@@ -30,14 +35,17 @@ const h = (v: string | null | undefined) => (v ? [sha256hex(v.trim().toLowerCase
 
 export function buildCapiPayload(e: CapiEventInput, testEventCode?: string) {
   const phoneDigits = e.phone ? normalizePhone(e.phone).replace(/\D/g, "") : null;
+  const actionSource = e.actionSource ?? "website";
   return {
     data: [
       {
         event_name: e.eventName,
         event_time: e.eventTime,
         event_id: e.eventId,
-        action_source: "website",
-        event_source_url: e.eventSourceUrl,
+        action_source: actionSource,
+        // event_source_url is required for website events; optional otherwise.
+        ...(actionSource === "website" || e.eventSourceUrl ? { event_source_url: e.eventSourceUrl } : {}),
+        ...(e.value != null ? { custom_data: { value: e.value, currency: e.currency || "USD" } } : {}),
         user_data: {
           em: h(e.email),
           ph: phoneDigits ? [sha256hex(phoneDigits)] : undefined,

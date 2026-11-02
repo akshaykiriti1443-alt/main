@@ -92,6 +92,7 @@ export type WorkspaceSettings = {
   audience?: string;
   offer?: string;
   skoolUrl?: string;
+  skoolMemberPrice?: number;
   mailingAddress?: string;
   replyToEmail?: string;
   timezone?: string;

@@ -1,10 +1,17 @@
 import Link from "next/link";
+import { UsersIcon } from "lucide-react";
 import { requireAgency } from "@/server/tenancy";
 import { listSubAccounts } from "@/server/agency";
 import { listTemplates } from "@/server/templates";
 import { createSubAccountAction, setSubAccountStatusAction } from "@/actions/agency";
-import { Empty, Flash, PageHead } from "@/components/ui";
+import { Empty, Flash, PageHead, Panel } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default async function AgencyHome({ params, searchParams }: { params: Promise<{ aid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { aid } = await params;
@@ -15,50 +22,89 @@ export default async function AgencyHome({ params, searchParams }: { params: Pro
       <PageHead eyebrow={agency.brand.name || agency.name} title="Client accounts" sub="Each client gets their own funnels, leads, inbox and automations. Usage is billed to your agency wallet." />
       <Flash searchParams={await searchParams} />
       {subs.length === 0 ? (
-        <Empty title="No clients yet" body="Add your first client below. Load a template to give them a ready-made funnel." />
+        <Empty icon={UsersIcon} title="No clients yet" body="Add your first client below. Load a template to give them a ready-made funnel." />
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Account</th><th>Owner</th><th>Contacts</th><th>Status</th><th></th></tr></thead>
-            <tbody>
+        <Panel>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Account</TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead className="text-right">Contacts</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {subs.map(({ workspace: w, contacts, owner }) => (
-                <tr key={w.id}>
-                  <td><Link href={`/app/w/${w.id}`}><strong>{w.name}</strong></Link><div className="tiny muted">{w.plan}</div></td>
-                  <td className="small">{owner ?? <span className="muted">no owner yet</span>}</td>
-                  <td className="num">{contacts}</td>
-                  <td><span className={`badge ${w.status === "active" ? "badge-good" : "badge-bad"}`}>{w.status}</span></td>
-                  <td>
-                    <div className="row" style={{ justifyContent: "flex-end" }}>
-                      <Link className="btn btn-sm" href={`/app/w/${w.id}`}>Open</Link>
+                <TableRow key={w.id}>
+                  <TableCell>
+                    <Link href={`/app/w/${w.id}`} className="font-medium text-foreground">
+                      {w.name}
+                    </Link>
+                    <div className="text-xs text-muted-foreground capitalize">{w.plan}</div>
+                  </TableCell>
+                  <TableCell>{owner ?? <span className="text-muted-foreground">no owner yet</span>}</TableCell>
+                  <TableCell className="text-right tabular-nums">{contacts}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className={w.status === "active" ? "bg-success-soft text-success" : "bg-destructive/10 text-destructive"}>
+                      {w.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/app/w/${w.id}`}>Open</Link>
+                      </Button>
                       <form action={setSubAccountStatusAction.bind(null, aid, w.id, w.status === "paused" ? "active" : "paused")}>
-                        <SubmitButton className={`btn btn-sm${w.status === "paused" ? "" : " btn-danger"}`} confirm={w.status === "paused" ? undefined : "Confirm pause"}>
+                        <SubmitButton variant={w.status === "paused" ? "outline" : "destructive"} size="sm" confirm={w.status === "paused" ? undefined : "Confirm pause"}>
                           {w.status === "paused" ? "Unpause" : "Pause"}
                         </SubmitButton>
                       </form>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Panel>
       )}
-      <form action={createSubAccountAction.bind(null, aid)} className="card stack">
-        <h2>Add a client</h2>
-        <div className="form-grid">
-          <div className="field"><label htmlFor="name">Business name</label><input id="name" name="name" required placeholder="Coach Maria Fitness" /></div>
-          <div className="field">
-            <label htmlFor="templateId">Start from</label>
-            <select id="templateId" name="templateId" defaultValue="">
-              <option value="">Blank account with defaults</option>
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.agencyId ? "" : " (platform)"}</option>)}
-            </select>
+      <Panel title="Add a client">
+        <form action={createSubAccountAction.bind(null, aid)} className="flex flex-col gap-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="name">Business name</FieldLabel>
+              <Input id="name" name="name" required placeholder="Coach Maria Fitness" />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="templateId">Start from</FieldLabel>
+              <NativeSelect id="templateId" name="templateId" defaultValue="" className="w-full">
+                <NativeSelectOption value="">Blank account with defaults</NativeSelectOption>
+                {templates.map((t) => (
+                  <NativeSelectOption key={t.id} value={t.id}>
+                    {t.name}
+                    {t.agencyId ? "" : " (platform)"}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ownerName">Client&apos;s name (optional)</FieldLabel>
+              <Input id="ownerName" name="ownerName" />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ownerEmail">Client&apos;s email (optional)</FieldLabel>
+              <Input id="ownerEmail" name="ownerEmail" type="email" />
+              <FieldDescription>We email them a link to set their password.</FieldDescription>
+            </Field>
           </div>
-          <div className="field"><label htmlFor="ownerName">Client's name (optional)</label><input id="ownerName" name="ownerName" /></div>
-          <div className="field"><label htmlFor="ownerEmail">Client's email (optional)</label><input id="ownerEmail" name="ownerEmail" type="email" /><span className="help">We email them a link to set their password.</span></div>
-        </div>
-        <SubmitButton>Create client account</SubmitButton>
-      </form>
+          <div>
+            <SubmitButton pendingText="Creating…">Create client account</SubmitButton>
+          </div>
+        </form>
+      </Panel>
     </>
   );
 }

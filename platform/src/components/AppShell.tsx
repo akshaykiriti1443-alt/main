@@ -1,70 +1,36 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { env } from "@/lib/env";
-import type { BrandSettings } from "@/lib/db/types";
-import { NavLink } from "./client";
+import { cookies } from "next/headers";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { AppHeader, AppSidebar, type NavGroup, type Place, type ShellBrand, type ShellUser } from "./shell";
 
-export type NavItem = { href: string; label: string; exact?: boolean; badge?: number; locked?: boolean };
-export type NavGroup = { title?: string; items: NavItem[] };
+export type { IconName, NavGroup, NavItem, Place } from "./shell";
 
-export function AppShell({
+export async function AppShell({
   brand,
-  switcher,
   groups,
-  footer,
-  children,
+  places = [],
+  user,
   banner,
+  children,
 }: {
-  brand?: BrandSettings | null;
-  switcher?: ReactNode;
+  brand: ShellBrand;
   groups: NavGroup[];
-  footer?: ReactNode;
-  children: ReactNode;
+  places?: Place[];
+  user: ShellUser;
   banner?: ReactNode;
+  children: ReactNode;
 }) {
-  const name = brand?.name || env.platformName;
+  const defaultOpen = (await cookies()).get("sidebar_state")?.value !== "false";
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <Link href="/app" className="brand" style={{ color: "inherit", textDecoration: "none" }}>
-          <span className="brand-mark" style={brand?.color ? { background: brand.color } : undefined}>
-            {brand?.logoUrl ? <img src={brand.logoUrl} alt="" /> : name.slice(0, 2).toUpperCase()}
-          </span>
-          {name}
-        </Link>
-        {switcher}
-        {groups.map((g, i) => (
-          <nav key={i} aria-label={g.title ?? "Main"} style={{ display: "contents" }}>
-            {g.title ? <div className="nav-group">{g.title}</div> : null}
-            {g.items.map((it) => (
-              <NavLink key={it.href} href={it.href} exact={it.exact} badge={it.badge} locked={it.locked}>
-                {it.label}
-              </NavLink>
-            ))}
-          </nav>
-        ))}
-        <div className="sidebar-foot">{footer}</div>
-      </aside>
-      <main className="main">
-        <div className="content">
+    <SidebarProvider defaultOpen={defaultOpen}>
+      <AppSidebar brand={brand} groups={groups} places={places} user={user} />
+      <SidebarInset className="min-w-0">
+        <AppHeader brand={brand} groups={groups} places={places} />
+        <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-6 px-4 pt-6 pb-16 md:px-8 md:pt-8">
           {banner}
           {children}
         </div>
-      </main>
-    </div>
-  );
-}
-
-export function UserFooter({ email, extra }: { email: string; extra?: ReactNode }) {
-  return (
-    <>
-      {extra}
-      <span className="tiny">{email}</span>
-      <form action="/logout" method="post">
-        <button className="link-btn small" type="submit">
-          Log out
-        </button>
-      </form>
-    </>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

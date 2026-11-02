@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MessageCircleIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 declare global {
   interface Window {
@@ -91,11 +94,16 @@ export function WhatsAppConnect({ appId, configId, graphVersion, workspaceId }: 
   }
 
   return (
-    <div className="row">
-      <button type="button" className="btn" onClick={start} disabled={busy}>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button type="button" variant="outline" onClick={start} disabled={busy}>
+        {busy ? <Spinner data-icon="inline-start" /> : <MessageCircleIcon data-icon="inline-start" />}
         {busy ? "Connecting…" : "Connect WhatsApp"}
-      </button>
-      {status ? <span className="small muted">{status}</span> : null}
+      </Button>
+      {status ? (
+        <span role="status" className="text-sm text-muted-foreground">
+          {status}
+        </span>
+      ) : null}
     </div>
   );
 }

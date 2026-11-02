@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
+import { ArrowRightIcon, CheckIcon, EyeIcon, FlameIcon, MailIcon, SparklesIcon, UsersIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { aiGenerations, channelConnections, contacts } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
@@ -8,7 +9,12 @@ import { listSites } from "@/server/sites";
 import { contactName } from "@/server/contacts";
 import { hasFeature } from "@/server/plans";
 import { relativeTime } from "@/lib/util";
-import { Empty, Flash, PageHead, Stat, TempBadge } from "@/components/ui";
+import { cn } from "@/lib/utils";
+import { Empty, Flash, PageHead, Panel, Stat, TempBadge } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default async function Dashboard({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
@@ -40,6 +46,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
     { done: reviews.length > 0, label: "Get your custom ad review", href: `${base}/ads` },
   ];
   const doneCount = checklist.filter((c) => c.done).length;
+  const next = checklist.find((c) => !c.done);
 
   return (
     <>
@@ -47,105 +54,147 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
       <Flash searchParams={await searchParams} />
 
       {sites.length === 0 ? (
-        <div className="card row-between" style={{ background: "var(--accent-soft)", borderColor: "transparent" }}>
-          <div className="stack" style={{ gap: 6 }}>
-            <h2>Build your funnel in about a minute</h2>
-            <p className="muted">Answer 6 questions. AI writes your landing page, free guide, 3 emails, ads and Skool About page.</p>
-          </div>
-          <Link className="btn btn-primary" href={`${base}/launch`}>
-            Start the launch kit
-          </Link>
-        </div>
+        <Card className="border-0 bg-linear-to-br from-primary to-primary/80 text-primary-foreground ring-0">
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 py-2">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-foreground/15">
+                <SparklesIcon className="size-5" />
+              </span>
+              <div className="grid gap-1">
+                <h2 className="text-lg font-semibold">Build your funnel in about a minute</h2>
+                <p className="text-primary-foreground/80">Answer 6 questions. AI writes your landing page, free guide, 3 emails, ads and Skool About page.</p>
+              </div>
+            </div>
+            <Button variant="secondary" size="lg" asChild>
+              <Link href={`${base}/launch`}>
+                Start the launch kit
+                <ArrowRightIcon data-icon="inline-end" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
 
-      <div className="grid-4">
-        <Stat label="Page views" value={stats.views} />
-        <Stat label="Leads" value={stats.leads} hint={`${stats.conversion.toFixed(1)}% opt-in rate`} />
-        <Stat label="Hot leads" value={stats.hot} hint={`${stats.warm} warm · ${stats.contactsTotal} total`} />
-        <Stat label="Emails sent" value={stats.emailsSent} hint={stats.unread ? `${stats.unread} unread messages` : undefined} />
+      <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
+        <Stat icon={EyeIcon} label="Page views" value={stats.views} />
+        <Stat icon={UsersIcon} label="Leads" value={stats.leads} hint={`${stats.conversion.toFixed(1)}% opt-in rate`} />
+        <Stat icon={FlameIcon} label="Hot leads" value={stats.hot} hint={`${stats.warm} warm · ${stats.contactsTotal} total`} />
+        <Stat icon={MailIcon} label="Emails sent" value={stats.emailsSent} hint={stats.unread ? `${stats.unread} unread messages` : undefined} />
       </div>
 
-      <div className="grid-2">
-        <div className="card">
-          <div className="card-head">
-            <h2>Views and leads</h2>
-            <span className="row small muted">
-              <span className="badge badge-accent">Leads</span>
-              <span className="badge">Views</span>
-            </span>
-          </div>
-          <div className="bars" role="img" aria-label="Daily page views and leads for the last 14 days">
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Panel
+          className="lg:col-span-3"
+          title="Views and leads"
+          sub="Daily, last 14 days"
+          action={
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm bg-primary" /> Leads
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm bg-chart-2" /> Views
+              </span>
+            </div>
+          }
+        >
+          <div className="relative grid h-48 auto-cols-fr grid-flow-col items-end gap-1.5" role="img" aria-label="Daily page views and leads for the last 14 days">
+            {stats.views === 0 ? (
+              <p className="absolute inset-0 grid place-items-center pb-6 text-center text-sm text-muted-foreground">No visits yet. Share your funnel link to see traffic here.</p>
+            ) : null}
             {stats.series.map((d) => (
-              <div key={d.day} className="bar-col" title={`${d.day}: ${d.views} views, ${d.leads} leads`}>
-                <div className="bar views" style={{ height: `${(Math.max(0, d.views - d.leads) / max) * 100}%` }} />
-                <div className="bar leads" style={{ height: `${(d.leads / max) * 100}%`, borderRadius: d.views - d.leads > 0 ? 0 : undefined }} />
-                <div className="bar-label">{d.day.slice(8)}</div>
+              <div key={d.day} className="group flex h-full flex-col justify-end" title={`${d.day}: ${d.views} views, ${d.leads} leads`}>
+                <div className="flex flex-1 flex-col justify-end overflow-hidden rounded-t-md">
+                  <div className="min-h-0.5 bg-chart-2 transition-opacity group-hover:opacity-80" style={{ height: `${(Math.max(0, d.views - d.leads) / max) * 100}%` }} />
+                  <div className="bg-primary transition-opacity group-hover:opacity-80" style={{ height: `${(d.leads / max) * 100}%` }} />
+                </div>
+                <div className="mt-1.5 text-center text-[10px] text-muted-foreground tabular-nums">{d.day.slice(8)}</div>
               </div>
             ))}
           </div>
-        </div>
-        <div className="card">
-          <div className="card-head">
-            <h2>Your 7-day sprint</h2>
-            <span className="badge badge-good">
-              {doneCount}/{checklist.length} done
-            </span>
-          </div>
-          <div className="checklist">
-            {checklist.map((c) => (
-              <div key={c.label} className="check-item">
-                <span className={`dot${c.done ? " done" : ""}`}>{c.done ? "✓" : ""}</span>
-                <span style={{ textDecoration: c.done ? "line-through" : undefined, color: c.done ? "var(--muted)" : undefined }}>{c.label}</span>
-                {c.done ? null : (
-                  <Link href={c.href} className="small">
-                    Do it →
+        </Panel>
+
+        <Panel className="lg:col-span-2" title="Your 7-day sprint" sub={`${doneCount} of ${checklist.length} done`}>
+          <Progress value={(doneCount / checklist.length) * 100} aria-label="Sprint progress" />
+          <ul className="-mx-1 flex flex-col">
+            {checklist.map((c) => {
+              const isNext = c === next;
+              return (
+                <li key={c.label}>
+                  <Link
+                    href={c.href}
+                    data-slot="checklist-item"
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted",
+                      isNext && "bg-accent text-accent-foreground hover:bg-accent/80",
+                      c.done && "text-muted-foreground",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "grid size-5 shrink-0 place-items-center rounded-full border",
+                        c.done && "border-success bg-success text-background",
+                        isNext && "border-primary",
+                      )}
+                    >
+                      {c.done ? <CheckIcon className="size-3" strokeWidth={3} /> : null}
+                    </span>
+                    <span className={cn("flex-1", c.done && "line-through")}>{c.label}</span>
+                    {isNext ? (
+                      <span className="flex items-center gap-1 text-xs font-medium text-primary">
+                        Up next <ArrowRightIcon className="size-3.5" />
+                      </span>
+                    ) : null}
                   </Link>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
       </div>
 
-      <div className="card">
-        <div className="card-head">
-          <h2>Newest leads</h2>
-          <Link href={`${base}/leads`} className="small">
-            All leads →
-          </Link>
-        </div>
+      <Panel
+        title="Newest leads"
+        action={
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={`${base}/leads`}>
+              All leads <ArrowRightIcon data-icon="inline-end" />
+            </Link>
+          </Button>
+        }
+      >
         {recent.length === 0 ? (
-          <Empty title="No leads yet" body="Publish your funnel and share the link. New leads show up here." />
+          <Empty icon={UsersIcon} title="No leads yet" body="Publish your funnel and share the link. New leads show up here." />
         ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Source</th>
-                  <th>Temperature</th>
-                  <th>Added</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((c) => (
-                  <tr key={c.id} className="clickable">
-                    <td>
-                      <Link href={`${base}/leads/${c.id}`}>{contactName(c)}</Link>
-                      <div className="tiny muted">{c.email ?? c.phone ?? ""}</div>
-                    </td>
-                    <td className="small">{c.source.replace("_", " ")}</td>
-                    <td>
-                      <TempBadge t={c.temperature} />
-                    </td>
-                    <td className="small muted">{relativeTime(c.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Temperature</TableHead>
+                <TableHead className="text-right">Added</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {recent.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <Link href={`${base}/leads/${c.id}`} className="font-medium text-foreground hover:text-primary">
+                      {contactName(c)}
+                    </Link>
+                    <div className="text-xs text-muted-foreground">{c.email ?? c.phone ?? ""}</div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground capitalize">{c.source.replace("_", " ")}</TableCell>
+                  <TableCell>
+                    <TempBadge t={c.temperature} />
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">{relativeTime(c.createdAt)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Panel>
     </>
   );
 }

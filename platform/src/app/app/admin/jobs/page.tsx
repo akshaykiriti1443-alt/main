@@ -1,39 +1,116 @@
+import { CircleCheckIcon } from "lucide-react";
 import { requirePlatformAdmin } from "@/server/auth";
 import { recentJobs, recentWebhooks } from "@/server/admin";
 import { retryJobAction, runTickAction } from "@/actions/admin";
 import { relativeTime, truncate } from "@/lib/util";
-import { Flash, PageHead } from "@/components/ui";
+import { Empty, Flash, PageHead, Panel } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default async function AdminJobs({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   await requirePlatformAdmin();
   const [failed, pending, hooks] = await Promise.all([recentJobs("failed"), recentJobs("pending"), recentWebhooks()]);
   return (
     <>
-      <PageHead title="Jobs & webhooks" sub="Background work: emails, Conversions API events, scoring, posts and webhooks." actions={<form action={runTickAction}><SubmitButton className="btn">Run jobs now</SubmitButton></form>} />
+      <PageHead
+        title="Jobs & webhooks"
+        sub="Background work: emails, Conversions API events, scoring, posts and webhooks."
+        actions={
+          <form action={runTickAction}>
+            <SubmitButton pendingText="Running…">Run jobs now</SubmitButton>
+          </form>
+        }
+      />
       <Flash searchParams={await searchParams} />
-      <div className="card">
-        <div className="card-head"><h2>Failed ({failed.length})</h2></div>
-        {failed.length === 0 ? <p className="muted small">Nothing failed. 🎉</p> : (
-          <div className="table-wrap"><table><thead><tr><th>Type</th><th>Error</th><th>Attempts</th><th>When</th><th></th></tr></thead><tbody>
-            {failed.map((j) => (
-              <tr key={j.id}><td className="mono small">{j.type}</td><td className="tiny">{truncate(j.lastError ?? "", 160)}</td><td className="num">{j.attempts}</td><td className="small muted">{relativeTime(j.createdAt)}</td><td><form action={retryJobAction.bind(null, j.id)}><SubmitButton className="btn btn-sm">Retry</SubmitButton></form></td></tr>
-            ))}
-          </tbody></table></div>
+      <Panel title={`Failed (${failed.length})`}>
+        {failed.length === 0 ? (
+          <Empty icon={CircleCheckIcon} title="Nothing failed. 🎉" />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Error</TableHead>
+                <TableHead className="text-right">Attempts</TableHead>
+                <TableHead>When</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {failed.map((j) => (
+                <TableRow key={j.id}>
+                  <TableCell className="font-mono text-xs">{j.type}</TableCell>
+                  <TableCell className="max-w-md min-w-64 text-xs break-words whitespace-normal text-muted-foreground">{truncate(j.lastError ?? "", 160)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{j.attempts}</TableCell>
+                  <TableCell className="text-muted-foreground">{relativeTime(j.createdAt)}</TableCell>
+                  <TableCell className="text-right">
+                    <form action={retryJobAction.bind(null, j.id)}>
+                      <SubmitButton variant="outline" size="sm" pendingText="Retrying…">
+                        Retry
+                      </SubmitButton>
+                    </form>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </div>
-      <div className="card">
-        <div className="card-head"><h2>Pending ({pending.length})</h2></div>
-        <div className="table-wrap"><table><thead><tr><th>Type</th><th>Runs</th><th>Attempts</th></tr></thead><tbody>
-          {pending.map((j) => <tr key={j.id}><td className="mono small">{j.type}</td><td className="small">{relativeTime(j.runAt)}</td><td className="num">{j.attempts}</td></tr>)}
-        </tbody></table></div>
-      </div>
-      <div className="card">
-        <div className="card-head"><h2>Recent webhooks</h2></div>
-        <div className="table-wrap"><table><thead><tr><th>Source</th><th>Received</th><th>Status</th></tr></thead><tbody>
-          {hooks.map((h) => <tr key={h.id}><td className="small">{h.source}</td><td className="small muted">{relativeTime(h.createdAt)}</td><td>{h.error ? <span className="badge badge-bad" title={h.error}>error</span> : h.processedAt ? <span className="badge badge-good">processed</span> : <span className="badge">queued</span>}</td></tr>)}
-        </tbody></table></div>
-      </div>
+      </Panel>
+      <Panel title={`Pending (${pending.length})`}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Type</TableHead>
+              <TableHead>Runs</TableHead>
+              <TableHead className="text-right">Attempts</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pending.map((j) => (
+              <TableRow key={j.id}>
+                <TableCell className="font-mono text-xs">{j.type}</TableCell>
+                <TableCell>{relativeTime(j.runAt)}</TableCell>
+                <TableCell className="text-right tabular-nums">{j.attempts}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Panel>
+      <Panel title="Recent webhooks">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Source</TableHead>
+              <TableHead>Received</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {hooks.map((h) => (
+              <TableRow key={h.id}>
+                <TableCell>{h.source}</TableCell>
+                <TableCell className="text-muted-foreground">{relativeTime(h.createdAt)}</TableCell>
+                <TableCell>
+                  {h.error ? (
+                    <Badge variant="destructive" title={h.error}>
+                      error
+                    </Badge>
+                  ) : h.processedAt ? (
+                    <Badge variant="secondary" className="bg-success-soft text-success">
+                      processed
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">queued</Badge>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Panel>
     </>
   );
 }

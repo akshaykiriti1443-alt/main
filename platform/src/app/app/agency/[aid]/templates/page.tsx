@@ -1,10 +1,17 @@
 import Link from "next/link";
+import { LayoutTemplateIcon } from "lucide-react";
 import { requireAgency, workspaceIdsForAgency, workspacesByIds } from "@/server/tenancy";
 import { listTemplates } from "@/server/templates";
 import { deleteTemplateAction, saveTemplateFromWorkspaceAction } from "@/actions/agency";
 import { relativeTime } from "@/lib/util";
-import { Flash, PageHead } from "@/components/ui";
+import { Callout, Empty, Flash, PageHead, Panel } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default async function AgencyTemplates({ params, searchParams }: { params: Promise<{ aid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { aid } = await params;
@@ -15,33 +22,86 @@ export default async function AgencyTemplates({ params, searchParams }: { params
     <>
       <PageHead title="Templates" sub="A template copies funnels, email sequences and automations. Build it once in a client account, save it, then load it into every new client." />
       <Flash searchParams={await searchParams} />
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Template</th><th>Owner</th><th>Created</th><th></th></tr></thead>
-          <tbody>
-            {templates.map((t) => (
-              <tr key={t.id}>
-                <td><strong>{t.name}</strong><div className="tiny muted">{t.description}</div></td>
-                <td className="small">{t.agencyId ? "Your agency" : "Platform"}</td>
-                <td className="small muted">{relativeTime(t.createdAt)}</td>
-                <td>{t.agencyId ? <form action={deleteTemplateAction.bind(null, aid, t.id)}><SubmitButton className="btn btn-sm btn-danger" confirm="Confirm">Delete</SubmitButton></form> : null}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {workspaces.length ? (
-        <form action={saveTemplateFromWorkspaceAction.bind(null, aid)} className="card stack">
-          <h2>Save a client account as a template</h2>
-          <div className="form-grid">
-            <div className="field"><label htmlFor="workspaceId">Account</label><select id="workspaceId" name="workspaceId">{workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
-            <div className="field"><label htmlFor="name">Template name</label><input id="name" name="name" required placeholder="Fitness coach funnel" /></div>
-            <div className="field full"><label htmlFor="description">Description</label><input id="description" name="description" /></div>
-          </div>
-          <SubmitButton>Save template</SubmitButton>
-        </form>
+      {templates.length === 0 ? (
+        <Empty icon={LayoutTemplateIcon} title="No templates yet" />
       ) : (
-        <p className="muted small">Create a client account first, build its funnel, then save it here. <Link href={`/app/agency/${aid}`}>Add a client</Link></p>
+        <Panel>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Template</TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {templates.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="min-w-56 whitespace-normal">
+                    <div className="font-medium">{t.name}</div>
+                    {t.description ? <div className="text-xs text-muted-foreground">{t.description}</div> : null}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={t.agencyId ? "secondary" : "outline"}>{t.agencyId ? "Your agency" : "Platform"}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{relativeTime(t.createdAt)}</TableCell>
+                  <TableCell className="text-right">
+                    {t.agencyId ? (
+                      <form action={deleteTemplateAction.bind(null, aid, t.id)}>
+                        <SubmitButton variant="destructive" size="sm" confirm="Confirm">
+                          Delete
+                        </SubmitButton>
+                      </form>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Panel>
+      )}
+      {workspaces.length ? (
+        <Panel title="Save a client account as a template">
+          <form action={saveTemplateFromWorkspaceAction.bind(null, aid)} className="flex flex-col gap-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="workspaceId">Account</FieldLabel>
+                <NativeSelect id="workspaceId" name="workspaceId" className="w-full">
+                  {workspaces.map((w) => (
+                    <NativeSelectOption key={w.id} value={w.id}>
+                      {w.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="name">Template name</FieldLabel>
+                <Input id="name" name="name" required placeholder="Fitness coach funnel" />
+              </Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor="description">Description</FieldLabel>
+                <Input id="description" name="description" />
+              </Field>
+            </div>
+            <div>
+              <SubmitButton pendingText="Saving…">Save template</SubmitButton>
+            </div>
+          </form>
+        </Panel>
+      ) : (
+        <Callout
+          tone="info"
+          action={
+            <Button size="sm" asChild>
+              <Link href={`/app/agency/${aid}`}>Add a client</Link>
+            </Button>
+          }
+        >
+          Create a client account first, build its funnel, then save it here.
+        </Callout>
       )}
     </>
   );

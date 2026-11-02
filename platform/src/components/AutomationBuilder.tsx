@@ -2,7 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowDownIcon, ArrowUpIcon, CircleAlertIcon, CircleCheckIcon, PlusIcon, Trash2Icon, ZapIcon, type LucideIcon } from "lucide-react";
 import type { AutomationAction, AutomationTrigger } from "@/lib/db/types";
+import { cn } from "@/lib/utils";
+import { Panel } from "@/components/ui";
+import { Button } from "@/components/ui/button";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 type ActionType = AutomationAction["type"];
 
@@ -100,47 +111,107 @@ export function AutomationBuilder({
   const hint = TRIGGERS.find((t) => t.value === trigger.type)?.hint;
 
   return (
-    <div className="stack">
-      <div className="card form-grid">
-        <div className="field"><label htmlFor="aname">Name</label><input id="aname" value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <label className="check" style={{ alignSelf: "flex-end" }}><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Automation is on</label>
-      </div>
-      <div className="card stack">
-        <span className="eyebrow">When this happens</span>
-        <div className="form-grid">
-          <div className="field">
-            <label htmlFor="ttype">Trigger</label>
-            <select id="ttype" value={trigger.type} onChange={(e) => setTrigger({ type: e.target.value as AutomationTrigger["type"], value: "" })}>
-              {TRIGGERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
-          <div className="field"><label htmlFor="tvalue">Filter</label><input id="tvalue" value={trigger.value} onChange={(e) => setTrigger({ ...trigger, value: e.target.value })} /><span className="help">{hint}</span></div>
+    <div className="flex flex-col gap-4">
+      <Panel>
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <Field>
+            <FieldLabel htmlFor="aname">Name</FieldLabel>
+            <Input id="aname" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Label htmlFor="aactive" className="h-8 font-normal">
+            <Switch id="aactive" checked={active} onCheckedChange={setActive} />
+            Automation is on
+          </Label>
         </div>
-      </div>
+      </Panel>
+
+      <Panel title={<StepTitle icon={ZapIcon} label="When this happens" />}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="ttype">Trigger</FieldLabel>
+            <NativeSelect id="ttype" className="w-full" value={trigger.type} onChange={(e) => setTrigger({ type: e.target.value as AutomationTrigger["type"], value: "" })}>
+              {TRIGGERS.map((t) => (
+                <NativeSelectOption key={t.value} value={t.value}>
+                  {t.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="tvalue">Filter</FieldLabel>
+            <Input id="tvalue" value={trigger.value} onChange={(e) => setTrigger({ ...trigger, value: e.target.value })} />
+            <FieldDescription>{hint}</FieldDescription>
+          </Field>
+        </div>
+      </Panel>
+
       {actions.map((a, i) => (
-        <div key={i} className="card stack">
-          <div className="row-between">
-            <span className="eyebrow">Then · step {i + 1}: {ACTION_LABELS[a.type]}</span>
-            <span className="row" style={{ gap: 4 }}>
-              <button type="button" className="btn btn-sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">↑</button>
-              <button type="button" className="btn btn-sm" onClick={() => move(i, 1)} disabled={i === actions.length - 1} aria-label="Move down">↓</button>
-              <button type="button" className="btn btn-sm btn-danger" onClick={() => setActions((p) => p.filter((_, j) => j !== i))} aria-label="Remove step">✕</button>
-            </span>
-          </div>
+        <Panel
+          key={i}
+          title={<StepTitle step={i + 1} label={`Then: ${ACTION_LABELS[a.type]}`} />}
+          action={
+            <div className="flex items-center gap-1">
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">
+                <ArrowUpIcon />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => move(i, 1)} disabled={i === actions.length - 1} aria-label="Move down">
+                <ArrowDownIcon />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setActions((p) => p.filter((_, j) => j !== i))}
+                aria-label="Remove step"
+              >
+                <Trash2Icon />
+              </Button>
+            </div>
+          }
+        >
           <ActionFields a={a} sequences={sequences} onChange={(patch) => setAction(i, patch)} />
-        </div>
+        </Panel>
       ))}
-      <div className="card row">
-        <select value={addType} onChange={(e) => setAddType(e.target.value as ActionType)} aria-label="Step type">
-          {(Object.keys(ACTION_LABELS) as ActionType[]).map((t) => <option key={t} value={t}>{ACTION_LABELS[t]}</option>)}
-        </select>
-        <button type="button" className="btn" onClick={() => setActions((p) => [...p, blankAction(addType)])}>Add step</button>
+
+      <div className="flex flex-col gap-2 rounded-xl border border-dashed p-3 sm:flex-row sm:items-center">
+        <NativeSelect className="w-full sm:w-72" value={addType} onChange={(e) => setAddType(e.target.value as ActionType)} aria-label="Step type">
+          {(Object.keys(ACTION_LABELS) as ActionType[]).map((t) => (
+            <NativeSelectOption key={t} value={t}>
+              {ACTION_LABELS[t]}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        <Button type="button" variant="outline" onClick={() => setActions((p) => [...p, blankAction(addType)])}>
+          <PlusIcon data-icon="inline-start" />
+          Add step
+        </Button>
       </div>
-      <div className="row">
-        <button type="button" className="btn btn-primary" onClick={onSave} disabled={pending}>{pending ? "Saving…" : "Save automation"}</button>
-        {msg ? <span className="small" style={{ color: msg.ok ? "var(--good)" : "var(--bad)" }}>{msg.text}</span> : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" onClick={onSave} disabled={pending}>
+          {pending ? <Spinner data-icon="inline-start" /> : null}
+          {pending ? "Saving…" : "Save automation"}
+        </Button>
+        {msg ? (
+          <span role="status" className={cn("flex items-center gap-1.5 text-sm", msg.ok ? "text-success" : "text-destructive")}>
+            {msg.ok ? <CircleCheckIcon className="size-4" /> : <CircleAlertIcon className="size-4" />}
+            {msg.text}
+          </span>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function StepTitle({ label, step, icon: Icon }: { label: string; step?: number; icon?: LucideIcon }) {
+  return (
+    <span className="flex items-center gap-2.5">
+      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-accent-foreground tabular-nums">
+        {Icon ? <Icon className="size-3.5" /> : step}
+      </span>
+      {label}
+    </span>
   );
 }
 
@@ -148,46 +219,58 @@ function ActionFields({ a, sequences, onChange }: { a: AutomationAction; sequenc
   switch (a.type) {
     case "add_tag":
     case "remove_tag":
-      return <input value={a.tag} placeholder="tag name" onChange={(e) => onChange({ tag: e.target.value })} aria-label="Tag" />;
+      return <Input value={a.tag} placeholder="tag name" onChange={(e) => onChange({ tag: e.target.value })} aria-label="Tag" />;
     case "set_stage":
       return (
-        <select value={a.stage} onChange={(e) => onChange({ stage: e.target.value as typeof a.stage })} aria-label="Stage">
-          {["new", "engaged", "trial", "member", "lost"].map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <NativeSelect className="w-full sm:w-64" value={a.stage} onChange={(e) => onChange({ stage: e.target.value as typeof a.stage })} aria-label="Stage">
+          {["new", "engaged", "trial", "member", "lost"].map((s) => (
+            <NativeSelectOption key={s} value={s}>
+              {s}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
       );
     case "wait":
       return (
-        <label className="row small">Wait <input type="number" min={1} value={a.minutes} onChange={(e) => onChange({ minutes: Math.max(1, Number(e.target.value) || 1) })} style={{ width: 110 }} /> minutes ({(a.minutes / 60).toFixed(1)} hours)</label>
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          Wait
+          <Input type="number" min={1} value={a.minutes} onChange={(e) => onChange({ minutes: Math.max(1, Number(e.target.value) || 1) })} className="w-28" />
+          <span className="text-muted-foreground">minutes ({(a.minutes / 60).toFixed(1)} hours)</span>
+        </label>
       );
     case "send_email":
       return (
         <>
-          <input value={a.subject} placeholder="Subject" onChange={(e) => onChange({ subject: e.target.value })} aria-label="Subject" />
-          <textarea value={a.body} placeholder="Message. You can use {{first_name}} and {{skool_url}}." onChange={(e) => onChange({ body: e.target.value })} aria-label="Message" />
+          <Input value={a.subject} placeholder="Subject" onChange={(e) => onChange({ subject: e.target.value })} aria-label="Subject" />
+          <Textarea value={a.body} placeholder="Message. You can use {{first_name}} and {{skool_url}}." onChange={(e) => onChange({ body: e.target.value })} aria-label="Message" />
         </>
       );
     case "enroll_sequence":
       return (
-        <select value={a.sequenceId} onChange={(e) => onChange({ sequenceId: e.target.value })} aria-label="Sequence">
-          <option value="">Pick a sequence…</option>
-          {sequences.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <NativeSelect className="w-full sm:w-72" value={a.sequenceId} onChange={(e) => onChange({ sequenceId: e.target.value })} aria-label="Sequence">
+          <NativeSelectOption value="">Pick a sequence…</NativeSelectOption>
+          {sequences.map((s) => (
+            <NativeSelectOption key={s.id} value={s.id}>
+              {s.name}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
       );
     case "notify_owner":
-      return <input value={a.message} placeholder="What should the alert say?" onChange={(e) => onChange({ message: e.target.value })} aria-label="Alert message" />;
+      return <Input value={a.message} placeholder="What should the alert say?" onChange={(e) => onChange({ message: e.target.value })} aria-label="Alert message" />;
     case "send_message":
-      return <textarea value={a.body} placeholder="Hey {{first_name}}! Thanks for reaching out…" onChange={(e) => onChange({ body: e.target.value })} aria-label="Message" />;
+      return <Textarea value={a.body} placeholder="Hey {{first_name}}! Thanks for reaching out…" onChange={(e) => onChange({ body: e.target.value })} aria-label="Message" />;
     case "webhook":
-      return <input value={a.url} placeholder="https://hooks.zapier.com/…" onChange={(e) => onChange({ url: e.target.value })} aria-label="Webhook URL" />;
+      return <Input value={a.url} placeholder="https://hooks.zapier.com/…" onChange={(e) => onChange({ url: e.target.value })} aria-label="Webhook URL" />;
     case "only_if_temperature":
       return (
-        <select value={a.temperature} onChange={(e) => onChange({ temperature: e.target.value as typeof a.temperature })} aria-label="Temperature">
-          <option value="hot">Hot</option>
-          <option value="warm">Warm</option>
-          <option value="cold">Cold</option>
-        </select>
+        <NativeSelect className="w-full sm:w-64" value={a.temperature} onChange={(e) => onChange({ temperature: e.target.value as typeof a.temperature })} aria-label="Temperature">
+          <NativeSelectOption value="hot">Hot</NativeSelectOption>
+          <NativeSelectOption value="warm">Warm</NativeSelectOption>
+          <NativeSelectOption value="cold">Cold</NativeSelectOption>
+        </NativeSelect>
       );
     default:
-      return <p className="small muted">No settings needed.</p>;
+      return <p className="text-sm text-muted-foreground">No settings needed.</p>;
   }
 }

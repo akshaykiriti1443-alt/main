@@ -111,6 +111,7 @@ src/
     legal/             privacy, terms, data deletion (needed for Meta review)
   actions/             server actions (every one checks workspace/agency access)
   components/          UI, landing page renderer, page editor, builders
+    ui/                shadcn/ui components (see docs/UI.md)
   lib/                 db (Drizzle schema + client), crypto, env, helpers
   server/              domain services
     ai/                Claude: launch kit, lead scoring, reply drafts, ad review
@@ -136,6 +137,8 @@ Key ideas:
 - **AI:** Claude (`claude-opus-5-5` by default) with structured outputs and
   server-side refusal fallback on. Every AI feature has a rule-based fallback,
   so the product works without a key.
+- **UI:** shadcn/ui on Tailwind CSS v4, light and dark. Page recipe, components
+  and color tokens are in [`docs/UI.md`](docs/UI.md).
 
 ## Going live
 

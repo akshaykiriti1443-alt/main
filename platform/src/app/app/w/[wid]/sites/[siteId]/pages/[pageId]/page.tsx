@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { getPage, getSite, siteVars } from "@/server/sites";
 import { savePageAction } from "@/actions/sites";
@@ -16,8 +17,9 @@ export default async function EditPage({ params }: { params: Promise<{ wid: stri
     <>
       <PageHead
         eyebrow={
-          <Link href={`/app/w/${wid}/sites/${siteId}`} className="muted">
-            ← {site.name}
+          <Link href={`/app/w/${wid}/sites/${siteId}`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
+            <ArrowLeftIcon className="size-3.5" aria-hidden />
+            {site.name}
           </Link>
         }
         title={`Edit: ${page.title}`}

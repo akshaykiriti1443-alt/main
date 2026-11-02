@@ -187,7 +187,7 @@ export const pages = pgTable(
 // CRM
 // ---------------------------------------------------------------------------
 
-export type ContactSource = "landing_page" | "facebook" | "instagram" | "whatsapp" | "sms" | "email" | "import" | "manual";
+export type ContactSource = "landing_page" | "facebook" | "instagram" | "whatsapp" | "sms" | "email" | "import" | "manual" | "skool";
 export type Temperature = "hot" | "warm" | "cold";
 export type Stage = "new" | "engaged" | "trial" | "member" | "lost";
 
@@ -447,7 +447,7 @@ export const aiGenerations = pgTable(
   {
     id: id(),
     workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review">().notNull(),
+    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message">().notNull(),
     input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
     output: jsonb("output").$type<Record<string, unknown>>().notNull().default({}),
     model: text("model").notNull(),
