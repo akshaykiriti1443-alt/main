@@ -72,27 +72,30 @@ You get: AI-written launch kits, lead scores, reply drafts and ad reviews. Serve
 refusal fallback is on, so a declined request retries on Anthropic's recommended
 fallback model. Real AI cost is recorded next to what you bill, so the admin page shows margin.
 
-## 6. Skool access — 10 minutes + 5 minutes a month
+## 6. Member access — 15 minutes + 2 minutes a week
 
-**Monthly code (works on any Skool plan):**
+No codes. Active members get the app automatically.
 
-1. Admin › Member codes › create a code. Codes overlap the next month by 7 days.
-2. Post the code (and the signup link the page gives you) in your Skool
-   "Start Here" lesson. Only paying members can see it.
-3. Each month, create the next code before the 1st. `npm run db:seed` makes this
-   month's and next month's codes for you.
+**Instant access for paid joins (needs Skool Pro's Zapier plugin):**
 
-**Automatic approval (needs Skool's Zapier plugin):**
-
-1. In Skool: Settings › Plugins › Zapier › copy the API key.
+1. In Skool: Settings › Plugins › Zapier › copy the API key. Never refresh it later: that breaks every zap.
 2. In Zapier: Trigger = Skool › **New Paid Member**. Action = Webhooks by Zapier › POST.
 3. URL: `https://app.yourdomain.com/api/webhooks/skool?secret=<SKOOL_WEBHOOK_SECRET>`.
-   Payload type JSON, data: `email` = member email, `name` = member name.
-4. Set `SKOOL_WEBHOOK_SECRET` in Vercel.
+   Payload type JSON, data: `email`, `name`, `transaction_id`.
+4. Set `SKOOL_WEBHOOK_SECRET` and `SKOOL_GROUP_URL` in Vercel.
 
-New paid members can then sign up with no code, and existing members get 35 days
-of access added. Monthly codes still handle renewals, because Zapier has no
-"member cancelled" trigger.
+**Weekly member sync (works on Hobby and Pro):**
+
+1. Add a Skool membership question: "What email will you use for the app?"
+2. Every Monday: Skool › Members › Export. Upload the file in **Admin › Members**,
+   check the preview, click Apply. Trials, paid members and anyone who left are handled.
+   Members on the export stay active for 35 days, so a missed week locks nobody out.
+
+**Optional: sell the app directly on `/join`:** create a monthly Stripe price and set
+`STRIPE_PRICE_MEMBER` (and `MEMBER_PRICE_LABEL`, e.g. "$29/month"). To also invite
+buyers into Skool, point `SKOOL_INVITE_WEBHOOK_URL` at a Zapier catch hook wired to
+Skool › Invite Member. Note: Skool's Discovery penalises *group* payments taken
+off-platform, so sell the software here and keep your community's own billing in Skool.
 
 ## 7. Payments (Stripe) — 20 minutes
 
@@ -162,6 +165,6 @@ resell through a partner such as Twilio or 360dialog.
 - [ ] Edit `/legal/privacy`, `/legal/terms` and `/legal/data-deletion` for your business (have a lawyer check them).
 - [ ] Check prices in `src/server/pricing.ts` against your real provider bills.
 - [ ] Set allowances per plan in `src/server/plans.ts`.
-- [ ] Create this month's member code and post it in Skool.
+- [ ] Set up the Zapier zap and upload your first Skool member export in Admin › Members.
 - [ ] Run one real lead through your own funnel and check the Conversions API event in Events Manager › Test events.
 - [ ] Add basic rate limiting at the edge (Vercel Firewall rules on `/api/public/lead`).

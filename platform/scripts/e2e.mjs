@@ -1,6 +1,6 @@
 // End-to-end smoke test: boots the production build on a fresh database and
-// clicks through signup, the AI launch kit, publishing, lead capture, member
-// codes, the Skool webhook, the editor, tracking, automations and unsubscribe.
+// clicks through signup, the AI launch kit, publishing, lead capture,
+// member access, the Skool webhook, the editor, tracking, automations and unsubscribe.
 // Usage: npm run build && npm run e2e
 import { spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
@@ -177,30 +177,34 @@ try {
     await page.screenshot({ path: `${SHOTS}/01-dashboard.png` });
   });
 
-  await step("admin creates a monthly member code", async () => {
-    await page.goto(`${BASE}/app/admin/codes`);
-    await page.fill("#code", "E2E-NOV");
-    await page.fill("#label", "E2E month");
-    await page.click("button:has-text('Create code')");
-    await page.getByText("Code E2E-NOV is live").waitFor();
-  });
-
-  await step("second member: wrong code is refused, right code works", async () => {
+  await step("a non-member can sign up but waits on the unlock screen", async () => {
     const m = await browser.newContext();
     const p = await m.newPage();
     await p.goto(`${BASE}/signup`);
     await p.fill("#name", "Second Member");
     await p.fill("#email", "member2@example.com");
     await p.fill("#password", "supersecret2");
-    await p.fill("#code", "WRONG");
     await p.click("button:has-text('Create my account')");
-    await p.getByText("member code isn't valid").waitFor();
-    // Typed values survive the error; only the password needs retyping.
-    expect((await p.inputValue("#email")) === "member2@example.com", "email was cleared after an error");
+    await p.waitForURL(/\/paused/);
+    await p.getByText("Unlock your account").waitFor();
+    await m.close();
+  });
+
+  await step("admin uploads the Skool export and the member's account turns on", async () => {
+    await page.goto(`${BASE}/app/admin/members`);
+    await page.fill("textarea[name=members]", "First Name,Last Name,Email\nSecond,Member,member2@example.com");
+    await page.click("button:has-text('Preview')");
+    await page.getByText("1 new").waitFor().catch(() => {});
+    await page.click("button:has-text('Apply')");
+    await page.getByText("Synced 1 members").waitFor();
+    const m = await browser.newContext();
+    const p = await m.newPage();
+    await p.goto(`${BASE}/login`);
+    await p.fill("#email", "member2@example.com");
     await p.fill("#password", "supersecret2");
-    await p.fill("#code", "e2e-nov");
-    await p.click("button:has-text('Create my account')");
-    await p.waitForURL(/\/launch/);
+    await p.click("button:has-text('Log in')");
+    await p.waitForURL(/\/app\/w\//);
+    expect(!p.url().includes("/paused"), "member is still paused after the roster sync");
     await m.close();
   });
 

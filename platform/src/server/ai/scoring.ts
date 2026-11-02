@@ -4,9 +4,8 @@ import { getDb } from "@/lib/db";
 import { activities, aiGenerations, contacts, conversations, messages, workspaces, type Temperature } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { hasFeature } from "../plans";
-import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
 import { setTemperature } from "../contacts";
-import { generateStructured } from "./client";
+import { chargeAi, generateStructured, refundAi } from "./client";
 
 export type ScoreResult = { score: number; temperature: Temperature; reason: string };
 
@@ -98,17 +97,13 @@ export async function scoreContact(contactId: string): Promise<ScoreResult | nul
   });
 
   let result = rules;
-  const wantsAi = env.aiEnabled && hasFeature(ws.plan, "ai_scoring") && history.length > 0;
-  const charge = wantsAi
-    ? await chargeUsage(ws.id, "ai_assist", 1, { description: "AI lead score" }).catch((err) => {
-        if (err instanceof InsufficientBalanceError) return null;
-        throw err;
-      })
-    : null;
+  const wantsAi = hasFeature(ws.plan, "ai_scoring") && history.length > 0;
+  const charge = wantsAi ? await chargeAi(ws.id, "ai_assist", "AI lead score") : null;
   if (charge) {
     try {
       const transcript = history.map((m) => `${m.direction === "in" ? "LEAD" : "BUSINESS"}: ${m.body}`).join("\n");
       const res = await generateStructured({
+        workspaceId: ws.id,
         effort: "low",
         maxTokens: 4000,
         schema: scoreSchema,
@@ -134,7 +129,7 @@ ${transcript}`,
         outputTokens: res.usage.outputTokens,
       });
     } catch (err) {
-      await refundUsage(ws.id, "ai_assist", 1, charge.billedMicros, "Refund: AI lead score failed");
+      await refundAi(ws.id, "ai_assist", charge, "Refund: AI lead score failed");
       console.error("[ai] scoring fell back to rules", err);
     }
   }

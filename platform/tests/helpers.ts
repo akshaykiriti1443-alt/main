@@ -15,7 +15,7 @@ export async function makeWorkspace(opts: { plan?: "starter" | "growth" } = {}) 
     name: `Fit Dads Club ${n}`,
     ownerUserId: user.id,
     plan: opts.plan ?? "starter",
-    accessSource: "skool_code",
+    accessSource: "member",
     accessVerifiedUntil: new Date(Date.now() + 30 * 86_400_000),
     isPlatformAgency: true,
     settings: { businessName: "Fit Dads Club", skoolUrl: "https://www.skool.com/fit-dads" },

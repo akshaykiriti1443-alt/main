@@ -3,8 +3,7 @@ import { getDb } from "@/lib/db";
 import { aiGenerations, contacts, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { MEMBER_TAG, CANCELLING_TAG } from "../skool";
-import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
-import { generateText, VOICE_RULES } from "./client";
+import { VOICE_RULES, chargeAi, generateText, refundAi } from "./client";
 
 // Drafts a Skool direct message for the owner to send by hand. We never send inside Skool or hold
 // anyone's Skool login, so no account is ever at risk — the owner copies the message and sends it.
@@ -70,15 +69,11 @@ export async function draftSkoolMessage(
   let text = fallbackSkoolMessage(chosen, { firstName: contact.firstName, businessName, skoolUrl: ws.settings.skoolUrl ?? "" });
   let ai = false;
 
-  const charge = env.aiEnabled
-    ? await chargeUsage(workspaceId, "ai_assist", 1, { description: "Skool message draft" }).catch((err) => {
-        if (err instanceof InsufficientBalanceError) return null;
-        throw err;
-      })
-    : null;
+  const charge = await chargeAi(workspaceId, "ai_assist", "Skool message draft");
   if (charge) {
     try {
       const res = await generateText({
+        workspaceId: workspaceId,
         effort: "low",
         maxTokens: 2000,
         system: `You write a single direct message for ${businessName}, a coach who runs a paid Skool community${
@@ -102,7 +97,7 @@ Return only the message text.`,
         outputTokens: res.usage.outputTokens,
       });
     } catch (err) {
-      await refundUsage(workspaceId, "ai_assist", 1, charge.billedMicros, "Refund: Skool message draft failed");
+      await refundAi(workspaceId, "ai_assist", charge, "Refund: Skool message draft failed");
       console.error("[ai] skool message fell back to template", err);
     }
   }

@@ -13,7 +13,8 @@ export type JobType =
   | "social.publish"
   | "inbox.webhook"
   | "domain.check"
-  | "agency_domain.check";
+  | "agency_domain.check"
+  | "member.skool_invite";
 
 export async function enqueue(
   type: JobType,

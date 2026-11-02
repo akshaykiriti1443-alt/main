@@ -12,7 +12,7 @@ import { PermanentJobError } from "../jobs/runner";
 export type CapiEventInput = {
   workspaceId: string;
   // Subscribe + StartTrial let ad campaigns optimize for paying members, not just signups.
-  eventName: "Lead" | "CompleteRegistration" | "Purchase" | "PageView" | "Subscribe" | "StartTrial";
+  eventName: "Lead" | "CompleteRegistration" | "Purchase" | "PageView" | "Subscribe" | "StartTrial" | "ViewContent";
   eventId: string;
   eventTime: number; // unix seconds
   eventSourceUrl: string;

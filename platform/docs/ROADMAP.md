@@ -5,11 +5,11 @@
 **Platform**
 - Multi-tenant model: platform → agencies → workspaces, with role checks on every action
 - Email/password auth, sessions, password reset links, invite links, team members with roles
-- Skool access: monthly member codes, Zapier auto-approval, 7-day grace, auto-pause
+- Member access without codes: Skool Zapier join, weekly Skool export sync (preview + large-drop guard), direct purchase on /join, manual grants, 7-day grace, auto-pause, auto-resume
 - Postgres-backed job queue with retries, cron tick, maintenance
 - Pay-as-you-go wallet with monthly allowances, idempotent top-ups, usage ledger with real cost
 - Stripe Checkout for Growth and Agency plans and wallet top-ups, signed webhooks
-- Platform admin: member codes, workspaces, agencies, wallets, jobs, webhooks, templates, setup checklist
+- Platform admin: members, workspaces, agencies, wallets, jobs, webhooks, templates, setup checklist
 
 **Member tier**
 - AI launch kit: landing page, hosted lead magnet, thank-you page, 3 emails, 3 ads, 10 hooks, Skool About page, 7-day ad plan
@@ -29,6 +29,19 @@
 - Social planner for Instagram and Facebook Pages
 - Custom domains via the Vercel API
 - Twilio SMS numbers: search, buy, monthly billing, inbound webhook
+
+**Skool growth**
+- Growth ladder: Skool Ads levels 1–4 on a rolling 30 days, Monday check-in, gaps and next moves
+- Skool link (/go/<slug>): instant redirect to the About page, click counts by source, Meta ViewContent
+- Budget planner and Growth Boost what-if calculator
+
+**Ad research**
+- Meta Ad Library search by keyword or competitor Page, longest-running first; website link for full coverage
+- AI analysis of competitor ads (hooks, angles, offers, gaps) and 3 original ads; paste mode when live search is off
+
+**Bring your own AI**
+- Own Claude or OpenAI key per workspace: AI features run on it and are never billed to the wallet
+- Claude / ChatGPT connector: private MCP URL (leads, pages, publish, automation recipes, check-in, Skool sync)
 
 **Agency tier**
 - Agency creation, plan activation, agency wallet that pays for client usage
@@ -59,7 +72,7 @@
 
 ## Known limits
 
-- Monthly codes are the renewal check, because Skool's Zapier app has no cancel trigger.
+- Skool has no cancel signal, so leavers are found by the weekly member export (members stay active 35 days after their last export).
 - Instagram publishing supports single images (no Reels/carousels yet).
 - The page editor is section-based, not free-form drag and drop.
 - PGlite (local mode) is single-process; use Postgres in production.

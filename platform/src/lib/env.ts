@@ -26,6 +26,11 @@ export const env = {
   jobsInline: bool(process.env.JOBS_INLINE, !isProd),
   cronSecret: process.env.CRON_SECRET ?? "",
   skoolWebhookSecret: process.env.SKOOL_WEBHOOK_SECRET ?? "",
+  // Your Skool community (where "Join on Skool" buttons point), e.g. https://www.skool.com/your-group/about
+  skoolGroupUrl: process.env.SKOOL_GROUP_URL ?? "",
+  // Optional: after a direct purchase on /join, POST { email, first_name, last_name } here to invite
+  // the buyer into Skool (a Zapier catch hook -> Skool "Invite Member", or Skool's Webhook plugin).
+  skoolInviteWebhookUrl: process.env.SKOOL_INVITE_WEBHOOK_URL ?? "",
 
   aiModel: process.env.AI_MODEL ?? "claude-opus-5-5",
   aiEnabled: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
@@ -40,12 +45,17 @@ export const env = {
   metaVerifyToken: process.env.META_VERIFY_TOKEN ?? "",
   metaGraphVersion: process.env.META_GRAPH_VERSION ?? "v23.0",
   metaLoginConfigId: process.env.META_LOGIN_CONFIG_ID ?? "",
+  // A user token from an identity-confirmed account with Ad Library API access (facebook.com/ads/library/api).
+  metaAdLibraryToken: process.env.META_AD_LIBRARY_TOKEN ?? "",
   metaWaConfigId: process.env.META_WA_CONFIG_ID ?? "",
 
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
   stripePriceGrowth: process.env.STRIPE_PRICE_GROWTH ?? "",
   stripePriceAgency: process.env.STRIPE_PRICE_AGENCY ?? "",
+  // Direct app membership sold on /join (a recurring Stripe price).
+  stripePriceMember: process.env.STRIPE_PRICE_MEMBER ?? "",
+  memberPriceLabel: process.env.MEMBER_PRICE_LABEL ?? "",
 
   vercelToken: process.env.VERCEL_TOKEN ?? "",
   vercelProjectId: process.env.VERCEL_PROJECT_ID ?? "",

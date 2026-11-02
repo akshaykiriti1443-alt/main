@@ -8,7 +8,8 @@ import { isEmail, normalizeEmail } from "@/lib/util";
 import { safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { checkCredentials, createSession, createUser, findUserByEmail, requestHost } from "@/server/auth";
-import { findApproval, findValidCode } from "@/server/access";
+import { FOREVER, membershipFor } from "@/server/access";
+import { workspaces } from "@/lib/db/schema";
 import { getPlatformAgency } from "@/server/tenancy";
 import { createWorkspace } from "@/server/workspace";
 import { passwordLinkFor, resetPassword } from "@/server/passwords";
@@ -36,9 +37,8 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
   const email = normalizeEmail(str(fd, "email"));
   const password = String(fd.get("password") ?? "");
   const businessName = str(fd, "businessName") || `${name.split(" ")[0] || "My"}'s community`;
-  const code = str(fd, "code");
   // Echo back what they typed (never the password) so a fix doesn't mean retyping everything.
-  const values = { name, email, businessName: str(fd, "businessName"), code };
+  const values = { name, email, businessName: str(fd, "businessName") };
 
   if (!name) return { error: "Enter your name.", values };
   if (!isEmail(email)) return { error: "Enter a valid email.", values };
@@ -56,24 +56,10 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
     }
   }
 
-  let accessSource: "admin" | "skool_zapier" | "skool_code" = "admin";
-  let until: Date | null = null;
-  if (!firstUser) {
-    const approval = await findApproval(email);
-    const valid = code ? await findValidCode(code) : null;
-    if (approval) {
-      accessSource = "skool_zapier";
-      until = approval.approvedUntil;
-    } else if (valid) {
-      accessSource = "skool_code";
-      until = valid.validUntil;
-    } else {
-      return {
-        error: code ? "That member code isn't valid. Copy this month's code from the Skool classroom." : "Enter your member code from the Skool classroom.",
-        values,
-      };
-    }
-  }
+  // No codes: anyone can create a login. The app turns on while the email is an active member
+  // (Skool or a direct purchase) and waits on the "unlock" screen until then.
+  const membership = firstUser ? null : await membershipFor(email);
+  const active = firstUser || Boolean(membership?.active);
 
   const user = await createUser({ email, name, password });
   if (firstUser) await db.update(users).set({ isPlatformAdmin: true }).where(sql`${users.id} = ${user.id}`);
@@ -82,13 +68,16 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
     agencyId: agency.id,
     name: businessName,
     ownerUserId: user.id,
-    accessSource,
-    accessVerifiedUntil: until,
+    accessSource: firstUser ? "admin" : "member",
+    accessVerifiedUntil: membership?.active ? (membership.until ?? FOREVER) : null,
     isPlatformAgency: true,
     settings: { businessName },
   });
+  if (!active) {
+    await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "access" }).where(sql`${workspaces.id} = ${ws.id}`);
+  }
   await createSession(user.id);
-  redirect(`/app/w/${ws.id}/launch`);
+  redirect(active ? `/app/w/${ws.id}/launch` : `/app/w/${ws.id}/paused`);
 }
 
 export async function forgotAction(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -113,4 +102,20 @@ export async function resetAction(_prev: FormState, fd: FormData): Promise<FormS
   if (!res.ok) return { error: res.error };
   await createSession(res.userId);
   redirect("/app");
+}
+
+/** /join: send the buyer to Stripe Checkout. Access is granted to this email when payment lands. */
+export async function joinAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const email = normalizeEmail(str(fd, "email"));
+  const name = str(fd, "name");
+  const values = { email, name };
+  if (!isEmail(email)) return { error: "Enter a valid email.", values };
+  const { createMemberCheckout } = await import("@/server/billing/stripe");
+  let url: string;
+  try {
+    url = await createMemberCheckout({ email, name });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Checkout isn't available right now.", values };
+  }
+  redirect(url);
 }

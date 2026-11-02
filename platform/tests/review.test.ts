@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db";
 import { automationRuns, channelConnections, contacts, emailCampaigns, emailMessages, jobs, subscriptions, usageCounters, workspaces } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { monthKey } from "@/lib/util";
-import { createAccessCode, enforceAccess, recordSkoolApproval, redeemCode } from "@/server/access";
+import { enforceAccess, grantAccess, recordSkoolPaidMember, revokeAccess } from "@/server/access";
 import { adminSetAgency, adminSetWorkspace } from "@/server/admin";
 import { agencyForHost, createAgency, createSubAccount, setSubAccountStatus } from "@/server/agency";
 import { createUser } from "@/server/auth";
@@ -48,15 +48,12 @@ describe("team", () => {
 });
 
 describe("pauses", () => {
-  it("member codes and Zapier only lift pauses caused by lapsed access", async () => {
+  it("membership only lifts pauses caused by lapsed access", async () => {
     const { ws, user } = await makeWorkspace();
     const now = Date.now();
-    const code = `RV${stamp()}`.slice(0, 14);
-    await createAccessCode({ code, label: "review", validFrom: new Date(now - 86_400_000), validUntil: new Date(now + 20 * 86_400_000) });
 
     await adminSetWorkspace(ws.id, { status: "paused" });
-    expect((await redeemCode(ws.id, code)).ok).toBe(true);
-    await recordSkoolApproval({ email: user.email });
+    await recordSkoolPaidMember({ email: user.email });
     expect(await statusOf(ws.id)).toEqual({ status: "paused", pauseReason: "admin" });
 
     await adminSetWorkspace(ws.id, { status: "active" });
@@ -65,14 +62,16 @@ describe("pauses", () => {
     await enforceAccess(new Date(now));
     await enforceAccess(new Date(now + 8 * 86_400_000));
     expect(await statusOf(ws.id)).toEqual({ status: "paused", pauseReason: "access" });
-    expect((await redeemCode(ws.id, code)).ok).toBe(true);
+    await recordSkoolPaidMember({ email: user.email });
     expect(await statusOf(ws.id)).toEqual({ status: "active", pauseReason: null });
   });
 
-  it("codes can't change accounts the platform or an agency manages", async () => {
-    const { ws } = await makeWorkspace();
+  it("membership changes never touch accounts the platform or an agency manages", async () => {
+    const { ws, user } = await makeWorkspace();
     await adminSetWorkspace(ws.id, { accessSource: "admin" });
-    expect((await redeemCode(ws.id, "ANYCODE")).ok).toBe(false);
+    await grantAccess({ email: user.email, channel: "admin", until: null });
+    await revokeAccess(user.email, "admin");
+    expect(await statusOf(ws.id)).toEqual({ status: "active", pauseReason: null });
   });
 
   it("an agency can't lift a pause set by the platform admin", async () => {

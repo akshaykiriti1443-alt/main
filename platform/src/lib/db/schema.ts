@@ -84,7 +84,9 @@ export const agencyMembers = pgTable(
 
 export type WorkspacePlan = "starter" | "growth";
 export type WorkspaceStatus = "active" | "grace" | "paused";
-export type AccessSource = "skool_code" | "skool_zapier" | "stripe" | "agency" | "admin";
+// "member": access follows the owner's membership (Skool or a direct purchase), see member_access.
+// "agency": an agency pays. "admin": lifetime access granted by the platform owner.
+export type AccessSource = "member" | "agency" | "admin";
 
 export const workspaces = pgTable(
   "workspaces",
@@ -95,11 +97,11 @@ export const workspaces = pgTable(
     slug: text("slug").notNull().unique(),
     plan: text("plan").$type<WorkspacePlan>().notNull().default("starter"),
     status: text("status").$type<WorkspaceStatus>().notNull().default("active"),
-    accessSource: text("access_source").$type<AccessSource>().notNull().default("skool_code"),
+    accessSource: text("access_source").$type<AccessSource>().notNull().default("member"),
     accessVerifiedUntil: ts("access_verified_until"),
     graceEndsAt: ts("grace_ends_at"),
     pausedAt: ts("paused_at"),
-    // Why a workspace is paused: only "access" pauses lift when a member code is entered.
+    // Why a workspace is paused: only "access" pauses lift by themselves when membership returns.
     pauseReason: text("pause_reason").$type<"access" | "admin" | "agency">(),
     settings: jsonb("settings").$type<WorkspaceSettings>().notNull().default({}),
     createdAt: createdAt(),
@@ -119,25 +121,83 @@ export const workspaceMembers = pgTable(
   (t) => [primaryKey({ columns: [t.workspaceId, t.userId] }), index("workspace_members_user_idx").on(t.userId)],
 );
 
-// Monthly member codes posted inside the Skool classroom.
-export const accessCodes = pgTable("access_codes", {
+// Who may use the platform. One row per email per channel; access is on while any row is
+// active and unexpired. Channels: Skool -> Zapier "New Paid Member", the admin's Skool member
+// export, a direct Stripe purchase on /join, or a manual grant.
+export type MemberChannel = "skool_zapier" | "skool_export" | "stripe" | "admin";
+export const memberAccess = pgTable(
+  "member_access",
+  {
+    id: id(),
+    email: text("email").notNull(),
+    name: text("name").notNull().default(""),
+    channel: text("channel").$type<MemberChannel>().notNull(),
+    status: text("status").$type<"active" | "removed">().notNull().default("active"),
+    // null = never expires (manual grants).
+    activeUntil: ts("active_until"),
+    lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
+    // Stripe subscription id, Zapier transaction id...
+    ref: text("ref"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("member_access_email_channel_uq").on(t.email, t.channel), index("member_access_ref_idx").on(t.ref)],
+);
+
+// Each applied Skool member export, so the admin sees when the roster was last refreshed.
+export const rosterImports = pgTable("roster_imports", {
   id: id(),
-  code: text("code").notNull().unique(),
-  label: text("label").notNull().default(""),
-  validFrom: ts("valid_from").notNull(),
-  validUntil: ts("valid_until").notNull(),
+  total: integer("total").notNull().default(0),
+  added: integer("added").notNull().default(0),
+  removed: integer("removed").notNull().default(0),
+  byUserId: uuid("by_user_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 });
 
-// Emails pre-approved by the Skool -> Zapier "New Paid Member" webhook.
-export const skoolApprovals = pgTable("skool_approvals", {
-  id: id(),
-  email: text("email").notNull().unique(),
-  name: text("name").notNull().default(""),
-  payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
-  approvedUntil: ts("approved_until").notNull(),
-  createdAt: createdAt(),
-});
+// ---------------------------------------------------------------------------
+// Skool growth ladder: the owner's weekly check-in from Skool's Growth tab.
+// ---------------------------------------------------------------------------
+
+export const skoolCheckins = pgTable(
+  "skool_checkins",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    aboutVisitors: integer("about_visitors").notNull().default(0),
+    networkSignups: integer("network_signups").notNull().default(0),
+    newPaid: integer("new_paid").notNull().default(0),
+    members: integer("members").notNull().default(0),
+    skoolLevel: integer("skool_level").notNull().default(1),
+    boostPercent: integer("boost_percent").notNull().default(30),
+    linkInBio: boolean("link_in_bio").notNull().default(false),
+    postsPerWeek: integer("posts_per_week").notNull().default(0),
+    adSpendPerDay: integer("ad_spend_per_day").notNull().default(0),
+    note: text("note").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [index("skool_checkins_ws_idx").on(t.workspaceId, t.createdAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Connector tokens: a private MCP URL that lets the owner's own Claude or ChatGPT
+// work inside one workspace. Only the sha256 of the token is stored.
+// ---------------------------------------------------------------------------
+
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull().default(""),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    lastUsedAt: ts("last_used_at"),
+    revokedAt: ts("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("api_tokens_ws_idx").on(t.workspaceId)],
+);
 
 // ---------------------------------------------------------------------------
 // Sites and pages
@@ -447,7 +507,7 @@ export const aiGenerations = pgTable(
   {
     id: id(),
     workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message">().notNull(),
+    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message" | "ad_research">().notNull(),
     input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
     output: jsonb("output").$type<Record<string, unknown>>().notNull().default({}),
     model: text("model").notNull(),

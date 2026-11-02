@@ -22,7 +22,7 @@ import { listPages, listSites, publishSite } from "@/server/sites";
 import { captureLead } from "@/server/leads";
 import { runDueJobs } from "@/server/jobs/runner";
 import { chargeUsage, getOrCreateWallet, creditWallet, InsufficientBalanceError, canAfford } from "@/server/wallet";
-import { createAccessCode, enforceAccess, redeemCode, recordSkoolApproval } from "@/server/access";
+import { enforceAccess, recordSkoolPaidMember } from "@/server/access";
 import { processMetaPayload, verifyMetaSignature } from "@/server/meta/webhooks";
 import { verifyStripeSignature, handleStripeEvent } from "@/server/billing/stripe";
 import { verifyTwilioSignature } from "@/server/sms";
@@ -145,13 +145,9 @@ describe("wallet", () => {
 });
 
 describe("Skool access", () => {
-  it("redeems codes, approves Zapier members and enforces grace then pause", async () => {
+  it("enforces grace then pause, and a Skool paid join turns the account back on", async () => {
     const { ws, user } = await makeWorkspace();
     const now = new Date();
-    await createAccessCode({ code: `NOV${Date.now()}`.slice(0, 14), label: "test", validFrom: new Date(now.getTime() - 86_400_000), validUntil: new Date(now.getTime() + 20 * 86_400_000) });
-    const bad = await redeemCode(ws.id, "NOPE");
-    expect(bad.ok).toBe(false);
-
     const db = await getDb();
     await db.update(workspaces).set({ accessVerifiedUntil: new Date(now.getTime() - 1000) }).where(eq(workspaces.id, ws.id));
     await enforceAccess(now);
@@ -161,8 +157,7 @@ describe("Skool access", () => {
     [w] = await db.select().from(workspaces).where(eq(workspaces.id, ws.id));
     expect(w.status).toBe("paused");
 
-    const approval = await recordSkoolApproval({ email: user.email, name: "Sam" });
-    expect(approval.extended).toBe(1);
+    await recordSkoolPaidMember({ email: user.email, name: "Sam" });
     [w] = await db.select().from(workspaces).where(eq(workspaces.id, ws.id));
     expect(w.status).toBe("active");
   });

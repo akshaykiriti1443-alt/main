@@ -3,8 +3,7 @@ import { getDb } from "@/lib/db";
 import { aiGenerations, workspaces } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
-import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
-import { describeAiError, generateStructured, VOICE_RULES } from "./client";
+import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 
 export const adReviewInputSchema = z.object({
   spend: z.coerce.number().min(0),
@@ -72,17 +71,13 @@ export async function runAdReview(workspaceId: string, raw: unknown) {
   let warning: string | undefined;
   const db = await getDb();
   const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
-  const charge = env.aiEnabled
-    ? await chargeUsage(workspaceId, "ai_generation", 1, { description: "AI ad review" }).catch((err) => {
-        if (err instanceof InsufficientBalanceError) return null;
-        throw err;
-      })
-    : null;
+  const charge = await chargeAi(workspaceId, "ai_generation", "AI ad review");
   if (env.aiEnabled && !charge) warning = "You've used this month's AI generations, so this is the rule-based review.";
   if (charge) {
     try {
       const m = computeMetrics(input);
       const res = await generateStructured({
+        workspaceId: workspaceId,
         effort: "medium",
         maxTokens: 8000,
         schema: reviewSchema,
@@ -99,7 +94,7 @@ Notes from the owner: ${input.notes || "none"}`,
       review = res.data;
       model = res.usage.model;
     } catch (err) {
-      await refundUsage(workspaceId, "ai_generation", 1, charge.billedMicros, "Refund: AI ad review failed");
+      await refundAi(workspaceId, "ai_generation", charge, "Refund: AI ad review failed");
       warning = `${describeAiError(err)} Showing the rule-based review instead.`;
     }
   }

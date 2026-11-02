@@ -4,6 +4,9 @@ import { agencies, subscriptions, workspaces, type WalletOwner } from "@/lib/db/
 import { hmacHex, safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { creditWallet, getOrCreateWallet } from "../wallet";
+import { grantAccess, revokeAccess, STRIPE_BUFFER_DAYS } from "../access";
+import { enqueue } from "../jobs/queue";
+import { addDays, isEmail, normalizeEmail } from "@/lib/util";
 
 export const stripeConfigured = () => Boolean(env.stripeSecretKey);
 
@@ -20,6 +23,30 @@ async function stripe<T>(path: string, form: Record<string, string>): Promise<T>
 }
 
 export type CheckoutKind = "topup" | "growth" | "agency";
+
+export const memberCheckoutConfigured = () => Boolean(env.stripeSecretKey && env.stripePriceMember);
+
+/** Direct app membership bought on /join. No account needed yet: access is keyed to the email. */
+export async function createMemberCheckout(input: { email: string; name?: string }) {
+  if (!env.stripePriceMember) throw new Error("Direct purchase isn't set up (STRIPE_PRICE_MEMBER).");
+  const email = normalizeEmail(input.email);
+  if (!isEmail(email)) throw new Error("Enter a valid email.");
+  const back = `${env.appUrl}/signup?email=${encodeURIComponent(email)}`;
+  const session = await stripe<{ url: string }>("checkout/sessions", {
+    mode: "subscription",
+    success_url: `${back}&paid=1`,
+    cancel_url: `${env.appUrl}/join?checkout=cancelled`,
+    customer_email: email,
+    "line_items[0][quantity]": "1",
+    "line_items[0][price]": env.stripePriceMember,
+    "metadata[kind]": "member",
+    "metadata[member_email]": email,
+    "metadata[member_name]": (input.name ?? "").slice(0, 120),
+    "subscription_data[metadata][kind]": "member",
+    "subscription_data[metadata][member_email]": email,
+  });
+  return session.url;
+}
 
 export async function createCheckout(input: {
   kind: CheckoutKind;
@@ -110,6 +137,31 @@ export async function handleStripeEvent(event: { id: string; type: string; data:
   const db = await getDb();
 
   const isCheckout = event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded";
+
+  // Direct app membership: access follows the subscription, keyed to the buyer's email.
+  if (meta.kind === "member") {
+    const email = meta.member_email;
+    if (!email || !isEmail(email)) return;
+    if (isCheckout) {
+      if (obj.payment_status === "unpaid") return;
+      await grantAccess({ email, name: meta.member_name, channel: "stripe", until: addDays(new Date(), 35), ref: obj.subscription ?? obj.id });
+      if (env.skoolInviteWebhookUrl) {
+        await enqueue("member.skool_invite", { email, name: meta.member_name ?? "" }, { dedupeKey: `skool-invite:${email}` });
+      }
+      return;
+    }
+    if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+      const status = event.type === "customer.subscription.deleted" ? "canceled" : (obj.status ?? "");
+      const periodEnd = obj.current_period_end ?? obj.items?.data?.[0]?.current_period_end;
+      if (status === "active" || status === "trialing" || status === "past_due") {
+        const until = addDays(periodEnd ? new Date(periodEnd * 1000) : new Date(), STRIPE_BUFFER_DAYS);
+        await grantAccess({ email, channel: "stripe", until, ref: obj.id });
+      } else {
+        await revokeAccess(email, "stripe", `stripe:${status}`);
+      }
+    }
+    return;
+  }
   if (isCheckout && ownerType && ownerId) {
     // Delayed payment methods complete checkout before the money arrives; wait for
     // checkout.session.async_payment_succeeded in that case.

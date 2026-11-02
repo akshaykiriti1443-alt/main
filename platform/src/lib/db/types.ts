@@ -100,6 +100,11 @@ export type WorkspaceSettings = {
   metaCapiTokenEnc?: string;
   metaTestEventCode?: string;
   launchKitId?: string;
+  // Bring your own AI: when set, AI features run on this key and are not billed to the wallet.
+  aiProvider?: "anthropic" | "openai";
+  aiKeyEnc?: string;
+  aiKeyHint?: string;
+  aiModel?: string;
 };
 
 export type BrandSettings = {

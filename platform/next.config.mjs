@@ -6,6 +6,8 @@ const codespaceOrigin = process.env.CODESPACE_NAME
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Lets a second dev server run beside the first (NEXT_DIST_DIR=.next-demo).
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // PGlite ships WASM + data files that must not be bundled.
   serverExternalPackages: ["@electric-sql/pglite"],
   poweredByHeader: false,

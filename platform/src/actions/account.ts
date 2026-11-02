@@ -1,13 +1,13 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { workspaces } from "@/lib/db/schema";
+import { users, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { safeUrl } from "@/lib/html";
 import { isEmail } from "@/lib/util";
 import { requireWorkspace } from "@/server/tenancy";
-import { redeemCode } from "@/server/access";
+import { membershipFor, refreshOwnerAccess } from "@/server/access";
 import { createCheckout, stripeConfigured } from "@/server/billing/stripe";
 import { billingWalletFor } from "@/server/wallet";
 import { disconnectChannel } from "@/server/inbox";
@@ -15,11 +15,24 @@ import { buyNumber, searchNumbers } from "@/server/sms";
 import { hasFeature } from "@/server/plans";
 import { errMsg, field, go } from "./helpers";
 
-export async function redeemCodeAction(wid: string, fd: FormData) {
+/** "Check again": re-read the owner's membership now (after joining Skool or paying). */
+export async function checkAccessAction(wid: string, fd: FormData) {
   await requireWorkspace(wid, "user", { allowPaused: true });
-  const res = await redeemCode(wid, field(fd, "code", 40));
-  if (!res.ok) go(field(fd, "back") || `/app/w/${wid}`, { error: res.error });
-  go(`/app/w/${wid}`, { ok: `Access confirmed until ${res.until.toDateString()}.` });
+  const back = field(fd, "back") || `/app/w/${wid}`;
+  const db = await getDb();
+  const [owner] = await db
+    .select({ email: users.email })
+    .from(workspaceMembers)
+    .innerJoin(users, eq(users.id, workspaceMembers.userId))
+    .where(and(eq(workspaceMembers.workspaceId, wid), eq(workspaceMembers.role, "owner")))
+    .limit(1);
+  if (!owner) go(back, { error: "This account has no owner. Contact support." });
+  await refreshOwnerAccess(owner.email);
+  const m = await membershipFor(owner.email);
+  if (!m.active) {
+    go(back, { error: `We can't see an active membership for ${owner.email} yet. Paid on Skool just now? Give it 15 minutes.` });
+  }
+  go(`/app/w/${wid}`, { ok: "You're an active member. Your account is on." });
 }
 
 export async function saveBusinessAction(wid: string, fd: FormData) {

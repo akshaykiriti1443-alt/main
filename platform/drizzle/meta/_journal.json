@@ -15,6 +15,20 @@
       "when": 1793169238161,
       "tag": "0001_review_fixes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793644297485,
+      "tag": "0002_member_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793644308048,
+      "tag": "0003_drop_member_codes",
+      "breakpoints": true
     }
   ]
 }

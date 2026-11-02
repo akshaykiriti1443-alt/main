@@ -18,17 +18,26 @@ Agencies resell the whole platform under their own brand.
 Usage beyond each plan's allowance (AI, emails, SMS, WhatsApp templates, phone
 numbers) comes out of a prepaid wallet with your markup. See `src/server/pricing.ts`.
 
-## How Skool access works
+## How member access works
 
-Skool has no API, so access is tied to a **monthly member code** that you post
-inside the paid Skool classroom:
+No codes. **If you're an active member, you're in.** Members sign up at `/signup`
+with the email they use on Skool, and the app turns on by itself once that email
+is confirmed as an active member through any of these:
 
-1. Members sign up at `/signup` with this month's code (or automatically when a
-   Skool → Zapier "New Paid Member" zap posts their email to `/api/webhooks/skool`).
-2. Each month they enter the new code (a banner reminds them 5 days early).
-3. If access lapses, the workspace gets a **7-day grace period**, then **pauses**:
-   pages go offline, automations and emails stop. Everything comes back when they
-   enter a valid code.
+1. **Skool → Zapier "New Paid Member"** (Skool Pro) posts to `/api/webhooks/skool`.
+   Paid members are in about 15 minutes after joining.
+2. **The Skool member export.** The platform owner uploads it in **Admin › Members**
+   (weekly). Everyone on it is active for 35 days; anyone who dropped off is removed
+   after a preview-and-confirm step that refuses suspiciously large drops.
+3. **A direct purchase** on `/join` (Stripe, `STRIPE_PRICE_MEMBER`). Access follows
+   the subscription. Optionally the buyer is invited into Skool via
+   `SKOOL_INVITE_WEBHOOK_URL`.
+4. **A manual grant** in Admin › Members.
+
+Skool has no public API and no "member cancelled" signal, so the export is the only
+safe way to learn who left. We never store or use anyone's Skool login. When
+membership ends, the workspace gets a **7-day grace period**, then **pauses**; it
+turns back on by itself when the person is a member again.
 
 The first account ever created becomes the platform owner and needs no code. In
 production it also needs the setup link: `/signup?setup=<SETUP_TOKEN>`.
@@ -78,8 +87,8 @@ Locally the database is embedded Postgres (PGlite) in `.data/`, emails print to
 the console and the launch kit uses a smart template until you add
 `ANTHROPIC_API_KEY`. Copy `.env.example` to `.env.local` to configure more.
 
-Create this month's member code: **Admin › Member codes**, or stop the dev server
-and run `npm run db:seed`.
+Give a test email member access: **Admin › Members › Give access**, or stop the
+dev server and run `npm run db:seed -- you@example.com`.
 
 ## Scripts
 
@@ -91,7 +100,7 @@ and run `npm run db:seed`.
 | `npm run e2e` | Browser end-to-end test (run `npm run build` first) |
 | `npm run db:generate` | Create a migration after editing `src/lib/db/schema.ts` |
 | `npm run db:migrate` | Apply migrations (Postgres when `DATABASE_URL` is set) |
-| `npm run db:seed` | Create this month's and next month's member codes |
+| `npm run db:seed -- email` | Give an email member access (local testing) |
 | `npm run worker` | Tick background jobs every 30s on hosts without cron |
 
 ## Architecture
@@ -99,7 +108,7 @@ and run `npm run db:seed`.
 ```
 src/
   app/                 Next.js routes
-    (auth)/            login, signup (member code), forgot, reset
+    (auth)/            login, signup, join (buy access), forgot, reset
     app/w/[wid]/       workspace dashboard: launch kit, funnels, leads, inbox,
                        emails, automations, social, ad review, billing, settings
     app/agency/[aid]/  agency tier: client accounts, templates, branding, wallet

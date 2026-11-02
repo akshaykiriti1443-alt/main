@@ -1,25 +1,43 @@
 "use server";
 
 import { requirePlatformAdmin } from "@/server/auth";
-import { createAccessCode } from "@/server/access";
+import { applyRoster, grantAccess, previewRoster, revokeAccess, type RosterPreview } from "@/server/access";
+import { isEmail } from "@/lib/util";
 import { adminAdjustWallet, adminSetAgency, adminSetWorkspace, retryJob } from "@/server/admin";
 import { runDueJobs } from "@/server/jobs/runner";
 import { tick } from "@/server/maintenance";
 import { errMsg, field, go } from "./helpers";
 
-export async function createCodeAction(fd: FormData) {
-  await requirePlatformAdmin();
-  const code = field(fd, "code", 40).toUpperCase().replace(/\s+/g, "");
-  const from = new Date(field(fd, "validFrom") || Date.now());
-  const until = new Date(field(fd, "validUntil"));
-  if (!code || code.length < 4) go("/app/admin/codes", { error: "Use a code with at least 4 characters." });
-  if (isNaN(until.getTime()) || until <= from) go("/app/admin/codes", { error: "Pick an end date after the start date." });
+export type RosterState = { preview?: RosterPreview; error?: string; ok?: string };
+
+/** Step 1 of a roster upload: show who would be added and removed. Changes nothing. */
+export async function rosterAction(_prev: RosterState, fd: FormData): Promise<RosterState> {
+  const admin = await requirePlatformAdmin();
+  const raw = String(fd.get("members") ?? "").slice(0, 5_000_000);
+  if (!raw.trim()) return { error: "Upload or paste your Skool member export first." };
   try {
-    await createAccessCode({ code, label: field(fd, "label", 80), validFrom: from, validUntil: until });
+    if (fd.get("apply") !== "1") return { preview: await previewRoster(raw) };
+    const res = await applyRoster(raw, { byUserId: admin.id, confirmLargeDrop: fd.get("confirmLargeDrop") === "on" });
+    return { ok: `Synced ${res.emails} members: ${res.added.length} new, ${res.removed.length} removed.` };
   } catch (err) {
-    go("/app/admin/codes", { error: errMsg(err).includes("unique") ? "That code already exists." : errMsg(err) });
+    return { error: errMsg(err), preview: await previewRoster(raw).catch(() => undefined) };
   }
-  go("/app/admin/codes", { ok: `Code ${code} is live. Post it in your Skool classroom.` });
+}
+
+export async function grantMemberAction(fd: FormData) {
+  await requirePlatformAdmin();
+  const email = field(fd, "email", 200);
+  if (!isEmail(email)) go("/app/admin/members", { error: "Enter a valid email." });
+  const days = Number(field(fd, "days"));
+  const until = days > 0 ? new Date(Date.now() + days * 86_400_000) : null;
+  await grantAccess({ email, name: field(fd, "name", 120), channel: "admin", until });
+  go("/app/admin/members", { ok: `${email} has access ${until ? `until ${until.toDateString()}` : "for life"}.` });
+}
+
+export async function revokeMemberAction(email: string, channel: "skool_zapier" | "skool_export" | "stripe" | "admin") {
+  await requirePlatformAdmin();
+  await revokeAccess(email, channel, "admin");
+  go("/app/admin/members", { ok: `Removed ${email} (${channel.replace("_", " ")}). Their account pauses after the 7-day grace unless another membership is active.` });
 }
 
 export async function setWorkspaceAction(wid: string, fd: FormData) {

@@ -43,7 +43,7 @@ export function normalizeStatus(raw: string): SkoolStatus {
   return "active";
 }
 
-function splitRow(line: string, delim: string): string[] {
+export function splitRow(line: string, delim: string): string[] {
   // Minimal CSV: handles quoted fields with embedded delimiters and "" escapes.
   if (delim !== ",") return line.split(delim).map((c) => c.trim());
   const out: string[] = [];

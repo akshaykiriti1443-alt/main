@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { forgotAction, loginAction, resetAction, signupAction, type FormState } from "./actions";
+import { forgotAction, joinAction, loginAction, resetAction, signupAction, type FormState } from "./actions";
 
 function Msg({ state }: { state: FormState }) {
   if (state.error)
@@ -68,7 +68,7 @@ export function LoginForm({ next }: { next?: string }) {
   );
 }
 
-export function SignupForm({ needsCode, defaultCode, setup }: { needsCode: boolean; defaultCode?: string; setup?: string }) {
+export function SignupForm({ member, defaultEmail, setup }: { member: boolean; defaultEmail?: string; setup?: string }) {
   const [state, action, pending] = useActionState(signupAction, {});
   return (
     <form action={action}>
@@ -85,21 +85,16 @@ export function SignupForm({ needsCode, defaultCode, setup }: { needsCode: boole
         </Field>
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.values?.email} />
-          <FieldDescription>Use the email from your Skool account.</FieldDescription>
+          <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.values?.email ?? defaultEmail} />
+          {member ? (
+            <FieldDescription>Use the same email as your Skool account (or the one you bought with). That&apos;s how we know you&apos;re a member.</FieldDescription>
+          ) : null}
         </Field>
         <Field>
           <FieldLabel htmlFor="password">Password</FieldLabel>
           <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
           <FieldDescription>At least 8 characters.</FieldDescription>
         </Field>
-        {needsCode ? (
-          <Field>
-            <FieldLabel htmlFor="code">Member code</FieldLabel>
-            <Input id="code" name="code" defaultValue={state.values?.code ?? defaultCode} placeholder="From the Start Here lesson" className="uppercase placeholder:normal-case" />
-            <FieldDescription>Find this month's code in the Skool classroom. Paid members added through Zapier can leave it blank.</FieldDescription>
-          </Field>
-        ) : null}
         <Submit pending={pending} pendingText="Creating your account…">
           Create my account
         </Submit>
@@ -147,6 +142,32 @@ export function ResetForm({ token }: { token: string }) {
         <Submit pending={pending} pendingText="Saving…">
           Save password
         </Submit>
+      </FieldGroup>
+    </form>
+  );
+}
+
+export function JoinForm({ defaultEmail, priceLabel }: { defaultEmail?: string; priceLabel?: string }) {
+  const [state, action, pending] = useActionState(joinAction, {});
+  return (
+    <form action={action}>
+      <FieldGroup className="gap-5">
+        <Msg state={state} />
+        <Field>
+          <FieldLabel htmlFor="name">Your name</FieldLabel>
+          <Input id="name" name="name" autoComplete="name" defaultValue={state.values?.name} />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.values?.email ?? defaultEmail} />
+          <FieldDescription>Your account is tied to this email. Use the same one when you create your login.</FieldDescription>
+        </Field>
+        <Submit pending={pending} pendingText="Opening secure checkout…">
+          {priceLabel ? `Continue to payment · ${priceLabel}` : "Continue to payment"}
+        </Submit>
+        <p className="text-center text-sm text-muted-foreground">
+          Already a member? <Link href="/signup">Create your login</Link>
+        </p>
       </FieldGroup>
     </form>
   );

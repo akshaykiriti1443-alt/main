@@ -5,29 +5,18 @@ kit. Paste each one into a Skool lesson. Swap the bracketed parts.
 
 ---
 
-## Lesson: Claim your funnel account (Day 0)
+## Lesson: Open your funnel account (Day 0)
 
-Your funnel account is ready for you. It's included with your membership.
+Your funnel account is included with your membership. No code needed.
 
-**Your code this month:** [MONTH CODE]
+1. Open this link: [APP_URL]/signup
+2. Use the **same email as your Skool account** (or the one you gave in the membership question).
+3. Your account turns on by itself. Paid members: within about 15 minutes of joining.
+   On a trial? It turns on at the next weekly member sync.
+4. Answer 6 quick questions. The AI builds your landing page, free guide, 3 emails, ads and Skool About page.
 
-1. Open this link: [APP_URL]/signup?code=[MONTH CODE]
-2. Use the same email as your Skool account.
-3. Answer 6 quick questions. The AI builds your landing page, free guide, 3 emails, ads and Skool About page.
-4. Click Publish. Your page is live.
-
-Your funnel account stays active while you're a member. Each month, a new code
-appears in this lesson. Enter it in Settings when the app asks.
-
----
-
-## Lesson: Your new monthly code (pin at the top, update on the 1st)
-
-🔑 This month's code: **[MONTH CODE]**
-
-Open your account › Settings › Member access › paste the code › Confirm.
-
-The code works until [END DATE]. Next month's code goes up here before then.
+It stays on while you're a member. If you leave, it pauses after 7 days, and comes
+back on by itself if you return.
 
 ---
 

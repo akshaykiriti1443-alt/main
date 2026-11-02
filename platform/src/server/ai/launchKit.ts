@@ -6,8 +6,7 @@ import type { PageContent } from "@/lib/db/types";
 import { env } from "@/lib/env";
 import { DEFAULT_SEQUENCE } from "../defaults";
 import { createSite, newSectionId } from "../sites";
-import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
-import { describeAiError, generateStructured, VOICE_RULES } from "./client";
+import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 import { isUuid } from "@/lib/util";
 
 export const launchKitInputSchema = z.object({
@@ -290,23 +289,18 @@ export async function runLaunchKit(workspaceId: string, rawInput: unknown): Prom
   let warning: string | undefined;
   let usage = { inputTokens: 0, outputTokens: 0, model: "template" };
 
-  if (env.aiEnabled) {
-    let charge: { billedMicros: number };
+  const charge = await chargeAi(workspaceId, "ai_generation", "AI launch kit");
+  if (!charge && env.aiEnabled) {
+    return { ok: false, error: "You've used this month's AI generations. Add funds in Plan & wallet to generate more." };
+  }
+  if (charge) {
     try {
-      charge = await chargeUsage(workspaceId, "ai_generation", 1, { description: "AI launch kit" });
-    } catch (err) {
-      if (err instanceof InsufficientBalanceError) {
-        return { ok: false, error: "You've used this month's AI generations. Add funds in Plan & wallet to generate more." };
-      }
-      throw err;
-    }
-    try {
-      const res = await generateStructured({ system: SYSTEM, prompt: buildPrompt(input), schema: launchKitSchema, effort: "medium" });
+      const res = await generateStructured({ workspaceId, system: SYSTEM, prompt: buildPrompt(input), schema: launchKitSchema, effort: "medium" });
       kit = normalizeKit(res.data);
       usage = res.usage;
       usedAi = true;
     } catch (err) {
-      await refundUsage(workspaceId, "ai_generation", 1, charge.billedMicros, "Refund: AI launch kit failed");
+      await refundAi(workspaceId, "ai_generation", charge, "Refund: AI launch kit failed");
       warning = `${describeAiError(err)} We used a template kit instead.`;
       kit = fallbackKit(input);
     }

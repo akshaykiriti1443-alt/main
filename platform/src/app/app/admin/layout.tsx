@@ -19,7 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           title: "Platform admin",
           items: [
             { href: "/app/admin", label: "Overview", icon: "dashboard", exact: true },
-            { href: "/app/admin/codes", label: "Member codes", icon: "key" },
+            { href: "/app/admin/members", label: "Members", icon: "members" },
             { href: "/app/admin/workspaces", label: "Workspaces", icon: "boxes" },
             { href: "/app/admin/agencies", label: "Agencies", icon: "clients" },
             { href: "/app/admin/templates", label: "Platform templates", icon: "templates" },

@@ -87,7 +87,7 @@ export default async function Home() {
           <div className="flex flex-wrap justify-center gap-2.5">
             <Button size="lg" className="h-11 px-5 text-base" asChild>
               <Link href={user ? "/app" : "/signup"}>
-                {user ? "Open dashboard" : "Start with your member code"}
+                {user ? "Open dashboard" : "Open it with your Skool email"}
                 <ArrowRightIcon data-icon="inline-end" />
               </Link>
             </Button>
@@ -157,7 +157,7 @@ export default async function Home() {
         <section className="relative overflow-hidden rounded-3xl bg-primary px-6 py-14 text-center text-primary-foreground md:py-16">
           <MessageSquareTextIcon aria-hidden className="absolute -top-6 -right-6 size-40 opacity-10" />
           <h2 className="text-2xl font-semibold tracking-tight md:text-4xl">Your first lead could land today.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-primary-foreground/80 md:text-lg">It takes about a minute to set up. Grab this month's code from your Skool classroom and go.</p>
+          <p className="mx-auto mt-3 max-w-xl text-primary-foreground/80 md:text-lg">It takes about a minute to set up. Sign up with your Skool email and it turns on by itself.</p>
           <Button size="lg" variant="secondary" className="mt-7 h-11 px-5 text-base" asChild>
             <Link href={cta.href}>
               {cta.label}

@@ -15,6 +15,9 @@ import {
   GraduationCapIcon,
   InboxIcon,
   KeyRoundIcon,
+  TrendingUpIcon,
+  PlugIcon,
+  IdCardIcon,
   LayoutDashboardIcon,
   LayoutTemplateIcon,
   LockIcon,
@@ -92,6 +95,10 @@ const ICONS = {
   boxes: BoxesIcon,
   activity: ActivityIcon,
   shield: ShieldCheckIcon,
+  ladder: TrendingUpIcon,
+  search: SearchIcon,
+  plug: PlugIcon,
+  members: IdCardIcon,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;
