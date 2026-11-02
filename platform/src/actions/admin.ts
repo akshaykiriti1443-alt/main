@@ -34,7 +34,7 @@ export async function grantMemberAction(fd: FormData) {
   go("/app/admin/members", { ok: `${email} has access ${until ? `until ${until.toDateString()}` : "for life"}.` });
 }
 
-export async function revokeMemberAction(email: string, channel: "skool_zapier" | "skool_export" | "stripe" | "admin") {
+export async function revokeMemberAction(email: string, channel: import("@/lib/db/schema").MemberChannel) {
   await requirePlatformAdmin();
   await revokeAccess(email, channel, "admin");
   go("/app/admin/members", { ok: `Removed ${email} (${channel.replace("_", " ")}). Their account pauses after the 7-day grace unless another membership is active.` });

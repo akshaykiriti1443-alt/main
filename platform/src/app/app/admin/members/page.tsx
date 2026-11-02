@@ -14,7 +14,7 @@ import { RosterUpload } from "./roster";
 
 export const metadata = { title: "Members" };
 
-const CHANNEL: Record<string, string> = { skool_zapier: "Skool · Zapier", skool_export: "Skool · export", stripe: "Bought on /join", admin: "Manual" };
+const CHANNEL: Record<string, string> = { skool_zapier: "Skool · Zapier", skool_export: "Skool · export", stripe: "Bought on /join", admin: "Manual", welcome: "Welcome days (unconfirmed)" };
 
 export default async function MembersPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   await requirePlatformAdmin();

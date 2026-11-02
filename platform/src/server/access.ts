@@ -2,6 +2,7 @@ import { and, desc, eq, gt, ilike, inArray, isNull, lt, or, sql } from "drizzle-
 import { getDb } from "@/lib/db";
 import { memberAccess, rosterImports, users, workspaceMembers, workspaces, type MemberChannel } from "@/lib/db/schema";
 import { addDays, isEmail, normalizeEmail } from "@/lib/util";
+import { env } from "@/lib/env";
 import { normalizeStatus, splitRow } from "./skool";
 
 // Access is simple: if you're an active member, you're in. No codes.
@@ -135,6 +136,26 @@ export async function revokeAccess(email: string, channel: MemberChannel, reason
     .returning({ id: memberAccess.id });
   if (rows.length) await refreshOwnerAccess(clean, now);
   return rows.length > 0;
+}
+
+/**
+ * A brand-new signup who isn't confirmed yet gets a few days of access, once per email, so they can
+ * start straight away. Zapier or the next Skool export then confirms them; if neither does, the
+ * welcome window simply ends and the usual 7-day grace follows.
+ */
+export async function grantWelcomeAccess(email: string, name = ""): Promise<boolean> {
+  const days = env.welcomeAccessDays;
+  if (!(days > 0)) return false;
+  const db = await getDb();
+  const clean = normalizeEmail(email);
+  const [used] = await db
+    .select({ id: memberAccess.id })
+    .from(memberAccess)
+    .where(and(eq(memberAccess.email, clean), eq(memberAccess.channel, "welcome")))
+    .limit(1);
+  if (used) return false;
+  await grantAccess({ email: clean, name, channel: "welcome", until: addDays(new Date(), days) });
+  return true;
 }
 
 /** Skool -> Zapier "New Paid Member". */

@@ -124,7 +124,8 @@ export const workspaceMembers = pgTable(
 // Who may use the platform. One row per email per channel; access is on while any row is
 // active and unexpired. Channels: Skool -> Zapier "New Paid Member", the admin's Skool member
 // export, a direct Stripe purchase on /join, or a manual grant.
-export type MemberChannel = "skool_zapier" | "skool_export" | "stripe" | "admin";
+// "welcome": a one-time few days of access right after signup, while membership is confirmed.
+export type MemberChannel = "skool_zapier" | "skool_export" | "stripe" | "admin" | "welcome";
 export const memberAccess = pgTable(
   "member_access",
   {

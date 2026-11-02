@@ -8,7 +8,7 @@ import { isEmail, normalizeEmail } from "@/lib/util";
 import { safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { checkCredentials, createSession, createUser, findUserByEmail, requestHost } from "@/server/auth";
-import { FOREVER, membershipFor } from "@/server/access";
+import { FOREVER, grantWelcomeAccess, membershipFor } from "@/server/access";
 import { workspaces } from "@/lib/db/schema";
 import { getPlatformAgency } from "@/server/tenancy";
 import { createWorkspace } from "@/server/workspace";
@@ -73,11 +73,13 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
     isPlatformAgency: true,
     settings: { businessName },
   });
-  if (!active) {
+  // Not confirmed yet: a one-time welcome window lets them start now (it also turns the workspace on).
+  const welcomed = !active && (await grantWelcomeAccess(email, name));
+  if (!active && !welcomed) {
     await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "access" }).where(sql`${workspaces.id} = ${ws.id}`);
   }
   await createSession(user.id);
-  redirect(active ? `/app/w/${ws.id}/launch` : `/app/w/${ws.id}/paused`);
+  redirect(active || welcomed ? `/app/w/${ws.id}/launch` : `/app/w/${ws.id}/paused`);
 }
 
 export async function forgotAction(_prev: FormState, fd: FormData): Promise<FormState> {

@@ -85,6 +85,23 @@ export default async function WorkspaceLayout({ children, params }: { children: 
         Your pages stay live until {workspace.graceEndsAt?.toDateString() ?? "soon"}. Rejoin, or <Link href={`/join?email=${encodeURIComponent(user.email)}`}>buy access directly</Link>, and everything stays on.
       </Callout>
     );
+  } else if (
+    workspace.accessSource === "member" &&
+    workspace.accessVerifiedUntil &&
+    workspace.accessVerifiedUntil.getTime() - Date.now() < 4 * 86_400_000
+  ) {
+    banner = (
+      <Callout
+        tone="info"
+        action={
+          <form action={checkAccessAction.bind(null, wid)}>
+            <SubmitButton size="sm" variant="outline" pendingText="Checking…">Check my membership</SubmitButton>
+          </form>
+        }
+      >
+        You&apos;re in until {workspace.accessVerifiedUntil.toDateString()}. Use the same email as your Skool account ({user.email}) and we confirm you automatically. Nothing to type.
+      </Callout>
+    );
   } else if (ctx.effectiveStatus === "grace") {
     banner = <Callout tone="warn">Your account pauses on {workspace.graceEndsAt?.toDateString() ?? "soon"}. Contact support to keep it on.</Callout>;
   }

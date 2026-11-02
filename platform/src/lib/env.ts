@@ -28,6 +28,9 @@ export const env = {
   skoolWebhookSecret: process.env.SKOOL_WEBHOOK_SECRET ?? "",
   // Your Skool community (where "Join on Skool" buttons point), e.g. https://www.skool.com/your-group/about
   skoolGroupUrl: process.env.SKOOL_GROUP_URL ?? "",
+  // New signups can use the app right away for this many days (once per email) while their
+  // membership is confirmed by Zapier or the next Skool export. 0 turns it off.
+  welcomeAccessDays: Number(process.env.WELCOME_ACCESS_DAYS ?? 3),
   // Optional: after a direct purchase on /join, POST { email, first_name, last_name } here to invite
   // the buyer into Skool (a Zapier catch hook -> Skool "Invite Member", or Skool's Webhook plugin).
   skoolInviteWebhookUrl: process.env.SKOOL_INVITE_WEBHOOK_URL ?? "",
