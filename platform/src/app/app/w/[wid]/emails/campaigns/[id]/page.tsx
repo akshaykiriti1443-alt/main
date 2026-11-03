@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, SendIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { countAudience, getCampaign } from "@/server/email/campaigns";
 import { saveCampaignAction, sendTestEmailAction } from "@/actions/marketing";
-import { Flash, PageHead, Panel } from "@/components/ui";
+import { Flash, IconTile, PageHead, Panel } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,12 +34,16 @@ export default async function CampaignPage({ params, searchParams }: { params: P
           </Link>
         }
         title={c.name}
-        sub={locked ? `Status: ${c.status}. ${c.recipients ? `${c.recipients} recipients.` : ""}` : `${audienceSize} people match this audience right now.`}
+        sub={
+          locked
+            ? `Status: ${c.status}. ${c.recipients ? `${c.recipients} recipients.` : ""}`
+            : `Write it once, pick who gets it, send. ${audienceSize} ${audienceSize === 1 ? "person matches" : "people match"} this audience right now.`
+        }
       />
       <Flash searchParams={await searchParams} />
       <form action={saveCampaignAction.bind(null, wid, id)} className="flex flex-col gap-4">
         <fieldset disabled={locked} className="flex min-w-0 flex-col gap-4">
-          <Panel title="Message">
+          <Panel step={1} title="Message" sub="Write it like a note to one person, not a newsletter.">
             <div className="flex flex-col gap-4">
               <Field>
                 <FieldLabel htmlFor="name">Internal name</FieldLabel>
@@ -57,7 +61,7 @@ export default async function CampaignPage({ params, searchParams }: { params: P
             </div>
           </Panel>
 
-          <Panel title="Audience" sub="Leave everything unticked to send to all subscribed contacts.">
+          <Panel step={2} title="Audience" sub="Leave everything unticked to send to all subscribed contacts.">
             <div className="flex flex-col gap-5">
               <FieldSet className="gap-2">
                 <FieldLegend variant="label">Temperature</FieldLegend>
@@ -97,7 +101,8 @@ export default async function CampaignPage({ params, searchParams }: { params: P
             <Button type="submit" variant="outline" name="intent" value="save">
               Save draft
             </Button>
-            <Button type="submit" name="intent" value="schedule">
+            <Button type="submit" size="lg" name="intent" value="schedule">
+              <SendIcon data-icon="inline-start" />
               Save & send
             </Button>
           </div>
@@ -106,7 +111,9 @@ export default async function CampaignPage({ params, searchParams }: { params: P
       <Card size="sm">
         <CardContent>
           <form action={sendTestEmailAction.bind(null, wid)} className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-sm text-muted-foreground">Preview it in your own inbox first.</span>
+            <span className="flex items-center gap-3 text-sm text-muted-foreground">
+              <IconTile icon={SendIcon} className="size-8 rounded-lg" /> Preview it in your own inbox first.
+            </span>
             <input type="hidden" name="back" value={`/app/w/${wid}/emails/campaigns/${id}`} />
             <input type="hidden" name="subject" value={c.subject} />
             <input type="hidden" name="body" value={c.body} />

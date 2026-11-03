@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeftIcon, SparklesIcon } from "lucide-react";
+import { ArrowLeftIcon, HistoryIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { getAutomation, recentRuns } from "@/server/automations";
 import { presetByKey } from "@/server/automationPresets";
@@ -13,7 +13,7 @@ import { AutomationAiBox } from "@/components/automation-ai";
 import type { AutomationAction, AutomationTrigger } from "@/lib/db/types";
 import { relativeTime } from "@/lib/util";
 import { cn } from "@/lib/utils";
-import { Callout, Flash, Locked, PageHead, Panel } from "@/components/ui";
+import { Callout, Flash, IconTile, Locked, MoreOptions, PageHead, Panel } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -42,6 +42,11 @@ export default async function AutomationPage({ params, searchParams }: { params:
           </Link>
         }
         title={existing?.name ?? preset!.name}
+        sub={
+          existing
+            ? "Change what starts it or what it does, then save. Switch it off any time."
+            : "Pick what starts it, then the steps in order. Read every email out loud. Nothing runs until you save."
+        }
       />
       <Flash searchParams={sp} />
       {ai ? (
@@ -75,14 +80,7 @@ export default async function AutomationPage({ params, searchParams }: { params:
           </div>
         </Callout>
       ) : existing ? (
-        <Panel
-          title={
-            <span className="flex items-center gap-2">
-              <SparklesIcon className="size-4 text-primary" /> Change it with AI
-            </span>
-          }
-          sub="Say what to change. Your AI rewrites the steps and shows you before anything is saved."
-        >
+        <MoreOptions icon={SparklesIcon} title="Change it with AI" sub="Say what to change. Your AI rewrites the steps and shows you before anything is saved.">
           <AutomationAiBox
             compact
             action={draftAutomationAction.bind(null, wid, existing.id)}
@@ -91,7 +89,7 @@ export default async function AutomationPage({ params, searchParams }: { params:
             pendingText="Your AI is changing it…"
             aiNote={whoBuilds(workspace)}
           />
-        </Panel>
+        </MoreOptions>
       ) : null}
       <AutomationBuilder
         key={ai ? sp.draft : "saved"}
@@ -109,9 +107,17 @@ export default async function AutomationPage({ params, searchParams }: { params:
       />
       {existing ? (
         <>
-          <Panel title="Recent runs">
+          <Panel icon={HistoryIcon} title="Recent runs" sub="Every time it fires, you see what it did here.">
             {runs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No runs yet.</p>
+              <div className="flex items-start gap-3 rounded-xl border border-dashed border-foreground/15 bg-muted/35 px-4 py-3.5">
+                <IconTile icon={HistoryIcon} tone={existing.active ? "success" : "muted"} className="size-8 rounded-lg" />
+                <div className="grid gap-0.5 text-sm">
+                  <span className="font-semibold">No runs yet</span>
+                  <span className="text-muted-foreground">
+                    {existing.active ? "It's on and waiting. The first time its trigger happens, the run shows up here." : "It's switched off. Turn it on above and save, and runs show up here."}
+                  </span>
+                </div>
+              </div>
             ) : (
               <Table>
                 <TableHeader>
@@ -143,14 +149,14 @@ export default async function AutomationPage({ params, searchParams }: { params:
               </Table>
             )}
           </Panel>
-          <Panel>
+          <MoreOptions icon={Trash2Icon} title="Delete this automation" sub="Running steps stop. Switching it off is usually enough.">
             <form action={deleteAutomationAction.bind(null, wid, existing.id)} className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-sm text-muted-foreground">Delete this automation. Running steps stop.</span>
+              <span className="text-sm text-muted-foreground">This can&apos;t be undone.</span>
               <SubmitButton variant="destructive" confirm="Yes, delete">
                 Delete
               </SubmitButton>
             </form>
-          </Panel>
+          </MoreOptions>
         </>
       ) : null}
     </>

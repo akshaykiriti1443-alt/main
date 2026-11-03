@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarIcon, Share2Icon } from "lucide-react";
+import { CalendarIcon, PenLineIcon, Share2Icon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { listConnections } from "@/server/inbox";
 import { listPosts } from "@/server/social";
@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 const STATUS_CLASS: Record<string, string> = {
   published: "bg-success-soft text-success",
   failed: "bg-destructive/10 text-destructive",
-  scheduled: "bg-warning-soft text-warning",
+  scheduled: "bg-accent text-accent-foreground",
 };
 
 export default async function SocialPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
@@ -39,27 +39,31 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
   const names = new Map(connections.map((c) => [c.id, c.name]));
   return (
     <>
-      <PageHead title="Social planner" sub="Schedule posts to your Instagram and Facebook Page. Instagram posts need an image link." />
+      <PageHead
+        title="Social planner"
+        sub="Write once, post to your Instagram and Facebook Page on a schedule. Instagram posts need an image link."
+        first={postable.length === 0 ? "Connect Instagram and Facebook in Settings. Then you can schedule." : "Write a caption, pick a time, press Schedule post."}
+      />
       <Flash searchParams={await searchParams} />
       {postable.length === 0 ? (
         <Empty
           icon={Share2Icon}
           title="Connect an account first"
-          body="Connect Instagram and Facebook in Settings to start posting."
+          body="Hook up Instagram and your Facebook Page in Settings. Takes about a minute, and then posts go out while you sleep."
           action={
-            <Button asChild>
+            <Button asChild size="lg">
               <Link href={`/app/w/${wid}/settings#channels`}>Connect accounts</Link>
             </Button>
           }
         />
       ) : (
-        <Panel title="New post">
+        <Panel icon={PenLineIcon} title="New post" sub="Hook first. Then value. Then a call to action.">
           <form action={schedulePostAction.bind(null, wid)} className="flex flex-col gap-4">
             <Field>
               <FieldLabel htmlFor="caption">Caption</FieldLabel>
               <Textarea id="caption" name="caption" rows={5} maxLength={2200} placeholder="Hook first. Then value. Then a call to action: link in bio." />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 @xl/main:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="mediaUrl">Image link</FieldLabel>
                 <Input id="mediaUrl" name="mediaUrl" type="url" placeholder="https://…/image.jpg" />
@@ -75,7 +79,7 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
               <legend className="mb-2 text-sm font-medium">Post to</legend>
               <div className="flex flex-wrap gap-2">
                 {postable.map((c) => (
-                  <Label key={c.id} className="cursor-pointer rounded-lg border px-3 py-2 font-normal has-checked:border-primary/40 has-checked:bg-accent">
+                  <Label key={c.id} className="cursor-pointer rounded-xl border bg-card px-3 py-2 font-normal has-checked:border-primary/40 has-checked:bg-accent">
                     <input type="checkbox" name="connectionIds" value={c.id} defaultChecked className="size-4 accent-primary" />
                     {c.name}
                     <span className="text-xs text-muted-foreground">({c.kind === "instagram" ? "Instagram" : "Facebook"})</span>
@@ -84,14 +88,16 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
               </div>
             </fieldset>
             <div>
-              <SubmitButton>Schedule post</SubmitButton>
+              <SubmitButton size="lg">Schedule post</SubmitButton>
             </div>
           </form>
         </Panel>
       )}
-      <Panel title="Posts">
+      {/* Nothing connected and nothing posted: one empty state is enough. */}
+      {postable.length === 0 && posts.length === 0 ? null : (
+      <Panel icon={CalendarIcon} tone="muted" title="Posts">
         {posts.length === 0 ? (
-          <Empty icon={CalendarIcon} title="No posts yet" />
+          <Empty icon={CalendarIcon} tone="muted" title="No posts yet" body="Scheduled and published posts show up here, with how each one went." />
         ) : (
           <Table>
             <TableHeader>
@@ -132,6 +138,7 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
           </Table>
         )}
       </Panel>
+      )}
     </>
   );
 }

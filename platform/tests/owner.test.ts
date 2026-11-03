@@ -50,7 +50,9 @@ describe("Your path: the course as a guided flow", () => {
   it("starts at the launch kit, ticks steps off from real data and moves the next step on", async () => {
     const { ws, user } = await makeWorkspace();
     const fresh = await computePath({ ...ws, settings: { ...ws.settings, skoolUrl: "" } }, user.id);
-    expect(fresh.next?.key).toBe("kit");
+    // Connect your AI comes first, then the launch kit.
+    expect(fresh.next?.key).toBe("ai");
+    expect(fresh.stages[0].steps.map((x) => x.key)).toEqual(["app", "ai"]);
     expect(fresh.total).toBeGreaterThan(15);
     expect(fresh.stages.find((s) => s.key === "keep")?.steps.find((s) => s.key === "automations")?.locked).toBe("Growth plan");
 

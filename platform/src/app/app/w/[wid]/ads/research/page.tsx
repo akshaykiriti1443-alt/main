@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
-import { ExternalLinkIcon, FlameIcon, LightbulbIcon, SearchIcon, SparklesIcon, TargetIcon } from "lucide-react";
+import { ClipboardPasteIcon, ExternalLinkIcon, FlameIcon, LightbulbIcon, SearchIcon, SparklesIcon, TargetIcon, type LucideIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { aiGenerations } from "@/lib/db/schema";
 import { isUuid, relativeTime, truncate } from "@/lib/util";
+import { cn } from "@/lib/utils";
 import { requireWorkspace } from "@/server/tenancy";
 import { adLibraryConfigured, adLibraryWebUrl, searchAdLibraryFor, type LibraryAd } from "@/server/meta/adLibrary";
 import type { AdAnalysis } from "@/server/ai/adResearch";
-import { ANGLE_HINT, ANGLE_LABEL } from "@/server/ai/adFramework";
+import { ANGLE_HINT, ANGLE_LABEL, type AdAngle } from "@/server/ai/adFramework";
 import { adResearchAction } from "@/actions/adResearch";
-import { Callout, Empty, Flash, PageHead, Panel } from "@/components/ui";
+import { Callout, Empty, Flash, MoreOptions, PageHead, Panel, StepDot } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,14 @@ const COUNTRIES: [string, string][] = [
   ["NL", "Netherlands"],
   ["IE", "Ireland"],
 ];
+
+/** Each angle of the 3-Pack gets its own colour, so the three ads read as a set. */
+const ANGLE_TONE: Record<AdAngle, { bar: string; chip: string }> = {
+  pain: { bar: "bg-hot", chip: "bg-hot-soft text-hot" },
+  dream: { bar: "bg-gold", chip: "bg-gold-soft text-gold-foreground" },
+  lesson: { bar: "bg-primary", chip: "bg-accent text-accent-foreground" },
+  proof: { bar: "bg-success", chip: "bg-success-soft text-success" },
+};
 
 export default async function AdResearchPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
@@ -68,6 +77,9 @@ export default async function AdResearchPage({ params, searchParams }: { params:
   const analysisQuery = String((row?.input as { query?: unknown } | undefined)?.query ?? "");
   const searchNow = q || pageId;
   const oldAnalysis = Boolean(analysis && !isUuid(sp.analysis) && searchNow && searchNow !== analysisQuery);
+  const showResults = configured && Boolean(q || pageId) && !searchError;
+  // The guide points at one "Analyse with AI" button: the search results' one when there are ads, else the paste box's.
+  const libraryAnalyse = showResults && ads.length > 0;
   const hidden = (
     <>
       <input type="hidden" name="q" value={q} />
@@ -76,25 +88,66 @@ export default async function AdResearchPage({ params, searchParams }: { params:
     </>
   );
 
+  const pasteForm = (
+    <form action={adResearchAction.bind(null, wid)} className="flex flex-col gap-4">
+      {hidden}
+      <input type="hidden" name="source" value="paste" />
+      <Field>
+        <FieldLabel htmlFor="paste" className="sr-only">
+          Competitor ads
+        </FieldLabel>
+        <Textarea
+          id="paste"
+          name="paste"
+          rows={7}
+          placeholder={"[62 days] Tired of guessing what to eat? Inside our group…\n\n[14 days] Dads: 20 minutes, 3 times a week…"}
+          aria-label="Competitor ads"
+        />
+        <FieldDescription>Leave a blank line between ads. We study the patterns; your new ads are always written fresh, never copied.</FieldDescription>
+      </Field>
+      <div className="flex flex-wrap items-center gap-3">
+        {libraryAnalyse ? (
+          <SubmitButton variant="outline" pendingText="Reading the ads…">
+            Analyse pasted ads
+          </SubmitButton>
+        ) : (
+          <span data-guide="research-analyse" className="inline-flex rounded-xl">
+            <SubmitButton size="lg" pendingText="Reading the ads… (up to a minute)">
+              <SparklesIcon data-icon="inline-start" />
+              Analyse with AI
+            </SubmitButton>
+          </span>
+        )}
+        <span className="text-xs text-muted-foreground">Three or more ads gives the AI something to chew on.</span>
+      </div>
+    </form>
+  );
+
   return (
     <>
       <PageHead
-        eyebrow="Ads"
+        lesson="2.3"
+        stage="Stage 2"
         title="Ad research"
-        sub="See what your competitors are running right now in the Meta Ad Library. The ads that have run longest are usually the ones making money. AI reads them and writes your 3-Pack: a Pain, a Dream and a Lesson ad."
+        sub="Find the ads your competitors keep paying for, then let AI turn them into your 3-Pack: a Pain, a Dream and a Lesson ad."
+        first={configured ? "Search a keyword from your niche, then press Analyse with AI." : "Search the Meta Ad Library, copy a few long-running ads, paste them below and press Analyse with AI."}
       />
       <Flash searchParams={sp} />
 
-      <Panel title="Search the Ad Library" sub="A keyword from your niche (“fat loss for dads”), or a competitor's Facebook Page ID for everything they run.">
+      <Panel
+        step={1}
+        title="Find ads that have run a long time"
+        sub="Search a keyword from your niche (“fat loss for dads”). Ads running for 30+ days are usually the ones making money."
+      >
         {!configured ? (
-          <Callout tone="info" title="Live search isn't switched on yet">
-            Open the Ad Library, copy the ads you like into the box below, and AI does the rest.
+          <Callout tone="tip" title="Live search isn't switched on yet">
+            No problem. The button below opens the same search on Meta&apos;s website. Copy the ads you like and paste them in step 2.
             {user.isPlatformAdmin ? " (Platform admin: set META_AD_LIBRARY_TOKEN to turn it on.)" : ""}
           </Callout>
         ) : null}
         {/* Without live search the form opens the same search on Meta's website in a new tab. */}
         <form
-          className={`grid gap-3 sm:items-end ${configured ? "sm:grid-cols-[2fr_1fr_1fr_auto]" : "sm:grid-cols-[2fr_1fr_auto]"}`}
+          className={cn("grid gap-3 @2xl/main:items-end", configured ? "@2xl/main:grid-cols-[2fr_1fr_1fr_auto]" : "@2xl/main:grid-cols-[2fr_1fr_auto]")}
           {...(configured ? {} : { action: "https://www.facebook.com/ads/library/", method: "get", target: "_blank", rel: "noreferrer" })}
         >
           {configured ? null : (
@@ -113,14 +166,15 @@ export default async function AdResearchPage({ params, searchParams }: { params:
             <Field>
               <FieldLabel htmlFor="pageId">Competitor Page ID</FieldLabel>
               <Input id="pageId" name="pageId" defaultValue={pageIdRaw} inputMode="numeric" placeholder="Optional" aria-invalid={pageIdError ? true : undefined} />
-              <FieldDescription>In the Ad Library, open the competitor&apos;s ads; the number after view_all_page_id= in the address bar is their Page ID.</FieldDescription>
             </Field>
           ) : null}
           <Field>
             <FieldLabel htmlFor="country">Country</FieldLabel>
             <NativeSelect id="country" name="country" defaultValue={country}>
               {COUNTRIES.map(([c, label]) => (
-                <NativeSelectOption key={c} value={c}>{label}</NativeSelectOption>
+                <NativeSelectOption key={c} value={c}>
+                  {label}
+                </NativeSelectOption>
               ))}
             </NativeSelect>
           </Field>
@@ -130,39 +184,38 @@ export default async function AdResearchPage({ params, searchParams }: { params:
               Search
             </Button>
           ) : (
-            <Button type="submit">
+            <Button type="submit" variant="outline">
               Search in Meta Ad Library
               <ExternalLinkIcon data-icon="inline-end" />
             </Button>
           )}
         </form>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Button asChild variant="outline" size="sm">
-            <a href={webUrl} target="_blank" rel="noreferrer">
-              Open in Meta Ad Library <ExternalLinkIcon data-icon="inline-end" />
-            </a>
-          </Button>
-          <span className="text-muted-foreground">The website shows every active ad, in every country, with images and videos.</span>
-        </div>
         {configured ? (
-          <p className="text-xs text-muted-foreground">
-            Meta&apos;s API returns ads that reached the EU, plus political ads. For ads shown only in your country, use the website link and paste them below.
-          </p>
+          <>
+            <p className="text-xs text-muted-foreground">
+              Competitor Page ID: in the Ad Library, open their ads; the number after view_all_page_id= in the address bar is it. Meta&apos;s API returns ads that reached the EU, plus political ads. For ads shown only in your country, use{" "}
+              <a href={webUrl} target="_blank" rel="noreferrer">
+                the Ad Library website
+              </a>{" "}
+              and paste them below.
+            </p>
+          </>
         ) : null}
         {pageIdError ? <Callout tone="error">{pageIdError}</Callout> : null}
         {searchError ? <Callout tone="error">{searchError}</Callout> : null}
       </Panel>
 
-      {configured && (q || pageId) && !searchError ? (
+      {showResults ? (
         <Panel
+          step={2}
           title={`${ads.length} active ad${ads.length === 1 ? "" : "s"}${ads.length > 30 ? " (showing 30)" : ""}`}
-          sub="Longest-running first. 🔥 = running 30+ days."
+          sub="Longest-running first. The flame means it has run 30+ days."
           action={
             ads.length ? (
-              <form action={adResearchAction.bind(null, wid)}>
+              <form action={adResearchAction.bind(null, wid)} data-guide="research-analyse">
                 {hidden}
                 <input type="hidden" name="source" value="library" />
-                <SubmitButton size="sm" pendingText="Reading the ads…">
+                <SubmitButton pendingText="Reading the ads…">
                   <SparklesIcon data-icon="inline-start" />
                   Analyse with AI
                 </SubmitButton>
@@ -171,14 +224,25 @@ export default async function AdResearchPage({ params, searchParams }: { params:
           }
         >
           {ads.length === 0 ? (
-            <Empty icon={SearchIcon} title="Nothing found" body="Try a broader keyword, or open the Ad Library website." />
+            <Empty
+              icon={SearchIcon}
+              title="Nothing found"
+              body="Try a broader keyword, or search the Ad Library website and paste what you find."
+              action={
+                <Button asChild variant="outline">
+                  <a href={webUrl} target="_blank" rel="noreferrer">
+                    Open the Ad Library <ExternalLinkIcon data-icon="inline-end" />
+                  </a>
+                </Button>
+              }
+            />
           ) : (
-            <ul className="grid gap-3 md:grid-cols-2">
+            <ul className="grid gap-3 @2xl/main:grid-cols-2">
               {ads.slice(0, 30).map((a) => (
-                <li key={a.id} className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+                <li key={a.id} className="flex flex-col gap-2 rounded-xl border bg-background/60 p-3.5 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate font-medium">{a.pageName || "Unknown page"}</span>
-                    <Badge variant="secondary" className={a.daysRunning >= 30 ? "bg-warning-soft text-warning" : undefined}>
+                    <span className="truncate font-semibold">{a.pageName || "Unknown page"}</span>
+                    <Badge variant="secondary" className={a.daysRunning >= 30 ? "bg-hot-soft text-hot" : undefined}>
                       {a.daysRunning >= 30 ? <FlameIcon data-icon="inline-start" /> : null}
                       {a.daysRunning} days
                     </Badge>
@@ -187,7 +251,9 @@ export default async function AdResearchPage({ params, searchParams }: { params:
                   <p className="whitespace-pre-line text-muted-foreground">{truncate(a.bodies[0] ?? "", 320)}</p>
                   <div className="mt-auto flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>{a.platforms.join(", ").toLowerCase()}</span>
-                    <a href={a.snapshotUrl} target="_blank" rel="noreferrer">View ad</a>
+                    <a href={a.snapshotUrl} target="_blank" rel="noreferrer">
+                      View ad
+                    </a>
                   </div>
                 </li>
               ))}
@@ -196,20 +262,15 @@ export default async function AdResearchPage({ params, searchParams }: { params:
         </Panel>
       ) : null}
 
-      <form action={adResearchAction.bind(null, wid)}>
-        {hidden}
-        <input type="hidden" name="source" value="paste" />
-        <Panel
-          title="Paste ads you found"
-          sub="From the Ad Library website: copy each ad's text. Leave a blank line between ads. Add how long it has run, like [45 days], if you can see it."
-          action={<SubmitButton size="sm" variant="outline" pendingText="Reading the ads…">Analyse pasted ads</SubmitButton>}
-        >
-          <Field>
-            <Textarea name="paste" rows={6} placeholder={"[62 days] Tired of guessing what to eat? Inside our group…\n\n[14 days] Dads: 20 minutes, 3 times a week…"} aria-label="Competitor ads" />
-            <FieldDescription>We study patterns. Your new ads are always written fresh, never copied.</FieldDescription>
-          </Field>
+      {configured ? (
+        <MoreOptions icon={ClipboardPasteIcon} title="Or paste ads you found yourself" sub="Copy each ad's text from the Ad Library website. Add how long it ran, like [45 days], if you can see it.">
+          {pasteForm}
+        </MoreOptions>
+      ) : (
+        <Panel step={2} title="Paste them here, then let AI read them" sub="Copy each ad's text from the Ad Library. Add how long it has run, like [45 days], if you can see it.">
+          {pasteForm}
         </Panel>
-      </form>
+      )}
 
       {analysis && row ? (
         <>
@@ -218,61 +279,117 @@ export default async function AdResearchPage({ params, searchParams }: { params:
               Click Analyse with AI to redo it for this search.
             </Callout>
           ) : null}
-          <Panel title="What's working in your niche" sub={`Based on ${analysisQuery || "pasted ads"} · ${relativeTime(row.createdAt)}. ${analysis.summary}`}>
-            <div className="grid gap-4 md:grid-cols-2">
+          <Panel
+            icon={LightbulbIcon}
+            tone="gold"
+            title="What's working in your niche"
+            sub={`Based on ${analysisQuery || "pasted ads"} · ${relativeTime(row.createdAt)}. ${analysis.summary}`}
+          >
+            <div className="grid gap-3 @2xl/main:grid-cols-2">
               <List icon={FlameIcon} title="Likely winners" items={analysis.winners.map((w) => `${w.page} (${w.daysRunning} days): ${w.why}`)} />
               <List icon={TargetIcon} title="Hooks they open with" items={analysis.hooks} />
               <List icon={LightbulbIcon} title="Angles" items={analysis.angles} />
               <List icon={SparklesIcon} title="Gaps nobody uses yet" items={analysis.gaps} />
+              {analysis.offers.length ? <List icon={TargetIcon} title="What the click gets you" items={analysis.offers} /> : null}
             </div>
-            {analysis.offers.length ? <List icon={TargetIcon} title="What the click gets you" items={analysis.offers} /> : null}
           </Panel>
-          <Panel title="Your 3-Pack" sub="Pain, Dream and Lesson, each built as Hook · Turn · Door. Point them at your Skool link (Growth ladder) and launch all three at your budget tier.">
-            <div className="grid gap-3 lg:grid-cols-3">
+          <Panel
+            icon={SparklesIcon}
+            title="Your 3-Pack"
+            sub="Pain, Dream and Lesson, each built as Hook · Turn · Door. Point them at your Skool link (Growth ladder) and launch all three at your budget tier."
+          >
+            <div className="grid gap-3 @3xl/main:grid-cols-3">
               {analysis.drafts.map((d, i) => {
                 const legacy = d as unknown as { primaryText?: string };
                 const body = legacy.primaryText ?? [d.hook, d.turn, d.door].filter(Boolean).join("\n\n");
                 const text = `${body}\n\nHeadline: ${d.headline}`;
+                const tone = d.angle ? ANGLE_TONE[d.angle] : ANGLE_TONE.lesson;
                 return (
-                  <div key={i} className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
-                    <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      {d.angle ? `${ANGLE_LABEL[d.angle]} · ${ANGLE_HINT[d.angle]}` : `Ad ${i + 1}`}
-                    </span>
+                  <div key={i} className="relative flex flex-col gap-3 overflow-hidden rounded-xl border bg-background/60 p-4 pt-5 text-sm">
+                    <span className={cn("absolute inset-x-0 top-0 h-1", tone.bar)} aria-hidden />
+                    <span className={cn("w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold", tone.chip)}>{d.angle ? ANGLE_LABEL[d.angle] : `Ad ${i + 1}`}</span>
+                    {d.angle ? <span className="-mt-1.5 text-xs text-muted-foreground">{ANGLE_HINT[d.angle]}</span> : null}
                     {d.turn ? (
-                      <dl className="flex flex-col gap-1.5">
-                        <div><dt className="inline font-semibold">Hook: </dt><dd className="inline">{d.hook}</dd></div>
-                        <div><dt className="inline font-semibold">Turn: </dt><dd className="inline">{d.turn}</dd></div>
-                        <div><dt className="inline font-semibold">Door: </dt><dd className="inline">{d.door}</dd></div>
+                      <dl className="flex flex-col gap-2">
+                        {(
+                          [
+                            ["Hook", d.hook],
+                            ["Turn", d.turn],
+                            ["Door", d.door],
+                          ] as const
+                        ).map(([k, v]) => (
+                          <div key={k} className="grid gap-0.5">
+                            <dt className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">{k}</dt>
+                            <dd>{v}</dd>
+                          </div>
+                        ))}
                       </dl>
                     ) : (
                       <p className="whitespace-pre-line">{body}</p>
                     )}
-                    <span><b>Headline:</b> {d.headline}</span>
-                    <span className="text-muted-foreground"><b>Creative:</b> {d.creativeIdea}</span>
+                    <div className="grid gap-1 border-t pt-2.5">
+                      <span>
+                        <b>Headline:</b> {d.headline}
+                      </span>
+                      <span className="text-muted-foreground">
+                        <b className="text-foreground">Creative:</b> {d.creativeIdea}
+                      </span>
+                    </div>
                     <CopyButton text={text} label="Copy ad" className="mt-auto self-start" />
                   </div>
                 );
               })}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Then check results in <Link href={`/app/w/${wid}/ads`}>Ad review</Link> after 72 hours.
-            </p>
+            <Callout tone="tip">
+              Launch all three, then come back after 72 hours and check them in <Link href={`/app/w/${wid}/ads`}>Ad review</Link>.
+            </Callout>
           </Panel>
         </>
-      ) : null}
+      ) : (
+        <ThreePackPreview />
+      )}
     </>
   );
 }
 
-function List({ icon: Icon, title, items }: { icon: typeof FlameIcon; title: string; items: string[] }) {
+/** Before the first analysis: a ghost of what you'll get, so the payoff is visible. */
+function ThreePackPreview() {
+  return (
+    <section aria-label="What you'll get" className="flex flex-col gap-3 rounded-2xl border border-dashed border-foreground/15 bg-muted/35 p-5">
+      <div className="flex items-start gap-3">
+        <StepDot n={3} />
+        <div className="grid gap-0.5">
+          <h2 className="text-[17px]">Your 3-Pack lands here</h2>
+          <p className="text-sm text-muted-foreground">Three ready-to-run ads, each built as Hook · Turn · Door, plus what&apos;s working in your niche.</p>
+        </div>
+      </div>
+      <div aria-hidden className="grid gap-3 @2xl/main:grid-cols-3">
+        {(["pain", "dream", "lesson"] as const).map((k) => (
+          <div key={k} className="relative flex flex-col gap-2.5 overflow-hidden rounded-xl bg-card p-4 pt-5 shadow-card ring-1 ring-foreground/[0.06]">
+            <span className={cn("absolute inset-x-0 top-0 h-1", ANGLE_TONE[k].bar)} />
+            <span className={cn("w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold", ANGLE_TONE[k].chip)}>{ANGLE_LABEL[k]}</span>
+            <span className="h-2 w-11/12 rounded-full bg-foreground/10" />
+            <span className="h-2 w-3/4 rounded-full bg-foreground/10" />
+            <span className="h-2 w-5/6 rounded-full bg-foreground/[0.07]" />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function List({ icon: Icon, title, items }: { icon: LucideIcon; title: string; items: string[] }) {
   if (!items.length) return null;
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium">{title}</span>
+    <div className="flex flex-col gap-2.5 rounded-xl bg-muted/50 p-3.5">
+      <span className="flex items-center gap-2 text-sm font-semibold">
+        <Icon className="size-4 text-primary" aria-hidden />
+        {title}
+      </span>
       <ul className="flex flex-col gap-1.5 text-sm">
         {items.map((it) => (
           <li key={it} className="flex gap-2">
-            <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
+            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary/50" aria-hidden />
             <span>{it}</span>
           </li>
         ))}

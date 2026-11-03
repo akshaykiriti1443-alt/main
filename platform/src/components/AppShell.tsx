@@ -11,6 +11,8 @@ export async function AppShell({
   places = [],
   user,
   banner,
+  headerExtra,
+  companion,
   children,
 }: {
   brand: ShellBrand;
@@ -18,6 +20,10 @@ export async function AppShell({
   places?: Place[];
   user: ShellUser;
   banner?: ReactNode;
+  /** Small controls in the top bar, before the theme toggle (e.g. the guide button). */
+  headerExtra?: ReactNode;
+  /** The step-by-step guide, floating over every page. */
+  companion?: ReactNode;
   children: ReactNode;
 }) {
   const defaultOpen = (await cookies()).get("sidebar_state")?.value !== "false";
@@ -25,12 +31,14 @@ export async function AppShell({
     <SidebarProvider defaultOpen={defaultOpen}>
       <AppSidebar brand={brand} groups={groups} places={places} user={user} />
       <SidebarInset className="min-w-0">
-        <AppHeader brand={brand} groups={groups} places={places} />
-        <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-6 px-4 pt-6 pb-16 md:px-8 md:pt-8">
+        <AppHeader brand={brand} groups={groups} places={places} extra={headerExtra} />
+        {/* A container, so page grids respond to the real width (the guide docks beside it on wide screens). */}
+        <div className="@container/main mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-7 px-4 pt-7 pb-20 md:px-10 md:pt-10">
           {banner}
           {children}
         </div>
       </SidebarInset>
+      {companion}
     </SidebarProvider>
   );
 }

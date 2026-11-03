@@ -41,9 +41,10 @@ export default async function InboxPage({ params, searchParams }: { params: Prom
     <>
       <PageHead
         title="Inbox"
-        sub="Hot leads float to the top. AI drafts a reply; you review and send."
+        sub="Every DM, WhatsApp and text in one place. Hot leads float to the top, AI drafts a reply, you send it."
+        first={list.length === 0 && !active && status === "open" ? "Connect Instagram or Facebook in Settings, and new DMs land here." : undefined}
         actions={
-          <nav className="inline-flex items-center gap-1 rounded-lg bg-muted p-1" aria-label="Conversation status">
+          <nav className="inline-flex items-center gap-1 rounded-xl bg-muted p-1 ring-1 ring-foreground/[0.05]" aria-label="Conversation status">
             {(
               [
                 ["open", "Open", `/app/w/${wid}/inbox`],
@@ -55,7 +56,7 @@ export default async function InboxPage({ params, searchParams }: { params: Prom
                 variant="ghost"
                 size="sm"
                 asChild
-                className={cn(status === key ? "bg-background text-foreground shadow-sm hover:bg-background dark:bg-input/40" : "text-muted-foreground")}
+                className={cn("rounded-lg", status === key ? "bg-card text-foreground shadow-card hover:bg-card dark:bg-input/40" : "text-muted-foreground")}
               >
                 <Link href={href} aria-current={status === key ? "page" : undefined}>
                   {label}
@@ -67,19 +68,33 @@ export default async function InboxPage({ params, searchParams }: { params: Prom
       />
       <Flash searchParams={sp} />
       {list.length === 0 && !active ? (
-        <Empty
-          icon={InboxIcon}
-          title={status === "open" ? "No conversations yet" : "No closed conversations"}
-          body="Connect Instagram, Facebook, WhatsApp or SMS in Settings. New messages appear here."
-          action={
-            <Button asChild>
-              <Link href={`/app/w/${wid}/settings#channels`}>Connect a channel</Link>
-            </Button>
-          }
-        />
+        status === "open" ? (
+          <Empty
+            icon={InboxIcon}
+            title="Your DMs, all in one place"
+            body="Connect Instagram, Facebook, WhatsApp or SMS. New messages land here with the hottest leads on top, so nobody waits three days for a reply."
+            action={
+              <Button asChild size="lg">
+                <Link href={`/app/w/${wid}/settings#channels`}>Connect a channel</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <Empty
+            icon={InboxIcon}
+            tone="muted"
+            title="No closed conversations"
+            body="When you close a conversation it moves here, out of your way."
+            action={
+              <Button asChild variant="outline">
+                <Link href={`/app/w/${wid}/inbox`}>Back to open</Link>
+              </Button>
+            }
+          />
+        )
       ) : (
-        <div className="grid min-h-[560px] grid-cols-1 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 md:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="max-h-[260px] overflow-y-auto border-b md:max-h-[72vh] md:border-r md:border-b-0">
+        <div className="grid min-h-[560px] grid-cols-1 overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-foreground/[0.07] @2xl/main:grid-cols-[280px_minmax(0,1fr)] @4xl/main:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="max-h-[260px] overflow-y-auto border-b @2xl/main:max-h-[72vh] @2xl/main:border-r @2xl/main:border-b-0">
             {sorted.map(({ conversation: c, contact }) => {
               const isActive = c.id === activeId;
               return (
@@ -89,7 +104,7 @@ export default async function InboxPage({ params, searchParams }: { params: Prom
                   aria-current={isActive ? "true" : undefined}
                   className={cn(
                     "block border-b px-3.5 py-3 text-foreground transition-colors last:border-b-0 hover:bg-muted/60 hover:no-underline",
-                    isActive && "bg-accent hover:bg-accent",
+                    isActive && "bg-accent shadow-[inset_3px_0_0_var(--primary)] hover:bg-accent",
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -108,11 +123,8 @@ export default async function InboxPage({ params, searchParams }: { params: Prom
           </div>
           <div className="flex min-w-0 flex-col">
             {!active ? (
-              <div className="grid flex-1 place-items-center p-8 text-center text-sm text-muted-foreground">
-                <div className="flex flex-col items-center gap-2">
-                  <MessageSquareIcon className="size-6" aria-hidden />
-                  Pick a conversation.
-                </div>
+              <div className="grid flex-1 place-items-center p-8">
+                <Empty icon={MessageSquareIcon} tone="muted" className="border-0 bg-transparent" title="Pick a conversation" body="Hot leads are at the top of the list." />
               </div>
             ) : (
               <>
@@ -138,8 +150,8 @@ export default async function InboxPage({ params, searchParams }: { params: Prom
                     <div key={m.id} className={cn("flex flex-col gap-1", m.direction === "in" ? "items-start" : "items-end")}>
                       <div
                         className={cn(
-                          "max-w-[85%] rounded-2xl px-3 py-2 text-sm break-words whitespace-pre-wrap sm:max-w-[75%]",
-                          m.direction === "in" ? "rounded-bl-sm bg-card ring-1 ring-foreground/10" : "rounded-br-sm bg-primary text-primary-foreground",
+                          "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm break-words whitespace-pre-wrap @2xl/main:max-w-[75%]",
+                          m.direction === "in" ? "rounded-bl-sm bg-card shadow-card ring-1 ring-foreground/[0.07]" : "rounded-br-sm bg-primary text-primary-foreground shadow-press",
                         )}
                       >
                         {m.body}

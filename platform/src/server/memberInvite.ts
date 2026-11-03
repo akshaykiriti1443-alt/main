@@ -1,16 +1,11 @@
-import { env } from "@/lib/env";
+import { platformInviteUrl, postSkoolInvite } from "./skoolInvite";
 
-// After a direct purchase, invite the buyer into the Skool community through an official path:
-// a Zapier catch hook wired to Skool's "Invite Member" action, or Skool's own Webhook plugin.
-// No Skool login is stored or used. Retries come from the job queue.
+// After a direct purchase on /join, invite the buyer into the platform owner's Skool community
+// through an official path: Skool's own Webhook plugin or a Zapier hook wired to "Invite Member".
+// The URL is set in Admin › Members (or SKOOL_INVITE_WEBHOOK_URL). Retries come from the job queue.
 export async function sendSkoolInvite(payload: Record<string, unknown>) {
-  if (!env.skoolInviteWebhookUrl) return;
-  const email = String(payload.email ?? "");
-  const [first, ...rest] = String(payload.name ?? "").trim().split(/\s+/);
-  const res = await fetch(env.skoolInviteWebhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, first_name: first ?? "", last_name: rest.join(" ") }),
-  });
-  if (!res.ok) throw new Error(`Skool invite webhook answered ${res.status}`);
+  const url = await platformInviteUrl();
+  if (!url) return;
+  const r = await postSkoolInvite(url, { email: String(payload.email ?? ""), name: String(payload.name ?? "") });
+  if (!r.ok) throw new Error(`Skool invite webhook answered ${r.status || "nothing"}`);
 }

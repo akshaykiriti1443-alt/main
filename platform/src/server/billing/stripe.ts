@@ -171,9 +171,8 @@ export async function handleStripeEvent(event: { id: string; type: string; creat
       const ref = obj.subscription ?? obj.id;
       if (await staleMemberEvent(email, ref, eventAt, true)) return;
       await grantAccess({ email, name: meta.member_name, channel: "stripe", until: addDays(new Date(), 35), ref, payload: stamp });
-      if (env.skoolInviteWebhookUrl) {
-        await enqueue("member.skool_invite", { email, name: meta.member_name ?? "" }, { dedupeKey: `skool-invite:${email}` });
-      }
+      // Pay here, get access there: the job invites them to the Skool group if a webhook is set.
+      await enqueue("member.skool_invite", { email, name: meta.member_name ?? "" }, { dedupeKey: `skool-invite:${email}` });
       return;
     }
     if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {

@@ -15,15 +15,16 @@ export default async function EditPage({ params }: { params: Promise<{ wid: stri
   if (!site || !page || page.siteId !== site.id) notFound();
   return (
     <>
+      <Link href={`/app/w/${wid}/sites/${siteId}`} className="-mb-4 inline-flex w-fit max-w-full items-center gap-1.5 truncate text-sm font-medium text-muted-foreground hover:text-foreground hover:no-underline">
+        <ArrowLeftIcon className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">Back to {site.name}</span>
+      </Link>
       <PageHead
-        eyebrow={
-          <Link href={`/app/w/${wid}/sites/${siteId}`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
-            <ArrowLeftIcon className="size-3.5" aria-hidden />
-            {site.name}
-          </Link>
-        }
+        lesson="1.3"
+        stage="Stage 1"
         title={`Edit: ${page.title}`}
-        sub="Changes show in the preview right away. Save, then publish the funnel to go live."
+        sub="Type on the left, watch the preview on the right. Save, then go back and publish the funnel to make it live."
+        first="Change the headline so it sounds like you. Three lines is plenty."
       />
       <PageEditor
         initialTitle={page.title}

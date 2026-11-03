@@ -93,6 +93,9 @@ export type WorkspaceSettings = {
   offer?: string;
   skoolUrl?: string;
   skoolMemberPrice?: number;
+  // Skool Pro's onboarding / cancellation videos, sent by email instead (works on Hobby).
+  onboardingVideoUrl?: string;
+  cancelVideoUrl?: string;
   mailingAddress?: string;
   replyToEmail?: string;
   timezone?: string;
@@ -103,6 +106,9 @@ export type WorkspaceSettings = {
   // Bring your own AI: when set, AI features run on this key and are not billed to the wallet.
   aiProvider?: "anthropic" | "openai" | "gemini" | "groq" | "openrouter" | "custom";
   aiKeyEnc?: string;
+  // Skool's Webhook plugin URL for this member's own group (encrypted; it can invite people).
+  skoolInviteEnc?: string;
+  skoolInviteHint?: string;
   aiKeyHint?: string;
   aiModel?: string;
   // Only for aiProvider "custom": an OpenAI-compatible base URL (https).
@@ -152,6 +158,8 @@ export const automationActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("only_if_temperature"), temperature: z.enum(["hot", "warm", "cold"]) }),
   // Hands a task to the owner's own AI (their API key, or their connected Claude/ChatGPT via MCP).
   z.object({ type: z.literal("ask_my_ai"), instruction: z.string().min(1).max(2000) }),
+  // Invites the contact into the owner's own Skool group through Skool's Webhook plugin.
+  z.object({ type: z.literal("skool_invite") }),
 ]);
 export type AutomationAction = z.infer<typeof automationActionSchema>;
 

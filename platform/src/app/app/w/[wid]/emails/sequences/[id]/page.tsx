@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, MailPlusIcon, SendIcon, SettingsIcon, Trash2Icon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { getSequenceWithSteps } from "@/server/email/sequences";
 import { deleteSequenceAction, saveSequenceAction, sendTestEmailAction } from "@/actions/marketing";
-import { Flash, PageHead, Panel } from "@/components/ui";
+import { Flash, MoreOptions, PageHead, Panel } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { SubmitButton } from "@/components/client";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -27,11 +28,11 @@ export default async function SequencePage({ params, searchParams }: { params: P
           </Link>
         }
         title={seq.name}
-        sub="Delays count from when the person joins the sequence. Leave an email's subject blank to remove it."
+        sub="A few emails in a row. Days count from when someone joins the sequence. Clear an email's subject to remove it."
       />
       <Flash searchParams={await searchParams} />
       <form action={saveSequenceAction.bind(null, wid, id)} className="flex flex-col gap-4">
-        <Panel title="Settings">
+        <Panel icon={SettingsIcon} tone="muted" title="Settings" sub="What starts it, and whether it's on.">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field className="sm:col-span-2">
               <FieldLabel htmlFor="name">Name</FieldLabel>
@@ -60,8 +61,10 @@ export default async function SequencePage({ params, searchParams }: { params: P
           return (
             <Panel
               key={s.id}
+              {...(isNew ? { icon: MailPlusIcon, tone: "muted" as const } : { step: i + 1 })}
               title={isNew ? "Add another email" : `Email ${i + 1}`}
-              className={isNew ? "bg-muted/30" : undefined}
+              sub={isNew ? "Optional. Leave the subject blank and nothing is added." : undefined}
+              className={cn(isNew && "border-2 border-dashed border-foreground/15 bg-muted/40 shadow-none ring-0")}
               action={
                 <Label className="font-normal text-muted-foreground">
                   Send on day
@@ -72,7 +75,7 @@ export default async function SequencePage({ params, searchParams }: { params: P
                     max={365}
                     step="0.5"
                     defaultValue={Math.round((s.delayMinutes / 1440) * 2) / 2}
-                    className="h-7 w-20 text-foreground"
+                    className="h-8 w-20 text-foreground"
                   />
                 </Label>
               }
@@ -94,31 +97,27 @@ export default async function SequencePage({ params, searchParams }: { params: P
           );
         })}
         <div>
-          <SubmitButton>Save sequence</SubmitButton>
+          <SubmitButton size="lg">Save sequence</SubmitButton>
         </div>
       </form>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <form action={sendTestEmailAction.bind(null, wid)}>
-          <Panel title="Send yourself a test of email 1" className="h-full">
-            <input type="hidden" name="back" value={`/app/w/${wid}/emails/sequences/${id}`} />
-            <input type="hidden" name="subject" value={seq.steps[0]?.subject ?? ""} />
-            <input type="hidden" name="body" value={seq.steps[0]?.body ?? ""} />
-            <div>
-              <SubmitButton variant="outline">Send test</SubmitButton>
-            </div>
-          </Panel>
-        </form>
+      <form action={sendTestEmailAction.bind(null, wid)}>
+        <Panel icon={SendIcon} title="Send yourself a test of email 1" sub="See it the way your leads will, in your own inbox.">
+          <input type="hidden" name="back" value={`/app/w/${wid}/emails/sequences/${id}`} />
+          <input type="hidden" name="subject" value={seq.steps[0]?.subject ?? ""} />
+          <input type="hidden" name="body" value={seq.steps[0]?.body ?? ""} />
+          <div>
+            <SubmitButton variant="outline">Send test</SubmitButton>
+          </div>
+        </Panel>
+      </form>
+      <MoreOptions icon={Trash2Icon} title="Delete sequence" sub="People in it stop getting these emails. Switching it off is usually enough.">
         <form action={deleteSequenceAction.bind(null, wid, id)}>
-          <Panel title="Delete sequence" sub="People in it stop getting these emails." className="h-full">
-            <div>
-              <SubmitButton variant="destructive" confirm="Yes, delete">
-                Delete
-              </SubmitButton>
-            </div>
-          </Panel>
+          <SubmitButton variant="destructive" confirm="Yes, delete">
+            Delete
+          </SubmitButton>
         </form>
-      </div>
+      </MoreOptions>
     </>
   );
 }

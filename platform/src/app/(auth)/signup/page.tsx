@@ -27,7 +27,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
             : `Included with your Skool membership. Sign up with your Skool email, click the link we send you${intro ? ", then say hi in the community" : ""}, and you're in.`
           : env.setupToken && !setup
             ? "Use the setup link from your server settings to claim this platform."
-            : "You're the first user, so you become the platform owner."
+            : "You're the first one here, so this account becomes the platform owner."
       }
     >
       <SignupForm member={count > 0} defaultEmail={email} setup={count === 0 ? setup : undefined} />

@@ -75,6 +75,15 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
         ...(opts.entryTicketOn && ws.accessSource === "member"
           ? [{ key: "hello", title: "Say hi in the community", why: "Your intro is your first post. Likes on it unlock your first bonus.", lesson: "0.4", href: `${base}/hello`, done: Boolean(s.entryClaimedAt) }]
           : []),
+        // First, because everything that writes for you works best on your own AI.
+        {
+          key: "ai",
+          title: "Connect your AI",
+          why: "For best results, link the AI you already use: your Claude or ChatGPT subscription works. No subscription? A free Gemini key does too.",
+          lesson: "0.4",
+          href: `${base}/ai`,
+          done: aiOn,
+        },
       ],
     },
     {
@@ -143,7 +152,6 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
           locked: growthPlan ? undefined : "Growth plan",
         },
         { key: "unlock", title: "Create your first Unlock", why: "A small reward for a post or comment. Engagement is what Skool ranks.", lesson: "6.4", href: `${base}/unlocks`, done: count(myUnlocks) > 0 },
-        { key: "ai", title: "Connect your own AI", why: "Claude, Gemini or ChatGPT does the boring bits, on your plan, not your wallet.", lesson: "6.5", href: `${base}/ai`, done: aiOn },
       ],
     },
     {

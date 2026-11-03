@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth";
-import { AuthShell } from "../AuthShell";
+import { AuthShell, type AuthAside } from "../AuthShell";
 import { LoginForm } from "../forms";
 import { Callout } from "@/components/ui";
 
@@ -13,14 +13,20 @@ const ERRORS: Record<string, string> = {
   "link-expired": "That link has expired. Log in and we'll help you get a new one.",
 };
 
+const ASIDE: AuthAside = {
+  eyebrow: "Welcome back",
+  title: "Your next step is right where you left it.",
+  points: ["Your path remembers where you stopped", "New leads, sorted hot to cold", "One next thing at a time, never a to-do list of 40"],
+};
+
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   if (await getCurrentUser()) redirect("/app");
   const { next, error } = await searchParams;
   const message = error && Object.hasOwn(ERRORS, error) ? ERRORS[error] : null;
   return (
-    <AuthShell title="Welcome back" sub="Log in to your funnels, leads and inbox.">
+    <AuthShell title="Welcome back" sub="Log in to your funnels, leads and Skool growth ladder." aside={ASIDE}>
       {message ? (
-        <Callout tone="error" className="mb-4">
+        <Callout tone="error" className="mb-5">
           {message}
         </Callout>
       ) : null}

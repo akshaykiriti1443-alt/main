@@ -19,7 +19,7 @@ function inline(s: string): string {
 }
 
 export function textToHtml(text: string): string {
-  const blocks = text.replace(/\r\n/g, "\n").split(/\n{2,}/);
+  const blocks = text.replace(/\r\n/g, "\n").split(/\n{2,}/).filter((b) => b.trim());
   return blocks
     .map((block) => {
       const lines = block.split("\n");

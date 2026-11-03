@@ -1,20 +1,23 @@
 "use client";
 
 import { useActionState } from "react";
+import { LinkIcon } from "lucide-react";
 import { createConnectorAction, type ConnectorState } from "@/actions/connectors";
 import { Callout } from "@/components/ui";
 import { CopyButton } from "@/components/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 
 // Shows the new connector URL exactly once. It works like a password.
 export function NewConnector({ wid }: { wid: string }) {
   const [state, action, pending] = useActionState<ConnectorState, FormData>(createConnectorAction.bind(null, wid), {});
   return (
     <div className="flex flex-col gap-3">
-      <form action={action} className="flex flex-wrap gap-2">
-        <Input name="name" placeholder="Name it, e.g. My Claude" className="w-full sm:max-w-56" aria-label="Connector name" />
-        <Button type="submit" variant="outline" disabled={pending}>
+      <form action={action} data-guide="ai-connect" className="flex flex-col gap-2 sm:flex-row">
+        <Input name="name" placeholder="Name it, e.g. My Claude" className="h-10 sm:max-w-60" aria-label="Connector name" />
+        <Button type="submit" disabled={pending} className="h-10">
+          {pending ? <Spinner data-icon="inline-start" /> : <LinkIcon data-icon="inline-start" />}
           {pending ? "Creating…" : "Create connector URL"}
         </Button>
       </form>

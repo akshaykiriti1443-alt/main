@@ -221,6 +221,11 @@ async function executeAction(
       }).catch((e: Error) => ({ ok: false, status: 0, statusText: e.message }) as const);
       return { kind: "next", message: `Webhook ${res.ok ? "sent" : `failed (${res.status} ${res.statusText})`}` };
     }
+    case "skool_invite": {
+      if (!contact) return { kind: "next", message: "No contact to invite" };
+      const { inviteContactToSkool } = await import("./skoolInvite");
+      return { kind: "next", message: await inviteContactToSkool(workspaceId, contact.id) };
+    }
     case "ask_my_ai": {
       const { createAiTask } = await import("./aiTasks");
       const r = await createAiTask({ workspaceId, contactId: contact?.id ?? null, instruction: action.instruction, source: automationName });
@@ -294,6 +299,7 @@ export const ACTION_LABELS: Record<AutomationAction["type"], string> = {
   webhook: "Send to a webhook (Zapier, Make)",
   only_if_temperature: "Continue only if lead is…",
   ask_my_ai: "Ask my AI (runs on your own AI)",
+  skool_invite: "Invite to my Skool group",
 };
 
 export const TRIGGER_LABELS: Record<AutomationTrigger["type"], string> = {

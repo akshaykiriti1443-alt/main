@@ -2,7 +2,7 @@
 
 import { useActionState, type ReactNode } from "react";
 import Link from "next/link";
-import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
+import { ArrowRightIcon, CircleAlertIcon, CircleCheckIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -13,14 +13,14 @@ import { forgotAction, joinAction, loginAction, resetAction, signupAction, verif
 function Msg({ state }: { state: FormState }) {
   if (state.error)
     return (
-      <Alert role="alert" className="border-destructive/25 bg-destructive/10 text-destructive">
+      <Alert role="alert" className="rounded-xl border-destructive/25 bg-destructive/10 px-4 py-3 text-destructive">
         <CircleAlertIcon />
         <AlertDescription className="text-destructive">{state.error}</AlertDescription>
       </Alert>
     );
   if (state.ok)
     return (
-      <Alert role="status" className="border-success/25 bg-success-soft text-success">
+      <Alert role="status" className="rounded-xl border-success/25 bg-success-soft px-4 py-3 text-success">
         <CircleCheckIcon />
         <AlertDescription className="text-success">{state.ok}</AlertDescription>
       </Alert>
@@ -30,9 +30,10 @@ function Msg({ state }: { state: FormState }) {
 
 function Submit({ pending, children, pendingText }: { pending: boolean; children: ReactNode; pendingText: string }) {
   return (
-    <Button type="submit" size="lg" className="h-10 w-full" disabled={pending}>
+    <Button type="submit" size="lg" className="mt-1 w-full" disabled={pending}>
       {pending ? <Spinner data-icon="inline-start" /> : null}
       {pending ? pendingText : children}
+      {pending ? null : <ArrowRightIcon data-icon="inline-end" />}
     </Button>
   );
 }
@@ -51,8 +52,8 @@ export function LoginForm({ next }: { next?: string }) {
         <Field>
           <div className="flex items-center justify-between">
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Link href="/forgot" className="text-sm">
-              Forgot password?
+            <Link href="/forgot" className="text-sm font-medium">
+              Forgot it?
             </Link>
           </div>
           <Input id="password" name="password" type="password" autoComplete="current-password" required />
@@ -61,7 +62,10 @@ export function LoginForm({ next }: { next?: string }) {
           Log in
         </Submit>
         <p className="text-center text-sm text-muted-foreground">
-          New here? <Link href="/signup">Create an account</Link>
+          New here?{" "}
+          <Link href="/signup" className="font-semibold">
+            Create your account
+          </Link>
         </p>
       </FieldGroup>
     </form>
@@ -80,14 +84,16 @@ export function SignupForm({ member, defaultEmail, setup }: { member: boolean; d
           <Input id="name" name="name" autoComplete="name" required autoFocus defaultValue={state.values?.name} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="businessName">Community or business name</FieldLabel>
+          <FieldLabel htmlFor="businessName">
+            Community or business name <span className="font-normal text-muted-foreground">(optional)</span>
+          </FieldLabel>
           <Input id="businessName" name="businessName" placeholder="Fit Dads Club" defaultValue={state.values?.businessName} />
         </Field>
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.values?.email ?? defaultEmail} />
           {member ? (
-            <FieldDescription>Use the same email as your Skool account (or the one you bought with). That&apos;s how we know you&apos;re a member.</FieldDescription>
+            <FieldDescription>Use the email from your Skool account (or the one you paid with). That&apos;s how we know it&apos;s you.</FieldDescription>
           ) : null}
         </Field>
         <Field>
@@ -99,7 +105,10 @@ export function SignupForm({ member, defaultEmail, setup }: { member: boolean; d
           Create my account
         </Submit>
         <p className="text-center text-sm text-muted-foreground">
-          Have an account? <Link href="/login">Log in</Link>
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold">
+            Log in
+          </Link>
         </p>
       </FieldGroup>
     </form>
@@ -119,8 +128,11 @@ export function ForgotForm() {
         <Submit pending={pending} pendingText="Sending…">
           Email me a reset link
         </Submit>
-        <p className="text-center text-sm">
-          <Link href="/login">Back to log in</Link>
+        <p className="text-center text-sm text-muted-foreground">
+          Remembered it?{" "}
+          <Link href="/login" className="font-semibold">
+            Back to log in
+          </Link>
         </p>
       </FieldGroup>
     </form>
@@ -175,13 +187,16 @@ export function JoinForm({ defaultEmail, priceLabel }: { defaultEmail?: string; 
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.values?.email ?? defaultEmail} />
-          <FieldDescription>Your account is tied to this email. Use the same one when you create your login. You'll confirm it by email once.</FieldDescription>
+          <FieldDescription>Your account follows this email. Use the same one when you create your login. We&apos;ll ask you to confirm it once.</FieldDescription>
         </Field>
         <Submit pending={pending} pendingText="Opening secure checkout…">
           {priceLabel ? `Continue to payment · ${priceLabel}` : "Continue to payment"}
         </Submit>
         <p className="text-center text-sm text-muted-foreground">
-          Already a member? <Link href="/signup">Create your login</Link>
+          Already a member?{" "}
+          <Link href="/signup" className="font-semibold">
+            Create your login
+          </Link>
         </p>
       </FieldGroup>
     </form>

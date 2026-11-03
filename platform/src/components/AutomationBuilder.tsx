@@ -31,6 +31,7 @@ const ACTION_LABELS: Record<ActionType, string> = {
   webhook: "Send to a webhook (Zapier, Make)",
   only_if_temperature: "Continue only if the lead is…",
   ask_my_ai: "Ask my AI (your Claude, ChatGPT or Gemini)",
+  skool_invite: "Invite to my Skool group",
 };
 
 const TRIGGERS: { value: AutomationTrigger["type"]; label: string; hint: string }[] = [
@@ -129,7 +130,8 @@ export function AutomationBuilder({
         </div>
       </Panel>
 
-      <Panel title={<StepTitle icon={ZapIcon} label="When this happens" />}>
+      <div className="flex flex-col">
+      <Panel title={<StepTitle icon={ZapIcon} label="When this happens" />} className="ring-1 ring-gold/40">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="ttype">Trigger</FieldLabel>
@@ -150,8 +152,9 @@ export function AutomationBuilder({
       </Panel>
 
       {actions.map((a, i) => (
+        <div key={i} className="flex flex-col">
+        <Connector />
         <Panel
-          key={i}
           title={<StepTitle step={i + 1} label={`Then: ${ACTION_LABELS[a.type]}`} />}
           action={
             <div className="flex items-center gap-1">
@@ -176,9 +179,12 @@ export function AutomationBuilder({
         >
           <ActionFields a={a} sequences={sequences} onChange={(patch) => setAction(i, patch)} />
         </Panel>
+        </div>
       ))}
+      <Connector />
 
-      <div className="flex flex-col gap-2 rounded-xl border border-dashed p-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 rounded-2xl border-2 border-dashed border-foreground/15 bg-muted/30 p-3.5 sm:flex-row sm:items-center">
+        <span className="text-sm font-semibold sm:mr-1">{actions.length ? "Then…" : "First step:"}</span>
         <NativeSelect className="w-full sm:w-72" value={addType} onChange={(e) => setAddType(e.target.value as ActionType)} aria-label="Step type">
           {(Object.keys(ACTION_LABELS) as ActionType[]).map((t) => (
             <NativeSelectOption key={t} value={t}>
@@ -191,9 +197,10 @@ export function AutomationBuilder({
           Add step
         </Button>
       </div>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={onSave} disabled={pending}>
+        <Button type="button" size="lg" onClick={onSave} disabled={pending}>
           {pending ? <Spinner data-icon="inline-start" /> : null}
           {pending ? "Saving…" : "Save automation"}
         </Button>
@@ -211,12 +218,22 @@ export function AutomationBuilder({
 function StepTitle({ label, step, icon: Icon }: { label: string; step?: number; icon?: LucideIcon }) {
   return (
     <span className="flex items-center gap-2.5">
-      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-xs font-semibold text-accent-foreground tabular-nums">
+      <span
+        className={cn(
+          "grid size-7 shrink-0 place-items-center rounded-full font-heading text-[13px] font-bold tabular-nums",
+          Icon ? "bg-gold-soft text-gold-foreground ring-1 ring-gold/50" : "bg-primary text-primary-foreground",
+        )}
+      >
         {Icon ? <Icon className="size-3.5" /> : step}
       </span>
       {label}
     </span>
   );
+}
+
+/** The little line between steps, so the flow reads top to bottom. */
+function Connector() {
+  return <div aria-hidden className="ml-[33px] h-4 w-0.5 rounded-full bg-foreground/15" />;
 }
 
 function ActionFields({ a, sequences, onChange }: { a: AutomationAction; sequences: { id: string; name: string }[]; onChange: (p: Partial<AutomationAction>) => void }) {
@@ -287,6 +304,13 @@ function ActionFields({ a, sequences, onChange }: { a: AutomationAction; sequenc
           <NativeSelectOption value="warm">Warm</NativeSelectOption>
           <NativeSelectOption value="cold">Cold</NativeSelectOption>
         </NativeSelect>
+      );
+    case "skool_invite":
+      return (
+        <p className="text-sm text-muted-foreground">
+          Skool emails this person an invite to your group, through the Skool webhook you connect in <b>Skool members</b>. Each person is only invited once. On a paid
+          group, only invite people who&apos;ve already paid you.
+        </p>
       );
     default:
       return <p className="text-sm text-muted-foreground">No settings needed.</p>;

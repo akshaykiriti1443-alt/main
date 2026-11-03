@@ -51,6 +51,25 @@ export const AUTOMATION_PRESETS: AutomationPreset[] = [
       actions: [{ type: "add_tag", tag: "new-lead" }, { type: "wait", minutes: 1440 }, { type: "set_stage", stage: "engaged" }],
     },
   },
+  {
+    key: "skool-invite-leads",
+    title: "Invite new leads to your Skool group",
+    body: "Someone grabs your free guide and Skool emails them an invite straight away. Best for free or freemium groups. Needs your Skool webhook.",
+    group: "Leads",
+    def: {
+      name: "Invite new leads to Skool",
+      trigger: { type: "lead_created", value: "" },
+      actions: [
+        { type: "skool_invite" },
+        { type: "wait", minutes: 1440 },
+        {
+          type: "send_email",
+          subject: "Your invite to {{business_name}} is waiting",
+          body: "Hey {{first_name}},\n\nSkool sent you an invite to {{business_name}} yesterday. It's in your inbox from Skool (check spam if not).\n\nOne tap and you're in. Say hi in the Community tab and tell us what you're working on.\n\n{{owner_name}}",
+        },
+      ],
+    },
+  },
   // --- Skool lifecycle ---
   {
     key: "skool-welcome",
@@ -61,7 +80,7 @@ export const AUTOMATION_PRESETS: AutomationPreset[] = [
       name: "Welcome a new Skool member",
       trigger: { type: "stage_changed", value: "member" },
       actions: [
-        { type: "send_email", subject: "Welcome in, {{first_name}} 🎉", body: "Hey {{first_name}},\n\nWelcome to {{business_name}}! So glad you're here.\n\nStart with the Start Here lesson in the classroom today. Reply and tell me your #1 goal and I'll point you to the right place.\n\nSee you inside." },
+        { type: "send_email", subject: "Welcome in, {{first_name}} 🎉", body: "Hey {{first_name}},\n\nWelcome to {{business_name}}! So glad you're here.\n\n{{onboarding_video_line}}\n\nStart with the Start Here lesson in the classroom today. Reply and tell me your #1 goal and I'll point you to the right place.\n\nSee you inside." },
         { type: "notify_owner", message: "New paid member. Open their lead and send a personal Skool welcome with the AI assist." },
       ],
     },
@@ -91,7 +110,7 @@ export const AUTOMATION_PRESETS: AutomationPreset[] = [
       trigger: { type: "tag_added", value: "skool-cancelling" },
       actions: [
         { type: "notify_owner", message: "A member is cancelling but still has access. Open their lead and send a save message with the AI assist." },
-        { type: "send_email", subject: "Did we miss something, {{first_name}}?", body: "Hey {{first_name}},\n\nI saw you cancelled, and that's okay. Quick question so I can do better: what made it not click?\n\nIf there's a way to make it right, I'm on it." },
+        { type: "send_email", subject: "Did we miss something, {{first_name}}?", body: "Hey {{first_name}},\n\nI saw you cancelled, and that's okay. Quick question so I can do better: what made it not click?\n\n{{cancel_video_line}}\n\nIf there's a way to make it right, I'm on it." },
       ],
     },
   },

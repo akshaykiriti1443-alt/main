@@ -5,7 +5,8 @@ import { entryTicketPending, getEntryTicket } from "@/server/unlocks";
 import { env } from "@/lib/env";
 import { entryTicketAction } from "@/actions/unlocks";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { StepDot } from "@/components/ui";
 import { EntryForm } from "./entry-form";
 
 export const metadata = { title: "Say hi" };
@@ -25,28 +26,27 @@ export default async function HelloPage({ params }: { params: Promise<{ wid: str
   const kind = u.action === "comment" ? "comment" : "post";
 
   return (
-    <Card className="mx-auto w-full max-w-xl">
-      <CardHeader className="gap-3">
-        <span className="grid size-10 place-items-center rounded-xl bg-accent text-primary">
-          <HandIcon className="size-5" />
+    <Card className="mx-auto w-full max-w-xl overflow-hidden py-0">
+      <div className="relative isolate flex flex-col items-center gap-3 bg-hero px-6 pt-8 pb-7 text-center text-white">
+        <div aria-hidden className="bg-dots pointer-events-none absolute inset-0 -z-10 text-white/[0.08]" />
+        <span className="grid size-14 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/25">
+          <HandIcon className="size-7" aria-hidden />
         </span>
-        <CardTitle>
-          <h1 className="text-xl font-semibold tracking-tight">One last step, {first}: say hi 👋</h1>
-        </CardTitle>
-        <CardDescription>
-          Your account is ready. Before it opens, introduce yourself in the community. It takes 2 minutes, it&apos;s how you meet the people who&apos;ll help you, and it&apos;s how this place stays alive.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-5">
+        <h1 className="text-[26px] leading-tight font-bold text-white md:text-3xl">One last step, {first}: say hi 👋</h1>
+        <p className="max-w-md text-[15px] text-white/85">
+          Your account is ready. Before it opens, introduce yourself in the community. Two minutes, and it&apos;s how you meet the people who&apos;ll help you.
+        </p>
+      </div>
+      <CardContent className="flex flex-col gap-6 pt-0 pb-6">
         {preview && ticketOff ? (
-          <p className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-xs">
+          <p className="rounded-xl border border-gold/45 bg-gold-soft px-3 py-2 text-xs text-gold-foreground">
             Preview: the entry ticket is off, so members don&apos;t see this yet. Turn it on in Platform admin › Members › Entry ticket.
           </p>
         ) : null}
-        <ol className="flex flex-col gap-3 text-sm">
+        <ol className="flex flex-col gap-4 text-sm">
           <li className="flex gap-3">
-            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">1</span>
-            <span className="flex flex-col gap-2">
+            <StepDot n={1} active />
+            <span className="flex flex-col gap-2 pt-1">
               <span>
                 <b>{u.action === "comment" ? "Comment" : "Post"} in the community.</b> {u.instructions || "Who you are, what you're building, and your daily ad budget."}
               </span>
@@ -60,12 +60,12 @@ export default async function HelloPage({ params }: { params: Promise<{ wid: str
             </span>
           </li>
           <li className="flex gap-3">
-            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">2</span>
-            <span>Copy the link to your {kind} (the ⋯ menu › Copy link) and paste it here. Your account opens straight away.</span>
+            <StepDot n={2} />
+            <span className="pt-1">Copy the link to your {kind} (the ⋯ menu › Copy link) and paste it here. Your account opens straight away.</span>
           </li>
         </ol>
         <EntryForm action={entryTicketAction.bind(null, wid)} kind={kind} />
-        <p className="text-xs text-muted-foreground">
+        <p className="border-t pt-4 text-xs text-muted-foreground">
           Not in the community yet?{" "}
           {env.skoolGroupUrl ? (
             <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-4 hover:underline">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -228,7 +228,7 @@ export function AppSidebar({ brand, groups, places, user }: { brand: ShellBrand;
   const { isMobile, setOpenMobile } = useSidebar();
   return (
     <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader>
+      <SidebarHeader className="pt-3">
         <SidebarMenu>
           <SidebarMenuItem>
             <Switcher brand={brand} places={places} />
@@ -237,15 +237,20 @@ export function AppSidebar({ brand, groups, places, user }: { brand: ShellBrand;
       </SidebarHeader>
       <SidebarContent>
         {groups.map((g, i) => (
-          <SidebarGroup key={g.title ?? i}>
-            {g.title ? <SidebarGroupLabel>{g.title}</SidebarGroupLabel> : null}
+          <SidebarGroup key={g.title ?? i} className="py-1">
+            {g.title ? <SidebarGroupLabel className="h-7">{g.title}</SidebarGroupLabel> : null}
             <SidebarMenu>
               {g.items.map((item) => {
                 const Icon = ICONS[item.icon];
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={item === active} tooltip={item.locked ? `${item.label} · Growth plan` : item.label}>
-                      <Link href={item.href} onClick={() => isMobile && setOpenMobile(false)}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={item === active}
+                      tooltip={item.locked ? `${item.label} · Growth plan` : item.label}
+                      className="h-8 gap-2.5 rounded-lg px-2.5 font-medium text-sidebar-foreground transition-[background-color,box-shadow,color] [&>svg]:text-sidebar-foreground/60 data-active:bg-card data-active:font-semibold data-active:text-sidebar-accent-foreground data-active:shadow-card data-active:ring-1 data-active:ring-foreground/[0.06] data-active:[&>svg]:text-primary"
+                    >
+                      <Link href={item.href} data-nav={item.href} onClick={() => isMobile && setOpenMobile(false)}>
                         <Icon />
                         <span>{item.label}</span>
                       </Link>
@@ -276,7 +281,7 @@ export function AppSidebar({ brand, groups, places, user }: { brand: ShellBrand;
   );
 }
 
-export function AppHeader({ brand, groups, places }: { brand: ShellBrand; groups: NavGroup[]; places: Place[] }) {
+export function AppHeader({ brand, groups, places, extra }: { brand: ShellBrand; groups: NavGroup[]; places: Place[]; extra?: ReactNode }) {
   const active = useActiveItem(groups);
   const [open, setOpen] = useState(false);
   const [mod, setMod] = useState("Ctrl");
@@ -297,7 +302,7 @@ export function AppHeader({ brand, groups, places }: { brand: ShellBrand; groups
   }, []);
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 rounded-t-xl border-b bg-background/85 px-3 backdrop-blur md:px-4">
+    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-foreground/[0.06] bg-background/80 px-3 backdrop-blur-md backdrop-saturate-150 md:rounded-t-2xl md:px-5">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-4" />
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
@@ -310,11 +315,12 @@ export function AppHeader({ brand, groups, places }: { brand: ShellBrand; groups
         ) : null}
       </nav>
       <div className="ml-auto flex items-center gap-1">
-        <Button variant="outline" size="sm" className="h-8 w-9 justify-center px-0 text-muted-foreground sm:w-56 sm:justify-start sm:px-2.5" onClick={() => setOpen(true)}>
+        <Button variant="outline" size="sm" className="h-9 w-9 justify-center rounded-xl px-0 font-normal text-muted-foreground sm:w-60 sm:justify-start sm:px-3" onClick={() => setOpen(true)}>
           <SearchIcon />
           <span className="hidden sm:inline">Search or jump to…</span>
           <Kbd className="ml-auto hidden sm:inline-flex">{mod} K</Kbd>
         </Button>
+        {extra}
         <ThemeToggle />
       </div>
       <CommandMenu open={open} onOpenChange={setOpen} groups={groups} places={places} />

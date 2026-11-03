@@ -9,6 +9,7 @@ import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
 import { isWorkspaceLive } from "../liveness";
 import { EmailProviderError, sendEmail } from "./providers";
 import { renderEmail, unsubscribeUrl } from "./render";
+import { videoVars } from "../skoolHobby";
 
 type Workspace = typeof workspaces.$inferSelect;
 type Contact = typeof contacts.$inferSelect;
@@ -50,6 +51,7 @@ export async function buildVars(ws: Workspace, contact: Contact | null, site?: S
     lead_magnet_url: fromSite.lead_magnet_url || "",
     lead_magnet_name: fromSite.lead_magnet_name || "your free guide",
     site_url: fromSite.site_url || "",
+    ...videoVars(ws.settings),
   } as Record<string, string>;
 }
 

@@ -19,6 +19,7 @@ export function SubmitButton({
   pendingText,
   confirm,
   disabled,
+  guide,
 }: {
   children: ReactNode;
   className?: string;
@@ -28,10 +29,12 @@ export function SubmitButton({
   /** Ask for a second click, showing this text, before submitting. */
   confirm?: string;
   disabled?: boolean;
+  /** A data-guide name, so the companion can point at this button. */
+  guide?: string;
 }) {
   const { pending } = useFormStatus();
   const [armed, setArmed] = useState(false);
-  const props = { variant, size, className };
+  const props = { variant, size, className, "data-guide": guide };
 
   useEffect(() => {
     if (!armed) return;

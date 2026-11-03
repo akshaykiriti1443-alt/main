@@ -1,75 +1,208 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
-import { ArrowRightIcon, EyeIcon, FlameIcon, MailIcon, SparklesIcon, UsersIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  BotIcon,
+  ChartNoAxesColumnIcon,
+  EyeIcon,
+  FlameIcon,
+  GiftIcon,
+  GlobeIcon,
+  LinkIcon,
+  MailIcon,
+  MegaphoneIcon,
+  RouteIcon,
+  SearchIcon,
+  SparklesIcon,
+  TagIcon,
+  TrendingUpIcon,
+  UsersIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
 import { workspaceStats } from "@/server/analytics";
-import { listSites } from "@/server/sites";
 import { contactName } from "@/server/contacts";
 import { computePath } from "@/server/path";
 import { getEntryTicket } from "@/server/unlocks";
 import { relativeTime } from "@/lib/util";
 import { cn } from "@/lib/utils";
-import { Empty, Flash, PageHead, Panel, Stat, TempBadge } from "@/components/ui";
+import { Empty, Flash, LessonTag, NextStep, PageHead, Panel, Stat, StepDot, TempBadge } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+/** A picture for each step of the path, so the big "do this next" card isn't just words. */
+const STEP_ICON: Record<string, LucideIcon> = {
+  ai: BotIcon,
+  hello: UsersIcon,
+  kit: SparklesIcon,
+  skool: LinkIcon,
+  publish: GlobeIcon,
+  price: TagIcon,
+  research: SearchIcon,
+  review: MegaphoneIcon,
+  unlock: GiftIcon,
+  sync: UsersIcon,
+};
+
 export default async function Dashboard({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
   const { workspace, user } = await requireWorkspace(wid);
   const db = await getDb();
-  const [stats, sites, recent, path] = await Promise.all([
+  const [stats, recent, path] = await Promise.all([
     workspaceStats(wid),
-    listSites(wid),
     db.select().from(contacts).where(eq(contacts.workspaceId, wid)).orderBy(desc(contacts.createdAt)).limit(6),
     computePath(workspace, user.id, { entryTicketOn: Boolean((await getEntryTicket())?.on) }),
   ]);
   const max = Math.max(1, ...stats.series.map((d) => d.views));
   const base = `/app/w/${wid}`;
-  // The dashboard shows the next few steps of "Your path" (the course as a guided flow).
-  const upcoming = path.stages.flatMap((st) => st.steps.map((step) => ({ ...step, tag: st.tag }))).filter((step) => !step.done).slice(0, 5);
+  const steps = path.stages.flatMap((st) => st.steps.map((step) => ({ ...step, tag: st.tag })));
   const next = path.next;
+  // Numbers only mean something once there are some. Until then the page is a "Start here".
+  const hasData = stats.views > 0 || stats.contactsTotal > 0 || stats.emailsSent > 0 || recent.length > 0;
+  const firstName = (user.name ?? "").trim().split(/\s+/)[0];
+  const pct = Math.round((path.done / path.total) * 100);
+  const isLive = steps.some((s) => s.key === "publish" && s.done);
+
+  // A short window of the path: the last ticked step (so you see progress), then what's next.
+  const nextIndex = next ? steps.findIndex((s) => s.key === next.key) : steps.length;
+  const from = Math.max(0, nextIndex - 1);
+  const peek = steps.slice(from, from + 5);
+
+  const nextCard = next ? (
+    <NextStep
+      eyebrow={`Up next · Lesson ${next.lesson}`}
+      title={next.title}
+      body={next.why}
+      href={next.href}
+      cta="Do it now"
+      icon={STEP_ICON[next.key] ?? RouteIcon}
+    />
+  ) : null;
+
+  const pathList = (
+    <ol className="flex flex-col gap-1">
+      {peek.map((step, i) => {
+        const isNext = step.key === next?.key;
+        return (
+          <li key={step.key}>
+            <Link
+              href={step.href}
+              className={cn(
+                "group flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm text-foreground transition-colors hover:bg-muted hover:no-underline",
+                isNext && "bg-accent ring-1 ring-primary/15 hover:bg-accent",
+              )}
+            >
+              <StepDot n={from + i + 1} done={step.done} active={isNext} />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className={cn("font-medium", step.done && "text-muted-foreground line-through decoration-foreground/30")}>{step.title}</span>
+                {isNext ? <span className="truncate text-xs text-muted-foreground">{step.why}</span> : null}
+              </span>
+              <span className="hidden rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground tabular-nums sm:inline">Lesson {step.lesson}</span>
+              {isNext ? <ArrowRightIcon className="size-4 shrink-0 text-primary" aria-hidden /> : null}
+            </Link>
+          </li>
+        );
+      })}
+    </ol>
+  );
+
+  if (!hasData) {
+    return (
+      <>
+        <PageHead
+          eyebrow={workspace.name}
+          title={firstName ? `Welcome, ${firstName}` : "Welcome"}
+          sub="This is home base. Do one step at a time, in order, and this page fills itself in as you go."
+        />
+        <Flash searchParams={await searchParams} />
+        {nextCard}
+
+        <div className="grid gap-5 @3xl/main:grid-cols-5">
+          <Panel
+            className="@3xl/main:col-span-3"
+            title="Your first steps"
+            sub={`${path.done} of ${path.total} done. Each one ticks itself off when you do it.`}
+            action={
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`${base}/path`}>
+                  See your whole path <ArrowRightIcon data-icon="inline-end" />
+                </Link>
+              </Button>
+            }
+          >
+            <div className="flex items-center gap-3">
+              <Progress value={pct} aria-label="Path progress" className="flex-1" />
+              <span className="text-xs font-semibold text-muted-foreground tabular-nums">{pct}%</span>
+            </div>
+            {pathList}
+          </Panel>
+
+          <Card className="relative overflow-hidden @3xl/main:col-span-2">
+            <CardContent className="flex h-full flex-col gap-5">
+              <div className="grid gap-1">
+                <h2 className="text-[17px]">Your numbers live here</h2>
+                <p className="text-sm text-muted-foreground">
+                  {isLive
+                    ? "Your funnel is live. Share its link and the first views, leads and hot leads land here as they come in."
+                    : "Page views, leads and hot leads show up the moment your funnel is live. No wall of zeros until then."}
+                </p>
+              </div>
+              {/* A ghost preview of what's coming, so the empty state shows the future instead of nothing. */}
+              <div aria-hidden className="relative mt-auto rounded-2xl border border-dashed border-foreground/15 bg-muted/40 p-4">
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { icon: EyeIcon, label: "Views" },
+                    { icon: UsersIcon, label: "Leads" },
+                    { icon: FlameIcon, label: "Hot" },
+                  ].map((t) => (
+                    <div key={t.label} className="flex flex-col gap-2 rounded-xl bg-card p-2.5 shadow-card ring-1 ring-foreground/[0.06]">
+                      <t.icon className="size-3.5 text-primary/70" />
+                      <span className="h-2.5 w-8 rounded-full bg-foreground/10" />
+                      <span className="text-[10px] font-medium text-muted-foreground">{t.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex h-16 items-end gap-1.5">
+                  {[22, 35, 28, 46, 40, 58, 52, 70, 64, 86].map((h, i) => (
+                    <span key={i} className="flex-1 rounded-t-md bg-primary/15" style={{ height: `${h}%` }} />
+                  ))}
+                </div>
+                <span className="absolute -top-2.5 right-4 rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold text-[oklch(0.35_0.08_70)] shadow-sm">Preview</span>
+              </div>
+              <Button variant="outline" asChild className="self-start">
+                <Link href={`${base}/sites`}>
+                  <ChartNoAxesColumnIcon data-icon="inline-start" />
+                  Go to Funnels & pages
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <PageHead eyebrow={workspace.name} title="Dashboard" sub="Your funnel at a glance. Numbers cover the last 14 days." />
+      <PageHead eyebrow={workspace.name} title="Dashboard" sub="How your funnel did over the last 14 days." />
       <Flash searchParams={await searchParams} />
+      {nextCard}
 
-      {sites.length === 0 ? (
-        <Card className="border-0 bg-linear-to-br from-primary to-primary/80 text-primary-foreground ring-0">
-          <CardContent className="flex flex-wrap items-center justify-between gap-4 py-2">
-            <div className="flex items-start gap-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-foreground/15">
-                <SparklesIcon className="size-5" />
-              </span>
-              <div className="grid gap-1">
-                <h2 className="text-lg font-semibold">Build your funnel in about a minute</h2>
-                <p className="text-primary-foreground/80">Answer 6 questions. AI writes your landing page, free guide, 3 emails, ads and Skool About page.</p>
-              </div>
-            </div>
-            <Button variant="secondary" size="lg" asChild>
-              <Link href={`${base}/launch`}>
-                Start the launch kit
-                <ArrowRightIcon data-icon="inline-end" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
-        <Stat icon={EyeIcon} label="Page views" value={stats.views} />
-        <Stat icon={UsersIcon} label="Leads" value={stats.leads} hint={`${stats.conversion.toFixed(1)}% opt-in rate`} />
-        <Stat icon={FlameIcon} label="Hot leads" value={stats.hot} hint={`${stats.warm} warm · ${stats.contactsTotal} total`} />
-        <Stat icon={MailIcon} label="Emails sent" value={stats.emailsSent} hint={stats.unread ? `${stats.unread} unread messages` : undefined} />
+      <div className="grid grid-cols-2 gap-3 md:gap-4 @2xl/main:grid-cols-4">
+        <Stat icon={EyeIcon} label="Page views" value={stats.views.toLocaleString()} />
+        <Stat icon={UsersIcon} tone="success" label="Leads" value={stats.leads.toLocaleString()} hint={`${stats.conversion.toFixed(1)}% opt-in rate`} />
+        <Stat icon={FlameIcon} tone="hot" label="Hot leads" value={stats.hot.toLocaleString()} hint={`${stats.warm} warm · ${stats.contactsTotal} total`} />
+        <Stat icon={MailIcon} tone="gold" label="Emails sent" value={stats.emailsSent.toLocaleString()} hint={stats.unread ? `${stats.unread} unread messages` : undefined} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
+      <div className="grid gap-5 @3xl/main:grid-cols-5">
         <Panel
-          className="lg:col-span-3"
+          className="@3xl/main:col-span-3"
+          icon={TrendingUpIcon}
           title="Views and leads"
           sub="Daily, last 14 days"
           action={
@@ -100,7 +233,8 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
         </Panel>
 
         <Panel
-          className="lg:col-span-2"
+          className="@3xl/main:col-span-2"
+          icon={RouteIcon}
           title="Your path"
           sub={`${path.done} of ${path.total} steps · Skool level ${path.level}`}
           action={
@@ -111,42 +245,15 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
             </Button>
           }
         >
-          <Progress value={(path.done / path.total) * 100} aria-label="Path progress" />
-          {upcoming.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Every step done. Keep the weekly rhythm going.</p>
-          ) : (
-            <ul className="-mx-1 flex flex-col">
-              {upcoming.map((c) => {
-                const isNext = c.key === next?.key;
-                return (
-                  <li key={c.key}>
-                    <Link
-                      href={c.href}
-                      data-slot="checklist-item"
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted",
-                        isNext && "bg-accent text-accent-foreground hover:bg-accent/80",
-                      )}
-                    >
-                      <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border", isNext && "border-primary")} />
-                      <span className="flex-1">{c.title}</span>
-                      {isNext ? (
-                        <span className="flex items-center gap-1 text-xs font-medium text-primary">
-                          Up next <ArrowRightIcon className="size-3.5" />
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground">{c.tag}</span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <Progress value={pct} aria-label="Path progress" />
+          {next ? pathList : <p className="text-sm text-muted-foreground">Every step done. Keep the weekly rhythm going.</p>}
+          {next ? <LessonTag lesson={next.lesson} stage={steps[nextIndex]?.tag} className="self-start" /> : null}
         </Panel>
       </div>
 
       <Panel
+        icon={UsersIcon}
+        tone="success"
         title="Newest leads"
         action={
           <Button variant="ghost" size="sm" asChild>
@@ -157,7 +264,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
         }
       >
         {recent.length === 0 ? (
-          <Empty icon={UsersIcon} title="No leads yet" body="Publish your funnel and share the link. New leads show up here." />
+          <Empty icon={UsersIcon} title="No leads yet" body="Share your funnel link. Every sign-up lands here, hottest first." />
         ) : (
           <Table>
             <TableHeader>

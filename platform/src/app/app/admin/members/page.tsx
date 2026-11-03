@@ -18,6 +18,9 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RosterUpload } from "./roster";
+import { SkoolInviteCard } from "@/components/skool-invite-card";
+import { platformInviteHint } from "@/server/skoolInvite";
+import { removePlatformInviteAction, savePlatformInviteAction, testPlatformInviteAction } from "@/actions/skoolInvite";
 
 export const metadata = { title: "Members" };
 
@@ -104,6 +107,15 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
           )}
         </Panel>
       </form>
+
+      <SkoolInviteCard
+        forPlatform
+        connected={await platformInviteHint()}
+        save={savePlatformInviteAction}
+        test={testPlatformInviteAction}
+        remove={removePlatformInviteAction}
+        defaultEmail={admin.email}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Instant access for paid joins (Skool Pro)" sub="Zapier: Skool “New Paid Member” → Webhooks by Zapier, POST JSON with email and name. Paid members get in about 15 minutes after joining.">

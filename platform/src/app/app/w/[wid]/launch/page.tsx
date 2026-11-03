@@ -2,7 +2,7 @@ import { ANGLE_HINT, ANGLE_LABEL, adText } from "@/server/ai/adFramework";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
-import { ArrowRightIcon, CheckIcon, PencilIcon, RotateCcwIcon, SparklesIcon } from "lucide-react";
+import { CalendarDaysIcon, CheckIcon, GiftIcon, GraduationCapIcon, MailIcon, MegaphoneIcon, PaletteIcon, PencilIcon, RocketIcon, RotateCcwIcon, SparklesIcon, ZapIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { aiGenerations, sites } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -10,7 +10,7 @@ import { requireWorkspace } from "@/server/tenancy";
 import { getLaunchKit } from "@/server/ai/launchKit";
 import { siteBaseUrl } from "@/server/sites";
 import { launchKitAction } from "@/actions/sites";
-import { Callout, Flash, PageHead, Panel } from "@/components/ui";
+import { Callout, Flash, MoreOptions, NextStep, PageHead, Panel, StepDot } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const maxDuration = 300;
@@ -36,14 +35,17 @@ function Copy({ text, label }: { text: string; label?: ReactNode }) {
   );
 }
 
-function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+function Step({ n, title, hint, children }: { n: number; title: string; hint?: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex items-center gap-2.5">
-        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{n}</span>
-        <h2 className="font-medium">{title}</h2>
+      <div className="flex items-start gap-3">
+        <StepDot n={n} active />
+        <div className="grid gap-0.5 pt-0.5">
+          <h2 className="text-base">{title}</h2>
+          {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
+        </div>
       </div>
-      {children}
+      <div className="@2xl/main:pl-10">{children}</div>
     </section>
   );
 }
@@ -74,20 +76,33 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
     return (
       <>
         <PageHead
-          eyebrow="Step 1 of your sprint"
+          lesson="1.2"
+          stage="Stage 1"
           title="AI launch kit"
-          sub="Answer these questions. In about a minute you get a live landing page, a free guide, 3 follow-up emails, ad copy, 10 hooks, a Skool About page and a 7-day ad plan."
+          sub="Answer a few questions and AI writes your whole starter funnel in about a minute: landing page, free guide, emails, ads and your Skool About page."
+          first="Fill in the three short steps below, then press Build my launch kit."
         />
         <Flash searchParams={sp} />
         {!env.aiEnabled ? (
           <Callout tone="info">AI isn&apos;t switched on for this server yet, so you&apos;ll get a smart template. The platform owner adds an Anthropic API key to turn on AI copy.</Callout>
         ) : null}
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+
+        {/* What you get, as a strip on narrow pages (the side card shows on wide ones). */}
+        <ul className="flex flex-wrap gap-2 @4xl/main:hidden" aria-label="What you get">
+          {YOU_GET.map((item) => (
+            <li key={item} className="flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-card ring-1 ring-foreground/[0.06]">
+              <CheckIcon className="size-3.5 text-success" strokeWidth={3} aria-hidden />
+              {item}
+            </li>
+          ))}
+        </ul>
+
+        <div className="grid items-start gap-5 @4xl/main:grid-cols-[minmax(0,1fr)_280px]">
           <form action={launchKitAction.bind(null, wid)}>
             <Card>
               <CardContent className="flex flex-col gap-8">
                 <Step n={1} title="About you">
-                  <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="grid gap-5 @2xl/main:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="businessName">Community name</FieldLabel>
                       <Input id="businessName" name="businessName" required minLength={2} defaultValue={s.businessName ?? workspace.name} />
@@ -99,11 +114,9 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                   </div>
                 </Step>
 
-                <Separator />
-
-                <Step n={2} title="Who you help">
-                  <div className="grid gap-5 sm:grid-cols-2">
-                    <Field className="sm:col-span-2">
+                <Step n={2} title="Who you help" hint="Your one sentence from lesson 1.1 covers most of this.">
+                  <div className="grid gap-5 @2xl/main:grid-cols-2">
+                    <Field className="@2xl/main:col-span-2">
                       <FieldLabel htmlFor="niche">What do you help with?</FieldLabel>
                       <Input id="niche" name="niche" required minLength={3} placeholder="Fat loss for busy dads" defaultValue={s.niche ?? ""} />
                     </Field>
@@ -118,10 +131,17 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                   </div>
                 </Step>
 
-                <Separator />
+                <Step n={3} title="Your Skool group link" hint="Every Join button in your funnel points here.">
+                  <Field>
+                    <FieldLabel htmlFor="skoolUrl" className="sr-only">
+                      Your Skool group link
+                    </FieldLabel>
+                    <Input id="skoolUrl" name="skoolUrl" type="url" placeholder="https://www.skool.com/your-group/about" defaultValue={s.skoolUrl ?? ""} />
+                  </Field>
+                </Step>
 
-                <Step n={3} title="Your offer">
-                  <div className="grid gap-5 sm:grid-cols-2">
+                <MoreOptions title="Make it yours (optional)" sub="Your free guide idea, your paid offer, tone and brand colour. Skip it and AI picks for you." icon={PaletteIcon}>
+                  <div className="grid gap-5 @2xl/main:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="leadMagnetIdea">
                         Free lead magnet idea <span className="font-normal text-muted-foreground">(optional)</span>
@@ -134,17 +154,6 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                       </FieldLabel>
                       <Input id="offer" name="offer" placeholder="$9/month Skool group with a 7-day free trial" defaultValue={s.offer ?? ""} />
                     </Field>
-                    <Field className="sm:col-span-2">
-                      <FieldLabel htmlFor="skoolUrl">Your Skool group link</FieldLabel>
-                      <Input id="skoolUrl" name="skoolUrl" type="url" placeholder="https://www.skool.com/your-group/about" defaultValue={s.skoolUrl ?? ""} />
-                    </Field>
-                  </div>
-                </Step>
-
-                <Separator />
-
-                <Step n={4} title="Look and feel">
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-5 sm:max-w-sm">
                     <Field>
                       <FieldLabel htmlFor="tone">Tone</FieldLabel>
                       <NativeSelect id="tone" name="tone" defaultValue="friendly" className="w-full">
@@ -158,19 +167,19 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                       <Input id="brandColor" name="brandColor" type="color" defaultValue="#2A44EE" className="w-16 cursor-pointer p-1" />
                     </Field>
                   </div>
-                </Step>
+                </MoreOptions>
               </CardContent>
-              <CardFooter className="flex-wrap gap-3">
-                <SubmitButton size="lg" pendingText="Writing your kit… (up to a minute)">
+              <CardFooter className="flex-wrap gap-x-4 gap-y-3">
+                <SubmitButton size="lg" guide="kit-build" pendingText="Writing your kit… (up to a minute)">
                   <SparklesIcon data-icon="inline-start" />
                   Build my launch kit
                 </SubmitButton>
-                <span className="text-xs text-muted-foreground">Uses 1 AI generation. Your plan includes some each month.</span>
+                <span className="text-xs text-muted-foreground">Takes about a minute. Uses 1 AI generation; your plan includes some each month.</span>
               </CardFooter>
             </Card>
           </form>
 
-          <Card size="sm" className="lg:sticky lg:top-4">
+          <Card size="sm" className="hidden @4xl/main:sticky @4xl/main:top-20 @4xl/main:flex">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <SparklesIcon className="size-4 text-primary" aria-hidden />
@@ -205,32 +214,35 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
-        eyebrow={`Generated ${result.createdAt.toDateString()} · ${result.model === "template" ? "template" : "AI"}`}
+        lesson="1.2"
+        stage="Stage 1"
+        eyebrow={`Made ${result.createdAt.toDateString()} · ${result.model === "template" ? "template" : "AI"}`}
         title="Your launch kit"
-        sub="Your funnel is built from this kit. Copy anything below into Meta Ads Manager, Instagram or Skool."
+        sub="Your funnel is built from this kit. Everything below is yours to copy into Meta Ads Manager, Instagram or Skool."
         actions={
-          <>
-            <Button variant="outline" asChild>
-              <Link href={`/app/w/${wid}/launch?new=1`}>
-                <RotateCcwIcon data-icon="inline-start" />
-                Make another kit
-              </Link>
-            </Button>
-            {site ? (
-              <Button asChild>
-                <Link href={`/app/w/${wid}/sites/${site.id}`}>
-                  Review & publish funnel
-                  <ArrowRightIcon data-icon="inline-end" />
-                </Link>
-              </Button>
-            ) : null}
-          </>
+          <Button variant="outline" asChild>
+            <Link href={`/app/w/${wid}/launch?new=1`}>
+              <RotateCcwIcon data-icon="inline-start" />
+              Make another kit
+            </Link>
+          </Button>
         }
       />
       <Flash searchParams={sp} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Your free lead magnet">
+      {site ? (
+        <NextStep
+          eyebrow="Up next · Lesson 1.3"
+          title="Review and publish your funnel"
+          body="Your pages are written. Change three lines (headline, free guide name, button), then press Publish."
+          href={`/app/w/${wid}/sites/${site.id}`}
+          cta="Review & publish funnel"
+          icon={RocketIcon}
+        />
+      ) : null}
+
+      <div className="grid gap-5 @3xl/main:grid-cols-2">
+        <Panel icon={GiftIcon} tone="gold" title="Your free lead magnet">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{kit.leadMagnetName}</span>
             <Badge variant="secondary">{kit.leadMagnetType}</Badge>
@@ -252,6 +264,8 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
         </Panel>
 
         <Panel
+          icon={CalendarDaysIcon}
+          tone="success"
           title="Your 7-day ad plan"
           sub={
             <>
@@ -290,8 +304,8 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
         </Panel>
       </div>
 
-      <Panel title="Your 3-Pack" sub="Pain, Dream and Lesson. Each one is Hook · Turn · Door, pointed at your Skool link. Launch all three, then fix one part at a time in Ad review." action={<CopyButton text={adsText} label="Copy all ads" />}>
-        <div className="grid gap-6 md:grid-cols-3">
+      <Panel icon={MegaphoneIcon} title="Your 3-Pack" sub="Pain, Dream and Lesson. Each one is Hook · Turn · Door, pointed at your Skool link. Launch all three, then fix one part at a time in Ad review." action={<CopyButton text={adsText} label="Copy all ads" />}>
+        <div className="grid gap-6 @4xl/main:grid-cols-3">
           {kit.ads.map((a, i) => (
             <div key={i} className="flex min-w-0 flex-col gap-2.5">
               <Copy label={a.angle ? `${ANGLE_LABEL[a.angle]} · ${ANGLE_HINT[a.angle]}` : `Ad ${i + 1}`} text={adText(a)} />
@@ -306,8 +320,8 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
         </div>
       </Panel>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="10 hooks for Reels and ads" action={<CopyButton text={kit.hooks.map((h, i) => `${i + 1}. ${h}`).join("\n")} label="Copy hooks" />}>
+      <div className="grid gap-5 @3xl/main:grid-cols-2">
+        <Panel icon={ZapIcon} tone="hot" title="10 hooks for Reels and ads" action={<CopyButton text={kit.hooks.map((h, i) => `${i + 1}. ${h}`).join("\n")} label="Copy hooks" />}>
           <ol className="flex flex-col divide-y">
             {kit.hooks.map((h, i) => (
               <li key={i} className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
@@ -317,12 +331,14 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
             ))}
           </ol>
         </Panel>
-        <Panel title="Skool About page">
+        <Panel icon={GraduationCapIcon} title="Skool About page">
           <Copy text={kit.skoolAboutPage} />
         </Panel>
       </div>
 
       <Panel
+        icon={MailIcon}
+        tone="success"
         title="Your 3 follow-up emails"
         sub="These already run for every new lead: day 0, day 1 and day 3."
         action={
@@ -337,7 +353,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
           </>
         }
       >
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 @4xl/main:grid-cols-3">
           {kit.emails.map((e, i) => (
             <div key={i} className="flex min-w-0 flex-col gap-1">
               <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Email {i + 1}</span>

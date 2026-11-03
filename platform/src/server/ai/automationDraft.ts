@@ -21,7 +21,7 @@ import { AI_PROVIDERS, chargeAi, describeAiError, generateStructured, isAiProvid
 
 export const TRIGGER_TYPES = ["lead_created", "message_received", "tag_added", "temperature_changed", "stage_changed"] as const;
 // No webhook: it needs a real Zapier/Make URL from the owner, so the AI says so in notes instead.
-export const STEP_TYPES = ["add_tag", "remove_tag", "set_stage", "wait", "send_email", "enroll_sequence", "notify_owner", "ai_score", "ai_draft_reply", "send_message", "only_if_temperature", "ask_my_ai"] as const;
+export const STEP_TYPES = ["add_tag", "remove_tag", "set_stage", "wait", "send_email", "enroll_sequence", "notify_owner", "ai_score", "ai_draft_reply", "send_message", "only_if_temperature", "ask_my_ai", "skool_invite"] as const;
 const STAGES = ["new", "engaged", "trial", "member", "lost"] as const;
 const CHANNELS = ["facebook", "instagram", "whatsapp", "sms"] as const;
 const TEMPERATURES = ["hot", "warm", "cold"] as const;
@@ -47,6 +47,7 @@ STEPS (run in order, per contact):
 - ai_draft_reply: AI drafts a reply in the inbox conversation (message_received flows only).
 - send_message {body}: replies in the contact's DM/WhatsApp/SMS conversation. Only works when they messaged first, so only after a message_received trigger.
 - enroll_sequence {sequenceId}: starts one of the owner's existing email sequences (use only an id from the list given).
+- skool_invite: Skool emails the contact an invite to the owner's group (through the Skool webhook the owner connected; each person is invited once). Free groups: fine for new leads. Paid groups: only for people who already paid elsewhere.
 
 HARD RULES:
 - Nothing can post, DM or act inside Skool, and nothing should pretend to. For Skool DMs or posts: ask_my_ai to draft it, then notify_owner to send it by hand. "AI writes, you send."

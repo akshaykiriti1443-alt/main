@@ -118,8 +118,8 @@ export function PageEditor({ initialTitle, initialSections, theme, vars, busines
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[400px_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-2.5 lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto lg:pr-1">
+      <div className="grid grid-cols-1 items-start gap-4 @4xl/main:grid-cols-[400px_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-2.5 @4xl/main:max-h-[calc(100vh-140px)] @4xl/main:overflow-y-auto @4xl/main:pr-1">
           {sections.map((s, i) => (
             <details key={s.id} className="group rounded-xl bg-card ring-1 ring-foreground/10" open={i === 0}>
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2.5 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
@@ -172,13 +172,13 @@ export function PageEditor({ initialTitle, initialSections, theme, vars, busines
             <code className="rounded bg-muted px-1 py-0.5 font-mono">{"{{lead_magnet_url}}"}</code> for your free guide.
           </p>
         </div>
-        <div className="flex min-w-0 flex-col gap-2 lg:sticky lg:top-4">
+        <div className="flex min-w-0 flex-col gap-2 @4xl/main:sticky @4xl/main:top-4">
           <div className="flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
             <EyeIcon className="size-3.5" aria-hidden />
             Live preview
           </div>
           {/* Funnels carry their own theme, so the preview always sits on white. */}
-          <div className="editor-preview overflow-hidden overflow-y-auto rounded-xl border bg-white shadow-sm lg:max-h-[calc(100vh-170px)]" aria-label="Live preview">
+          <div className="editor-preview overflow-hidden overflow-y-auto rounded-xl border bg-white shadow-sm @4xl/main:max-h-[calc(100vh-170px)]" aria-label="Live preview">
             <LandingSections sections={sections} theme={theme} vars={vars} businessName={businessName} form={{ action: "#", pageId: "preview", eventId: "preview", preview: true }} />
           </div>
         </div>

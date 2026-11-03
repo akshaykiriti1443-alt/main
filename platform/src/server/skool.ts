@@ -22,7 +22,36 @@ export { normalizeStatus, splitRow };
 
 export type SkoolStatus = "trial" | "active" | "cancelling" | "churned";
 
-export type ParsedMember = { email: string; firstName: string; lastName: string; status: SkoolStatus };
+export type ParsedMember = { email: string; firstName: string; lastName: string; status: SkoolStatus; answers?: { q: string; a: string }[] };
+
+// Membership questions are a free Skool plugin, and their answers come out in the Members export.
+// Any column that looks like a question (or "answer") is kept on the contact, so the CRM (and
+// the AI writing welcome DMs) knows why each person joined. Sending answers to a CRM is
+// otherwise a Pro (Zapier) feature.
+const KNOWN_COLS = /^(e-?mail|first|last|name|full name|member|status|stage|segment|state|membership|subscription|price|tier|plan|ltv|lifetime|joined|join date|date|created|invited|level|points|role|location|bio|link|profile|url|phone|approved|approved by|source)$/;
+const isAnswerCol = (h: string) => h.includes("?") || /\b(question|answer|q\d+)\b/.test(h);
+export const ANSWERS_START = "— Skool membership answers —";
+export const ANSWERS_END = "— end of answers —";
+const ANSWERS_RE = new RegExp(`${ANSWERS_START}[\\s\\S]*?${ANSWERS_END}`);
+
+/** Replace (or add) the answers block in a contact's notes, leaving the owner's own notes alone. */
+export function withAnswers(notes: string, answers: { q: string; a: string }[]): string {
+  const block = [ANSWERS_START, ...answers.flatMap(({ q, a }) => [`Q: ${q}`, `A: ${a}`]), ANSWERS_END].join("\n");
+  if (ANSWERS_RE.test(notes)) return notes.replace(ANSWERS_RE, () => block);
+  return notes.trim() ? `${notes.trim()}\n\n${block}` : block;
+}
+
+/** The answers block from a contact's notes, if the export brought one in. */
+export function answersFrom(notes: string): { q: string; a: string }[] {
+  const m = notes.match(ANSWERS_RE);
+  if (!m) return [];
+  const out: { q: string; a: string }[] = [];
+  for (const line of m[0].split("\n")) {
+    if (line.startsWith("Q: ")) out.push({ q: line.slice(3), a: "" });
+    else if (line.startsWith("A: ") && out.length) out[out.length - 1].a = line.slice(3);
+  }
+  return out;
+}
 
 export type SkoolSyncResult = {
   total: number;
@@ -55,6 +84,7 @@ export function parseSkoolMembers(raw: string): { members: ParsedMember[]; skipp
   const hasHeader = first.some((c) => c.includes("email") || c.includes("e-mail"));
 
   let emailCol = 0, firstCol = -1, lastCol = -1, nameCol = -1, statusCol = -1;
+  let answerCols: { i: number; q: string }[] = [];
   let start = 0;
   if (hasHeader) {
     emailCol = findCol(first, ["email", "e-mail"]);
@@ -62,6 +92,11 @@ export function parseSkoolMembers(raw: string): { members: ParsedMember[]; skipp
     lastCol = findCol(first, ["last name", "last", "surname", "family"]);
     nameCol = findCol(first, ["name", "member", "full name"]);
     statusCol = findCol(first, ["status", "stage", "segment", "state", "membership", "subscription"]);
+    const original = splitRow(lines[0], delim);
+    answerCols = first
+      .map((h, i) => ({ i, h }))
+      .filter(({ i, h }) => ![emailCol, firstCol, lastCol, nameCol, statusCol].includes(i) && !KNOWN_COLS.test(h.trim()) && isAnswerCol(h))
+      .map(({ i }) => ({ i, q: (original[i] ?? "").trim().slice(0, 200) }));
     start = 1;
   }
 
@@ -81,7 +116,10 @@ export function parseSkoolMembers(raw: string): { members: ParsedMember[]; skipp
       lastName = parts.slice(1).join(" ");
     }
     const status = statusCol >= 0 ? normalizeStatus(cells[statusCol] ?? "") : "active";
-    byEmail.set(email, { email, firstName: firstName.slice(0, 80), lastName: lastName.slice(0, 80), status });
+    const answers = answerCols
+      .map(({ i, q }) => ({ q, a: (cells[i] ?? "").trim().slice(0, 1000) }))
+      .filter((x) => x.a);
+    byEmail.set(email, { email, firstName: firstName.slice(0, 80), lastName: lastName.slice(0, 80), status, ...(answers.length ? { answers } : {}) });
   }
   return { members: [...byEmail.values()], skipped };
 }
@@ -164,6 +202,11 @@ export async function syncSkoolMembers(
     if (created) {
       res.created++;
       await emitEvent({ type: "lead_created", workspaceId, contactId: contact.id });
+    }
+
+    if (m.answers?.length) {
+      const next = withAnswers(contact.notes ?? "", m.answers);
+      if (next !== contact.notes) await db.update(contacts).set({ notes: next.slice(0, 20000) }).where(eq(contacts.id, contact.id));
     }
 
     // The cancelling tag mirrors Skool's "cancelled but still paid" state.

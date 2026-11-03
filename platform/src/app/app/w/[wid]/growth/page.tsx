@@ -1,13 +1,25 @@
 import Link from "next/link";
-import { CheckCircle2Icon, CircleIcon, LinkIcon, MousePointerClickIcon, TargetIcon, TrendingUpIcon } from "lucide-react";
+import {
+  CalculatorIcon,
+  CalendarCheckIcon,
+  CheckIcon,
+  CoinsIcon,
+  HistoryIcon,
+  LinkIcon,
+  MousePointerClickIcon,
+  SettingsIcon,
+  TargetIcon,
+  TrendingUpIcon,
+} from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { computeLadder, latestCheckins, LEVELS, requirementLines, skoolLinkFor, skoolTargetFor, skoolVisits } from "@/server/growth";
 import { skoolMemberCounts } from "@/server/skool";
 import { saveCheckinAction } from "@/actions/growth";
 import { relativeTime } from "@/lib/util";
 import { cn } from "@/lib/utils";
-import { Callout, Flash, PageHead, Panel, Stat } from "@/components/ui";
+import { Callout, Flash, MoreOptions, PageHead, Panel } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
+import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +29,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BoostCalculator, BudgetPlanner } from "./calculators";
 
 export const metadata = { title: "Growth ladder" };
+
+/** A flat number tile for inside a panel (a Stat card in a card gets heavy). */
+function MiniStat({ icon: Icon, label, value, hint }: { icon: typeof LinkIcon; label: string; value: string; hint?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-muted/60 px-3.5 py-3">
+      <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Icon className="size-3.5" aria-hidden />
+        {label}
+      </dt>
+      <dd className="truncate font-heading text-2xl font-bold tabular-nums">{value}</dd>
+      {hint ? <dd className="text-xs text-muted-foreground">{hint}</dd> : null}
+    </div>
+  );
+}
 
 export default async function GrowthPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
@@ -33,137 +59,51 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
   const link = skoolLinkFor(workspace.slug);
   const stale = !last || Date.now() - last.createdAt.getTime() > 8 * 86_400_000;
 
-  return (
-    <>
-      <PageHead
-        eyebrow="Skool growth"
-        title="Growth ladder"
-        sub="Skool advertises communities that climb its levels: custom ads at Level 2, a dedicated campaign at Level 3, a partnership campaign with video ads at Level 4. Skool decides the spend, and it isn't guaranteed. Every requirement is the last 30 days."
-      />
-      <Flash searchParams={await searchParams} />
-
-      {/* The ladder */}
-      <ol className="grid gap-3 md:grid-cols-4">
-        {LEVELS.map((l) => {
-          const reached = ladder.qualifies >= l.level;
-          const isNext = ladder.next?.level === l.level;
-          return (
-            <li key={l.level} className={cn("flex flex-col gap-1.5 rounded-xl border bg-card p-4", reached && "border-success/40 bg-success-soft", isNext && "border-primary ring-2 ring-primary/20")}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Level {l.level}</span>
-                {reached ? <CheckCircle2Icon className="size-4 text-success" /> : isNext ? <TargetIcon className="size-4 text-primary" /> : <CircleIcon className="size-4 text-muted-foreground/50" />}
-              </div>
-              <span className="font-semibold">{l.name}</span>
-              <span className="text-sm">{l.reward}</span>
-              <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
-                {l.level === 1 ? <li>Cover, description, About page, 1 post, invited members</li> : requirementLines(l.req).map((r) => <li key={r}>{r}</li>)}
-              </ul>
-            </li>
-          );
-        })}
-      </ol>
-
-      {stale ? (
-        <Callout tone="info" title={last ? `Your last check-in was ${relativeTime(last.createdAt)}` : "Do your first check-in"}>
-          Open Skool › your group › Settings › Growth. Copy 4 numbers into the check-in below. It takes 2 minutes, every Monday.
-        </Callout>
-      ) : null}
-
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <Panel title={ladder.next ? `What's between you and Level ${ladder.next.level}` : "You're at the top"} sub={ladder.next?.reward}>
-          {ladder.gaps.length ? (
-            <ul className="flex flex-col gap-3">
-              {ladder.gaps.map((g) => (
-                <li key={g.label} className="flex flex-col gap-1.5">
-                  <div className="flex justify-between gap-2 text-sm">
-                    <span>{g.label}</span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {g.toggle ? (g.done ? "Done" : "Not yet") : `${g.have.toLocaleString()} / ${g.need.toLocaleString()}`}
-                    </span>
-                  </div>
-                  <Progress value={Math.min(100, g.need ? (g.have / g.need) * 100 : 100)} className={cn("h-2", g.done && "[&>[data-slot=progress-indicator]]:bg-success")} />
-                </li>
+  const checkin = (
+    <form action={saveCheckinAction.bind(null, wid)} data-guide="checkin" className="scroll-mt-20" id="checkin">
+      <Panel
+        icon={CalendarCheckIcon}
+        title="Monday check-in"
+        sub={
+          <>
+            Two minutes, once a week. In Skool, open your group › <b className="font-semibold text-foreground">Settings › Growth</b> and copy these numbers (they cover the last 30 days).
+            {last ? ` Last one: ${relativeTime(last.createdAt)}.` : ""}
+          </>
+        }
+        className={cn(stale && "ring-2 ring-primary/25")}
+      >
+        <div className="grid grid-cols-2 items-end gap-4 @2xl/main:grid-cols-4">
+          <Field>
+            <FieldLabel htmlFor="aboutVisitors">About-page visitors</FieldLabel>
+            <Input id="aboutVisitors" name="aboutVisitors" inputMode="numeric" defaultValue={last?.aboutVisitors ?? ""} placeholder="0" className="tabular-nums" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="newPaid">New customers</FieldLabel>
+            <Input id="newPaid" name="newPaid" inputMode="numeric" defaultValue={last?.newPaid ?? ""} placeholder="0" className="tabular-nums" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="networkSignups">Skool Network sign-ups</FieldLabel>
+            <Input id="networkSignups" name="networkSignups" inputMode="numeric" defaultValue={last?.networkSignups ?? ""} placeholder="0" className="tabular-nums" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="skoolLevel">Level Skool shows</FieldLabel>
+            <NativeSelect id="skoolLevel" name="skoolLevel" defaultValue={String(last?.skoolLevel ?? 1)}>
+              {[1, 2, 3, 4].map((n) => (
+                <NativeSelectOption key={n} value={String(n)}>
+                  Level {n}
+                </NativeSelectOption>
               ))}
-            </ul>
-          ) : null}
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">Your next moves</span>
-            <ul className="flex flex-col gap-2 text-sm">
-              {ladder.moves.map((m) => (
-                <li key={m} className="flex gap-2.5">
-                  <TrendingUpIcon className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <span>{m}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          {last && last.skoolLevel !== ladder.qualifies ? (
-            <Callout tone="info">
-              Skool shows Level {last.skoolLevel}; your numbers point to Level {ladder.qualifies}. Skool reviews levels on its side and needs 2–4 weeks of data for a new group, so a short lag is normal.
-            </Callout>
-          ) : null}
-        </Panel>
-
-        <Panel title="Your Skool link" sub="Point your ads here, not straight at Skool. It sends visitors to your About page instantly, counts every click by source, and tells Meta about each visit (ViewContent), so your ads learn who actually lands.">
-          {target ? (
-            <>
-              <div className="flex items-center gap-2">
-                <Input readOnly value={link} className="font-mono text-xs" aria-label="Your Skool link" />
-                <CopyButton text={link} />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Goes to <span className="break-all">{target}</span>. Add <code>?src=ads</code>, <code>?src=youtube</code> and so on to split sources. In your Instagram and TikTok bios, use your plain skool.com link so Skool credits it as organic promotion.
-              </p>
-            </>
-          ) : (
-            <Callout tone="warn">
-              Add your Skool group link in <Link href={`${base}/settings#business`}>Settings</Link> to turn on your Skool link.
-            </Callout>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <Stat icon={MousePointerClickIcon} label="Clicks, 30 days" value={visits.total.toLocaleString()} />
-            <Stat icon={LinkIcon} label="Top source" value={visits.bySource[0]?.source ?? "—"} hint={visits.bySource[0] ? `${visits.bySource[0].count} clicks` : undefined} />
-          </div>
-          {visits.bySource.length > 1 ? (
-            <ul className="flex flex-wrap gap-2 text-xs">
-              {visits.bySource.slice(0, 8).map((s) => (
-                <li key={s.source} className="rounded-full border px-2 py-1">
-                  {s.source} · {s.count}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {!workspace.settings.metaPixelId ? (
-            <p className="text-xs text-muted-foreground">
-              Connect your pixel in <Link href={`${base}/settings#tracking`}>Settings</Link> to send ViewContent events.
-            </p>
-          ) : null}
-        </Panel>
-      </div>
-
-      <form action={saveCheckinAction.bind(null, wid)}>
-        <Panel title="Monday check-in" sub="From Skool › Settings › Growth (last 30 days). Your history below shows the trend." action={<SubmitButton size="sm" pendingText="Saving…">Save check-in</SubmitButton>}>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Field>
-              <FieldLabel htmlFor="aboutVisitors">About-page visitors</FieldLabel>
-              <Input id="aboutVisitors" name="aboutVisitors" inputMode="numeric" defaultValue={last?.aboutVisitors ?? ""} placeholder="0" />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="newPaid">New customers</FieldLabel>
-              <Input id="newPaid" name="newPaid" inputMode="numeric" defaultValue={last?.newPaid ?? ""} placeholder="0" />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="networkSignups">Skool Network sign-ups</FieldLabel>
-              <Input id="networkSignups" name="networkSignups" inputMode="numeric" defaultValue={last?.networkSignups ?? ""} placeholder="0" />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="skoolLevel">Level Skool shows</FieldLabel>
-              <NativeSelect id="skoolLevel" name="skoolLevel" defaultValue={String(last?.skoolLevel ?? 1)}>
-                {[1, 2, 3, 4].map((n) => (
-                  <NativeSelectOption key={n} value={String(n)}>Level {n}</NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </Field>
+            </NativeSelect>
+          </Field>
+        </div>
+        <Label className="flex items-start gap-2.5 rounded-xl bg-muted/60 px-3 py-2.5 text-sm font-normal">
+          <input type="checkbox" name="linkInBio" defaultChecked={last?.linkInBio ?? false} className="mt-0.5" />
+          <span>
+            My skool.com link is in my Instagram, TikTok and YouTube bios. <span className="text-muted-foreground">(Level 3 checks this.)</span>
+          </span>
+        </Label>
+        <MoreOptions title="A few extra numbers" sub="Optional. They sharpen your next moves and the planner below.">
+          <div className="grid grid-cols-2 items-start gap-4 @2xl/main:grid-cols-4">
             <Field>
               <FieldLabel htmlFor="members">Total members</FieldLabel>
               <Input id="members" name="members" inputMode="numeric" defaultValue={last?.members ?? (counts.members + counts.trials || "")} placeholder="0" />
@@ -182,30 +122,187 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
               <FieldDescription>Settings › Discovery.</FieldDescription>
             </Field>
           </div>
-          <Label className="flex items-center gap-2 text-sm font-normal">
-            <input type="checkbox" name="linkInBio" defaultChecked={last?.linkInBio ?? false} />
-            My skool.com link is in my Instagram, TikTok and YouTube bios.
-          </Label>
           <Field>
             <FieldLabel htmlFor="note">Note to self</FieldLabel>
             <Input id="note" name="note" placeholder="What I changed this week" />
           </Field>
-          <SubmitButton className="self-start" pendingText="Saving…">
+        </MoreOptions>
+        <div className="flex flex-wrap items-center gap-3">
+          <SubmitButton size="lg" pendingText="Saving…">
+            <CheckIcon data-icon="inline-start" />
             Save check-in
           </SubmitButton>
+          <span className="text-xs text-muted-foreground">Same time next Monday. Boring on purpose.</span>
+        </div>
+      </Panel>
+    </form>
+  );
+
+  return (
+    <>
+      <PageHead
+        lesson="3.4"
+        stage="Stage 3"
+        title="Growth ladder"
+        sub="Skool runs ads for communities that climb its levels. See which rung you're on and exactly what gets you to the next one."
+        first={stale ? "Do your Monday check-in: copy 4 numbers from Skool › Settings › Growth into the form below." : undefined}
+      />
+      <Flash searchParams={await searchParams} />
+
+      {/* The ladder itself: four rungs, the one you're climbing to is lit up. */}
+      <section aria-label="Skool's growth levels" className="flex flex-col gap-3">
+        <ol className="grid gap-3 @xl/main:grid-cols-2 @4xl/main:grid-cols-4">
+          {LEVELS.map((l) => {
+            const reached = ladder.qualifies >= l.level;
+            const here = ladder.qualifies === l.level;
+            const isNext = ladder.next?.level === l.level;
+            return (
+              <li
+                key={l.level}
+                className={cn(
+                  "relative flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/[0.07]",
+                  reached && "bg-success-soft ring-success/25",
+                  isNext && "ring-2 ring-primary",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={cn(
+                      "grid size-9 place-items-center rounded-xl font-heading text-lg font-bold",
+                      reached ? "bg-success text-white dark:text-background" : isNext ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {reached ? <CheckIcon className="size-5" strokeWidth={3} aria-hidden /> : l.level}
+                  </span>
+                  {here ? (
+                    <span className="rounded-full bg-success px-2 py-0.5 text-[11px] font-bold text-white dark:text-background">You&apos;re here</span>
+                  ) : isNext ? (
+                    <span className="flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-accent-foreground">
+                      <TargetIcon className="size-3" aria-hidden /> Next rung
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Level {l.level}</span>
+                  )}
+                </div>
+                <span className="font-heading text-[17px] leading-tight font-semibold">
+                  <span className="sr-only">Level {l.level}: </span>
+                  {l.name}
+                </span>
+                {/* On a phone only the rung you're climbing to keeps its details, so the check-in isn't miles down. */}
+                <span className={cn("text-sm text-muted-foreground", !isNext && "hidden @xl/main:block")}>{l.reward}</span>
+                <ul className={cn("mt-auto flex-col gap-1 border-t border-foreground/[0.07] pt-2.5 text-xs", isNext ? "flex" : "hidden @xl/main:flex")}>
+                  {(l.level === 1 ? ["Cover, description, About page, 1 post, invited members"] : requirementLines(l.req)).map((r) => (
+                    <li key={r} className="flex gap-1.5">
+                      <span className={cn("mt-1 size-1.5 shrink-0 rounded-full", reached ? "bg-success" : "bg-foreground/25")} aria-hidden />
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            );
+          })}
+        </ol>
+        <p className="text-xs text-muted-foreground">Skool decides the spend, and it isn&apos;t guaranteed. Every requirement counts the last 30 days, so it&apos;s a pace, not a pile.</p>
+      </section>
+
+      {stale ? checkin : null}
+
+      <div className="grid items-start gap-5 @3xl/main:grid-cols-[1.15fr_1fr]">
+        <Panel icon={TrendingUpIcon} tone="success" title={ladder.next ? `What's between you and Level ${ladder.next.level}` : "You're at the top"} sub={ladder.next?.reward}>
+          {ladder.gaps.length ? (
+            <ul className="flex flex-col gap-3.5">
+              {ladder.gaps.map((g) => (
+                <li key={g.label} className="flex flex-col gap-1.5">
+                  <div className="flex justify-between gap-2 text-sm">
+                    <span className="font-medium">{g.label}</span>
+                    <span className={cn("tabular-nums", g.done ? "font-semibold text-success" : "text-muted-foreground")}>
+                      {g.toggle ? (g.done ? "Done" : "Not yet") : `${g.have.toLocaleString()} / ${g.need.toLocaleString()}`}
+                    </span>
+                  </div>
+                  <Progress value={Math.min(100, g.need ? (g.have / g.need) * 100 : 100)} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="flex flex-col gap-2.5 rounded-xl bg-muted/60 p-3.5">
+            <span className="text-sm font-semibold">Your next moves</span>
+            <ol className="flex flex-col gap-2.5 text-sm">
+              {ladder.moves.map((m, i) => (
+                <li key={m} className="flex gap-2.5">
+                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground tabular-nums">{i + 1}</span>
+                  <span>{m}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          {last && last.skoolLevel !== ladder.qualifies ? (
+            <Callout tone="info">
+              Skool shows Level {last.skoolLevel}; your numbers point to Level {ladder.qualifies}. Skool reviews levels on its side and needs 2–4 weeks of data for a new group, so a short lag is normal.
+            </Callout>
+          ) : null}
         </Panel>
-      </form>
 
-      <Panel title="Budget planner" sub="How many About-page visitors your budget buys, and which level's visitor bar it clears.">
-        <BudgetPlanner initialBudget={last?.adSpendPerDay ?? 10} initialOrganic={0} initialPrice={workspace.settings.skoolMemberPrice ?? 29} />
-      </Panel>
+        <Panel icon={LinkIcon} title="Your Skool link" sub="Point your ads here, not straight at Skool. It counts every click by source and tells Meta about each visit, so your ads learn who actually lands.">
+          {target ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Input readOnly value={link} className="font-mono text-xs" aria-label="Your Skool link" />
+                <CopyButton text={link} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Goes to <span className="break-all">{target}</span>. Add <code>?src=ads</code>, <code>?src=youtube</code> and so on to split sources. In your Instagram and TikTok bios, use your plain skool.com link so Skool credits it as organic promotion.
+              </p>
+            </>
+          ) : (
+            <Callout
+              tone="warn"
+              title="Add your Skool group link first"
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`${base}/settings#business`}>
+                    <SettingsIcon data-icon="inline-start" />
+                    Add it in Settings
+                  </Link>
+                </Button>
+              }
+            >
+              Your Skool link turns on the moment it knows where your group lives.
+            </Callout>
+          )}
+          <dl className="grid grid-cols-2 gap-3">
+            <MiniStat icon={MousePointerClickIcon} label="Clicks, 30 days" value={visits.total.toLocaleString()} hint={visits.total ? undefined : "Your own test click doesn't count"} />
+            <MiniStat icon={LinkIcon} label="Top source" value={visits.bySource[0]?.source ?? "—"} hint={visits.bySource[0] ? `${visits.bySource[0].count} clicks` : "Shows once clicks come in"} />
+          </dl>
+          {visits.bySource.length > 1 ? (
+            <ul className="flex flex-wrap gap-2 text-xs">
+              {visits.bySource.slice(0, 8).map((s) => (
+                <li key={s.source} className="rounded-full border bg-background px-2.5 py-1">
+                  {s.source} · <span className="tabular-nums">{s.count}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {!workspace.settings.metaPixelId ? (
+            <p className="text-xs text-muted-foreground">
+              Connect your pixel in <Link href={`${base}/settings#tracking`}>Settings</Link> to send ViewContent events.
+            </p>
+          ) : null}
+        </Panel>
+      </div>
 
-      <Panel title="If Skool spends on you" sub="Skool decides what it spends on your ads, and it isn't guaranteed. Plug in what Skool actually spends and see what you keep.">
-        <BoostCalculator initialBoost={last?.boostPercent ?? 30} />
-      </Panel>
+      {stale ? null : checkin}
+
+      <div className="flex flex-col gap-3">
+        <MoreOptions icon={CalculatorIcon} title="Budget planner" sub="How many About-page visitors your budget buys, and which level's visitor bar it clears.">
+          <BudgetPlanner initialBudget={last?.adSpendPerDay ?? 10} initialOrganic={0} initialPrice={workspace.settings.skoolMemberPrice ?? 29} />
+        </MoreOptions>
+        <MoreOptions icon={CoinsIcon} title="If Skool spends on you" sub="Plug in what Skool actually spends and see what you keep. Skool decides the spend, and it isn't guaranteed.">
+          <BoostCalculator initialBoost={last?.boostPercent ?? 30} />
+        </MoreOptions>
+      </div>
 
       {checkins.length > 1 ? (
-        <Panel title="History">
+        <Panel icon={HistoryIcon} tone="muted" title="History" sub="Your last few Monday check-ins. Watch the visitor column climb.">
           <Table>
             <TableHeader>
               <TableRow>

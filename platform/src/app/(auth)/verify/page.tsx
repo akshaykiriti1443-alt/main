@@ -18,11 +18,11 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   const data = readVerifyToken(token);
   if (!data) {
     return (
-      <AuthShell title="Confirm your email">
-        <Callout tone="error" className="mb-4">
+      <AuthShell title="Confirm your email" sub="Nearly there. This link needs a quick refresh first.">
+        <Callout tone="error" className="mb-5">
           {VERIFY_EXPIRED}
         </Callout>
-        <Button asChild className="w-full">
+        <Button asChild size="lg" className="w-full">
           <Link href="/login">Log in</Link>
         </Button>
       </AuthShell>
@@ -34,7 +34,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
     return (
       <AuthShell title="Confirm your email" sub={`Log in with the password you chose for ${data.email}, then confirm.`}>
         <LoginForm next={`/verify?token=${encodeURIComponent(token)}`} />
-        <p className="mt-4 text-center text-xs text-muted-foreground">
+        <p className="mt-5 text-center text-xs text-muted-foreground">
           Didn&apos;t create this account, or forgot the password? <Link href="/forgot">Reset the password</Link>. That confirms the email too.
         </p>
       </AuthShell>
@@ -44,11 +44,11 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   if (user.id !== data.uid) {
     return (
       <AuthShell title="Confirm your email">
-        <Callout tone="error" className="mb-4">
+        <Callout tone="error" className="mb-5">
           This link is for {data.email}, but you&apos;re logged in as {user.email}. Log out, then open the link again.
         </Callout>
         <form action="/logout" method="post">
-          <Button type="submit" variant="outline" className="w-full">
+          <Button type="submit" variant="outline" size="lg" className="w-full">
             Log out
           </Button>
         </form>

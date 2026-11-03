@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -46,7 +47,7 @@ export function BudgetPlanner({ initialBudget, initialOrganic, initialPrice }: {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 @3xl/main:grid-cols-3">
         <NumField id="pl-budget" label="Your ad budget / day" prefix="$" value={budget} onChange={setBudget} />
         <NumField id="pl-cpv" label="Cost per About-page visit" prefix="$" value={cpv} onChange={setCpv} hint="Start at $1. Use your real number after a week." />
         <NumField id="pl-organic" label="Organic visitors / 30 days" value={organic} onChange={setOrganic} hint="Bio links, posts, YouTube." />
@@ -54,7 +55,7 @@ export function BudgetPlanner({ initialBudget, initialOrganic, initialPrice }: {
         <NumField id="pl-price" label="Price / month" prefix="$" value={price} onChange={setPrice} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 @xl/main:grid-cols-3">
         <Out label="Visitors / 30 days" value={Math.round(visitors).toLocaleString()} sub={`${Math.round(fromAds).toLocaleString()} from ads`} />
         <Out
           label="New paying members"
@@ -66,14 +67,17 @@ export function BudgetPlanner({ initialBudget, initialOrganic, initialPrice }: {
 
       <p className="text-xs text-muted-foreground">A what-if, not a forecast. Use your real cost per visit and conversion after a week of ads.</p>
 
-      <ol className="grid gap-2 sm:grid-cols-3">
+      <ol className="grid gap-2 @xl/main:grid-cols-3">
         {THRESHOLDS.map((t) => {
           const ok = cleared.includes(t.level);
           const needPerDay = Math.max(0, ((t.visitors - o) * c) / 30);
           return (
-            <li key={t.level} className={cn("rounded-lg border p-3 text-sm", ok && "border-success/40 bg-success-soft")}>
-              <div className="font-medium">Level {t.level} · {t.visitors.toLocaleString()} visitors</div>
-              <div className="text-muted-foreground">{ok ? "Visitor bar cleared." : `Needs about ${money(needPerDay)}/day in ads at your numbers.`}</div>
+            <li key={t.level} className={cn("flex flex-col gap-0.5 rounded-xl border bg-background/60 p-3 text-sm", ok && "border-success/30 bg-success-soft")}>
+              <div className="flex items-center gap-1.5 font-semibold">
+                {ok ? <CheckIcon className="size-4 text-success" strokeWidth={3} aria-hidden /> : null}
+                Level {t.level} · {t.visitors.toLocaleString()} visitors
+              </div>
+              <div className={ok ? "text-success" : "text-muted-foreground"}>{ok ? "Visitor bar cleared." : `Needs about ${money(needPerDay)}/day in ads at your numbers.`}</div>
             </li>
           );
         })}
@@ -100,18 +104,18 @@ export function BoostCalculator({ initialBoost }: { initialBoost: number }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 @3xl/main:grid-cols-4">
         <NumField id="b-spend" label="Skool spends / day" prefix="$" value={spend} onChange={setSpend} hint="What Skool actually spends. It isn't guaranteed." />
         <NumField id="b-roas" label="Revenue per $1 spent" value={roas} onChange={setRoas} hint="First month." />
         <NumField id="b-boost" label="Your Growth Boost %" value={boost} onChange={setBoost} hint="Skool's cut. Default 30%." />
         <NumField id="b-ret" label="Monthly retention %" value={retention} onChange={setRetention} />
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 @xl/main:grid-cols-3">
         <Out label="New revenue / month" value={money(gross)} sub={`Skool keeps ${money(gross * share)}`} />
         <Out label="You keep, month 1" value={money(gross * (1 - share))} strong />
         <Out label="You keep / month by month 6" value={money(runRate(6) * (1 - share))} sub="Members who stay keep paying" strong />
       </div>
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-xl border bg-background/60">
         <table className="w-full min-w-[360px] text-sm">
           <thead>
             <tr className="border-b text-left text-muted-foreground">
@@ -136,9 +140,9 @@ export function BoostCalculator({ initialBoost }: { initialBoost: number }) {
 
 function Out({ label, value, sub, strong }: { label: string; value: string; sub?: string; strong?: boolean }) {
   return (
-    <div className={cn("rounded-lg border p-3", strong && "border-primary bg-accent")}>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+    <div className={cn("rounded-xl bg-muted/60 p-3.5", strong && "bg-accent ring-1 ring-primary/20")}>
+      <div className={cn("text-xs font-medium text-muted-foreground", strong && "text-accent-foreground")}>{label}</div>
+      <div className="mt-1 font-heading text-2xl font-bold tabular-nums">{value}</div>
       {sub ? <div className="text-xs text-muted-foreground">{sub}</div> : null}
     </div>
   );
