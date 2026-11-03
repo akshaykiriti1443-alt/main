@@ -6,6 +6,8 @@ import { env } from "@/lib/env";
 import { addTag, contactName, contactTimeline, getContact, listContacts, removeTag, setStage, updateContactDetails } from "./contacts";
 import { getPage, getSite, listPages, listSites, publishSite, savePageContent, siteBaseUrl } from "./sites";
 import { listAutomations, saveAutomation } from "./automations";
+import { AUTOMATION_GUIDE, finishDraft, MAX_STEPS, STEP_TYPES, TRIGGER_TYPES } from "./ai/automationDraft";
+import { listSequences } from "./email/sequences";
 import { AUTOMATION_PRESETS, presetByKey } from "./automationPresets";
 import { workspaceStats } from "./analytics";
 import { skoolChurnPreview, skoolMemberCounts, syncSkoolMembers } from "./skool";
@@ -401,6 +403,77 @@ const TOOLS: Tool[] = [
       if (!preset) throw new Error(`Unknown recipe. Use one of: ${AUTOMATION_PRESETS.map((p) => p.key).join(", ")}`);
       const id = await saveAutomation(workspaceId, null, { ...preset.def, active: Boolean(args.active) });
       return { ok: true, id, active: Boolean(args.active), review: `${env.appUrl}/app/w/${workspaceId}/automations/${id}` };
+    },
+  },
+  {
+    name: "create_automation",
+    description: `Build a custom automation the owner described: one trigger and up to ${MAX_STEPS} steps, using only what's listed below. Call list_automations first so you don't duplicate one, and show the owner the plan (every email in full) before calling this. It starts switched OFF so the owner can review it; pass active: true only if the owner explicitly said to switch it on. Growth plan.
+
+${AUTOMATION_GUIDE}`,
+    inputSchema: obj(
+      {
+        name: str("2-6 words, like 'Save a cancelling member'"),
+        trigger: obj({ type: { type: "string", enum: [...TRIGGER_TYPES] }, value: str('Optional filter, "" for any. Required for tag_added.') }, ["type"]),
+        steps: {
+          type: "array",
+          maxItems: MAX_STEPS,
+          items: obj(
+            {
+              type: { type: "string", enum: [...STEP_TYPES] },
+              tag: str("add_tag / remove_tag"),
+              stage: str("set_stage: new, engaged, trial, member or lost"),
+              minutes: { type: "integer", description: "wait: 1440 = 1 day" },
+              subject: str("send_email"),
+              body: str("send_email or send_message"),
+              message: str("notify_owner"),
+              temperature: str("only_if_temperature: hot, warm or cold"),
+              instruction: str("ask_my_ai"),
+              sequenceId: str("enroll_sequence: an id from the owner's sequences"),
+            },
+            ["type"],
+          ),
+        },
+        active: { type: "boolean", default: false },
+      },
+      ["name", "trigger", "steps"],
+    ),
+    write: true,
+    annotations: { readOnlyHint: false, destructiveHint: true },
+    run: async ({ workspaceId }, a) => {
+      const ws = await workspaceOf(workspaceId);
+      if (!hasFeature(ws.plan, "automations")) throw new Error("Automations are on the Growth plan. The owner can upgrade in Plan & wallet.");
+      const text = z.string().max(20000).optional().default("");
+      const args = z
+        .object({
+          name: z.string().max(200),
+          trigger: z.object({ type: z.enum(TRIGGER_TYPES), value: z.string().max(200).optional().default("") }),
+          steps: z
+            .array(
+              z.object({
+                type: z.enum(STEP_TYPES),
+                tag: text,
+                stage: text,
+                minutes: z.number().optional().default(0),
+                subject: text,
+                body: text,
+                message: text,
+                temperature: text,
+                instruction: text,
+                sequenceId: text,
+              }),
+            )
+            .max(MAX_STEPS),
+          active: z.boolean().optional(),
+        })
+        .parse(a);
+      const [sites, sequences] = await Promise.all([listSites(workspaceId), listSequences(workspaceId)]);
+      const finished = finishDraft(
+        { name: args.name, summary: "", why: "", trigger: args.trigger, steps: args.steps, notes: [] },
+        { siteIds: new Set(sites.map((x) => x.id)), sequenceIds: new Set(sequences.map((x) => x.id)) },
+      );
+      if ("error" in finished) throw new Error(finished.error);
+      const id = await saveAutomation(workspaceId, null, { name: finished.name, trigger: finished.trigger, actions: finished.actions, active: Boolean(args.active) });
+      return { ok: true, id, active: Boolean(args.active), steps: finished.actions.length, notes: finished.notes, review: `${env.appUrl}/app/w/${workspaceId}/automations/${id}` };
     },
   },
   {

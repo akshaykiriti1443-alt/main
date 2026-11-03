@@ -62,6 +62,17 @@ export const PLAYBOOKS: Playbook[] = [
 4. Call update_page to save the draft and show me before and after. Only call publish_site if I say yes.`,
   },
   {
+    name: "build_my_automation",
+    title: "Build my automation",
+    description: "Say what should happen and your AI builds the automation: trigger, emails and every step.",
+    say: `Build me an automation in ${env.platformName}.`,
+    steps: `1. Call get_overview and list_automations, so you know my numbers and what already runs.
+2. Ask me what should happen, to whom and when, unless I already said. If I'm not sure, look at my numbers (cancelling, trials, churned, new leads) and suggest the one that would plug my biggest leak.
+3. Design it using only the triggers and steps that create_automation lists. Anything inside Skool: an ask_my_ai step drafts it and a notify_owner step tells me to send it myself.
+4. Show me the plan in plain words: one line per step, every email in full. Ask "build it?".
+5. When I say yes, call create_automation (switched off unless I said to switch it on) and give me the review link.`,
+  },
+  {
     name: "plan_this_weeks_unlock",
     title: "Plan this week's Unlock",
     description: "Create this week's Unlock: a small reward for a post or comment, plus the Skool post.",

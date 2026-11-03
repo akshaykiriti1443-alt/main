@@ -106,7 +106,8 @@ export function AutomationBuilder({
       const res = await save(id, { name, trigger, actions, active });
       if (res.ok) {
         setMsg({ ok: true, text: "Saved." });
-        if (!id && res.id) router.replace(`/app/w/${workspaceId}/automations/${res.id}`);
+        // Drop any ?draft= from the address, so the saved automation shows instead of the AI's draft.
+        if (res.id && (!id || window.location.search)) router.replace(`/app/w/${workspaceId}/automations/${res.id}`);
         else router.refresh();
       } else setMsg({ ok: false, text: res.error ?? "Couldn't save." });
     });

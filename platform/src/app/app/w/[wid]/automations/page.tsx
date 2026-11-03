@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { ArrowRightIcon, PlusIcon, WorkflowIcon } from "lucide-react";
+import { ArrowRightIcon, PlusIcon, SparklesIcon, WorkflowIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { listAutomations, TRIGGER_LABELS } from "@/server/automations";
 import { AUTOMATION_PRESETS } from "@/server/automationPresets";
+import { automationContext, automationSuggestions, whoBuilds } from "@/server/ai/automationDraft";
+import { draftAutomationAction } from "@/actions/automationAi";
+import { AutomationAiBox } from "@/components/automation-ai";
 import { hasFeature } from "@/server/plans";
 import { Empty, Flash, Locked, PageHead, Panel } from "@/components/ui";
 import { Badge } from "@/components/ui/badge";
@@ -22,12 +25,13 @@ export default async function AutomationsPage({ params, searchParams }: { params
       </>
     );
   }
-  const list = await listAutomations(wid);
+  const [list, ctx] = await Promise.all([listAutomations(wid), automationContext(wid)]);
+  const suggestions = automationSuggestions(ctx);
   return (
     <>
       <PageHead
         title="Automations"
-        sub="When something happens, do something. They run 24/7."
+        sub="When something happens, do something. They run 24/7. Tell your AI what you want, or start from a recipe."
         actions={
           <Button asChild>
             <Link href={`/app/w/${wid}/automations/new`}>
@@ -38,8 +42,26 @@ export default async function AutomationsPage({ params, searchParams }: { params
         }
       />
       <Flash searchParams={await searchParams} />
+      <Panel
+        title={
+          <span className="flex items-center gap-2">
+            <SparklesIcon className="size-4 text-primary" /> Tell your AI what to automate
+          </span>
+        }
+        sub="Say what should happen, to whom and when, in your own words. Or tap an idea from your numbers. Your AI builds the trigger and every step, then opens it for you to read and switch on."
+        className="border-primary/30 bg-linear-to-br from-primary/5 to-transparent"
+      >
+        <AutomationAiBox
+          action={draftAutomationAction.bind(null, wid, null)}
+          suggestions={suggestions}
+          placeholder={`e.g. "When someone starts a trial, email them the one lesson to finish first. On day 5, if they haven't upgraded, have my AI draft a Skool DM and tell me."`}
+          cta="Build it"
+          pendingText="Your AI is building it…"
+          aiNote={whoBuilds(workspace)}
+        />
+      </Panel>
       {list.length === 0 ? (
-        <Empty icon={WorkflowIcon} title="No automations yet" body="Start from a recipe below." />
+        <Empty icon={WorkflowIcon} title="No automations yet" body="Tell your AI above, or start from a recipe below." />
       ) : (
         <Panel>
           <Table>
