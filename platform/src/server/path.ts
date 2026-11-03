@@ -23,15 +23,19 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
   const wid = ws.id;
   const since30 = new Date(Date.now() - 30 * 86_400_000);
   const n = sql<number>`count(*)::int`;
-  const [kits, research, reviews, published, skoolSite, clicks, leads30, checkins, skoolMembers, liveAutomations, myUnlocks, connectors, agencies, loop] = await Promise.all([
+  const [kits, research, reviews, published, skoolSite, clicks, realClicks, leads30, checkins, checkinCount, skoolMembers, liveAutomations, myUnlocks, connectors, agencies, loop] = await Promise.all([
     db.select({ n }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "launch_kit"))),
     db.select({ n }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_research"))),
     db.select({ n }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_review"))),
     db.select({ n }).from(sites).where(and(eq(sites.workspaceId, wid), eq(sites.published, true))),
     db.select({ n }).from(sites).where(and(eq(sites.workspaceId, wid), sql`${sites.skoolUrl} <> ''`)),
     db.select({ n }).from(activities).where(and(eq(activities.workspaceId, wid), eq(activities.type, "skool_visit"), gte(activities.createdAt, since30))),
+    // Lesson 2.5 has members click their own link to test the Pixel: that's a "direct" visit, so it
+    // doesn't count as sending traffic (2.6). Ads, bios and posts do.
+    db.select({ n }).from(activities).where(and(eq(activities.workspaceId, wid), eq(activities.type, "skool_visit"), sql`coalesce(${activities.data}->>'source', 'direct') <> 'direct'`)),
     db.select({ n }).from(activities).where(and(eq(activities.workspaceId, wid), eq(activities.type, "lead"), gte(activities.createdAt, since30))),
     db.select().from(skoolCheckins).where(eq(skoolCheckins.workspaceId, wid)).orderBy(sql`${skoolCheckins.createdAt} desc`).limit(1),
+    db.select({ n }).from(skoolCheckins).where(eq(skoolCheckins.workspaceId, wid)),
     db.select({ n }).from(contacts).where(and(eq(contacts.workspaceId, wid), sql`${MEMBER_TAG} = any(${contacts.tags})`)),
     db.select({ n }).from(automations).where(and(eq(automations.workspaceId, wid), eq(automations.active, true))),
     db.select({ n }).from(unlocks).where(eq(unlocks.workspaceId, wid)),
@@ -56,7 +60,10 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
   const level = Math.max(ladder.qualifies, last?.skoolLevel ?? 1);
   const growthPlan = hasFeature(ws.plan, "automations");
   const aiOn = count(connectors) > 0 || Boolean(s.aiKeyEnc);
+  const l = loop[0];
 
+  // Lesson numbers and stage names match the course (The Skool Growth Ladder). If a lesson is
+  // renumbered there, change it here too.
   const stages: PathStage[] = [
     {
       key: "start",
@@ -66,7 +73,7 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
         { key: "app", title: "Open your app", why: "You're in. No codes, ever.", lesson: "0.4", href: base, done: true },
         // Only trackable when the entry ticket is on (then the intro post is how they got in).
         ...(opts.entryTicketOn && ws.accessSource === "member"
-          ? [{ key: "hello", title: "Say hi in the community", why: "Your intro is your first post. Likes on it unlock your first bonus.", lesson: "0.5", href: `${base}/hello`, done: Boolean(s.entryClaimedAt) }]
+          ? [{ key: "hello", title: "Say hi in the community", why: "Your intro is your first post. Likes on it unlock your first bonus.", lesson: "0.4", href: `${base}/hello`, done: Boolean(s.entryClaimedAt) }]
           : []),
       ],
     },
@@ -76,9 +83,9 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
       title: "Open the shop",
       steps: [
         { key: "kit", title: "Build your launch kit", why: "AI writes your page, free guide, emails, 3-Pack and About page.", lesson: "1.2", href: `${base}/launch`, done: count(kits) > 0 },
+        { key: "skool", title: "Add your Skool group link", why: "Every Join button and your Skool link point here.", lesson: "1.2", href: `${base}/settings#business`, done: Boolean(s.skoolUrl) || count(skoolSite) > 0 },
         { key: "publish", title: "Publish your funnel", why: "Edit three lines, then press the scary button.", lesson: "1.3", href: `${base}/sites`, done: count(published) > 0 },
-        { key: "skool", title: "Add your Skool group link", why: "Every Join button and your Skool link point here.", lesson: "1.4", href: `${base}/settings#business`, done: Boolean(s.skoolUrl) || count(skoolSite) > 0 },
-        { key: "price", title: "Set your member price", why: "Level 2 needs subscription or tiers pricing. Also sets your Meta Subscribe value.", lesson: "1.5", href: `${base}/skool`, done: Boolean(s.skoolMemberPrice) },
+        { key: "price", title: "Set your member price", why: "Level 2 needs subscription or tiers pricing. Save the same price in Skool members so Meta knows what a member is worth.", lesson: "1.5", href: `${base}/skool`, done: Boolean(s.skoolMemberPrice) },
       ],
     },
     {
@@ -86,9 +93,10 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
       tag: "Stage 2",
       title: "The ad kitchen",
       steps: [
-        { key: "research", title: "Spy on long-running ads", why: "A competitor's 90-day ad is a free lesson they paid for.", lesson: "2.1", href: `${base}/ads/research`, done: count(research) > 0 },
+        // Saved when Ad research's "Analyse with AI" runs (or your connected AI saves a 3-Pack), which is lesson 2.3.
+        { key: "research", title: "Turn long-running ads into your 3-Pack", why: "Search your niche, then Analyse with AI: Pain, Dream and Lesson, built from ads that already work.", lesson: "2.3", href: `${base}/ads/research`, done: count(research) > 0 },
         { key: "pixel", title: "Connect your Meta Pixel", why: "So ads learn who actually lands on your About page.", lesson: "2.5", href: `${base}/settings#tracking`, done: Boolean(s.metaPixelId) },
-        { key: "clicks", title: "Send traffic through your Skool link", why: "Your 3-Pack, launched at your budget tier, pointed at your Skool link.", lesson: "2.6", href: `${base}/growth`, done: count(clicks) > 0 },
+        { key: "clicks", title: "Send traffic through your Skool link", why: "Your 3-Pack, launched at your budget tier, pointed at your Skool link. (Your own test click doesn't count.)", lesson: "2.6", href: `${base}/growth`, done: count(realClicks) > 0 },
         { key: "review", title: "Keep, fix or kill", why: "After 72 hours: fix one room only. Hook, Turn or Door.", lesson: "2.8", href: `${base}/ads`, done: count(reviews) > 0 },
       ],
     },
@@ -97,8 +105,8 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
       tag: "Stage 3",
       title: "Wake up Printy (Level 2)",
       steps: [
+        { key: "customer", title: "Land your first paying member", why: "Level 2 needs one new customer. They're usually in your phone, not your ads.", lesson: "3.3", href: `${base}/leads`, done: (l?.paying ?? 0) > 0 || (last?.newPaid ?? 0) >= 1 || level >= 2 },
         { key: "checkin", title: "Do your first Monday check-in", why: "Four numbers from Skool › Settings › Growth.", lesson: "3.4", href: `${base}/growth`, done: Boolean(last) },
-        { key: "sync", title: "Bring your members into the CRM", why: "Trials, paying, cancelling and churned on one timeline.", lesson: "6.1", href: `${base}/skool`, done: count(skoolMembers) > 0 },
         { key: "l2", title: "Reach Level 2", why: "100 About-page visitors + 1 new customer. Skool starts running 6 ads for you.", lesson: "3.5", href: `${base}/growth`, done: level >= 2 },
       ],
     },
@@ -107,7 +115,9 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
       tag: "Stage 4",
       title: "The 3,000 club (Level 3)",
       steps: [
+        { key: "visitors", title: "Reach 3,000 About-page visitors", why: "Last 30 days, so it's a pace, not a pile. Your $30–$50 base camp plus the repost covers it.", lesson: "4.2", href: `${base}/growth`, done: (last?.aboutVisitors ?? 0) >= 3000 || level >= 3 },
         { key: "bio", title: "Put your Skool link in your bios", why: "The laziest requirement you'll ever meet. Skool checks it.", lesson: "4.3", href: `${base}/growth`, done: Boolean(last?.linkInBio) },
+        { key: "network", title: "Earn 10 Skool Network sign-ups", why: "People Skool sends you. Hellos and real replies on Skool earn them.", lesson: "4.5", href: `${base}/growth`, done: (last?.networkSignups ?? 0) >= 10 || level >= 3 },
         { key: "l3", title: "Reach Level 3", why: "Upload your own ads. Skool spends up to $1,000 a day on them.", lesson: "4.6", href: `${base}/growth`, done: level >= 3 },
       ],
     },
@@ -122,6 +132,7 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
       tag: "Stage 6",
       title: "Plug the leaky bucket",
       steps: [
+        { key: "sync", title: "Bring your members into the CRM", why: "Trial, paying, cancelling and churned, in four piles.", lesson: "6.1", href: `${base}/skool`, done: count(skoolMembers) > 0 },
         {
           key: "automations",
           title: "Switch on your member automations",
@@ -141,12 +152,17 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
       title: "The second floor",
       steps: [{ key: "agency", title: "Resell this stack as yours", why: "Your brand, your domain, your markup. Optional, and very lucrative.", lesson: "7.3", href: "/app/agency/new", done: count(agencies) > 0 }],
     },
+    {
+      key: "rhythm",
+      tag: "Stage 8",
+      title: "One boring hour a week",
+      steps: [{ key: "weeks", title: "Do four Monday check-ins", why: "Boring on purpose. Four Mondays and it's a habit, not a heroic effort.", lesson: "8.1", href: `${base}/growth`, done: count(checkinCount) >= 4 }],
+    },
   ];
 
   const all = stages.flatMap((st) => st.steps);
   const done = all.filter((x) => x.done).length;
   const next = all.find((x) => !x.done) ?? null;
-  const l = loop[0];
   const counts: LoopCounts = {
     clicks: count(clicks),
     leads: count(leads30),
