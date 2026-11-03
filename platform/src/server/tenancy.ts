@@ -49,6 +49,8 @@ export type WorkspaceContext = {
   agency: Agency;
   role: WorkspaceRole;
   effectiveStatus: "active" | "grace" | "paused";
+  /** Set when the platform owner is previewing the app as a kind of member ("View as"). */
+  viewAs: import("./viewAs").ViewAs | null;
 };
 
 async function loadWorkspaceContext(workspaceId: string): Promise<WorkspaceContext> {
@@ -81,8 +83,12 @@ async function loadWorkspaceContext(workspaceId: string): Promise<WorkspaceConte
   if (!role && user.isPlatformAdmin) role = "owner";
   if (!role) notFound();
 
-  const effectiveStatus = row.agency.status === "paused" ? "paused" : row.workspace.status;
-  return { user, workspace: row.workspace, agency: row.agency, role, effectiveStatus };
+  // "View as": the platform owner previews a member's experience; only this request's copy changes.
+  const { currentViewAs, previewWorkspace } = await import("./viewAs");
+  const viewAs = user.isPlatformAdmin ? await currentViewAs() : null;
+  const workspace = viewAs ? previewWorkspace(row.workspace, viewAs) : row.workspace;
+  const effectiveStatus = row.agency.status === "paused" ? "paused" : workspace.status;
+  return { user, workspace, agency: row.agency, role, effectiveStatus, viewAs };
 }
 
 export const getWorkspaceContext = cache(loadWorkspaceContext);
@@ -95,6 +101,7 @@ export async function requireWorkspace(workspaceId: string, minRole: WorkspaceRo
   if (ROLE_RANK[ctx.role] < ROLE_RANK[minRole]) throw new Error("You don't have permission for this action.");
   if (ctx.effectiveStatus === "paused" && !opts.allowPaused) redirect(`/app/w/${workspaceId}/paused`);
   // The entry ticket: new members post their intro in the community before the app opens.
+  if (!opts.allowEntry && ctx.viewAs === "entry") redirect(`/app/w/${workspaceId}/hello`);
   if (!opts.allowEntry && !ctx.user.isPlatformAdmin && ctx.workspace.accessSource === "member") {
     const { entryTicketPending } = await import("./unlocks");
     if (await entryTicketPending(await entryTicket(), ctx.workspace)) redirect(`/app/w/${workspaceId}/hello`);

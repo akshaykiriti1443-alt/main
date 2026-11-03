@@ -57,7 +57,7 @@ export async function listAllAgencies() {
     .orderBy(desc(agencies.createdAt));
 }
 
-export async function adminSetWorkspace(workspaceId: string, patch: { plan?: "starter" | "growth"; status?: "active" | "grace" | "paused"; accessSource?: "admin" }) {
+export async function adminSetWorkspace(workspaceId: string, patch: { plan?: "starter" | "growth" | "owner"; status?: "active" | "grace" | "paused"; accessSource?: "admin" }) {
   const db = await getDb();
   await db
     .update(workspaces)

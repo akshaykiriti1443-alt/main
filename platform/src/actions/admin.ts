@@ -48,7 +48,7 @@ export async function setWorkspaceAction(wid: string, fd: FormData) {
   const plan = field(fd, "plan");
   const status = field(fd, "status");
   await adminSetWorkspace(wid, {
-    ...(plan === "starter" || plan === "growth" ? { plan } : {}),
+    ...(plan === "starter" || plan === "growth" || plan === "owner" ? { plan } : {}),
     ...(status === "active" || status === "grace" || status === "paused" ? { status } : {}),
     ...(fd.get("lifetime") === "on" ? { accessSource: "admin" as const } : {}),
   });

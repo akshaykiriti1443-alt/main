@@ -67,8 +67,9 @@ export async function toggleUnlockAction(wid: string, id: string, active: boolea
 
 /** The entry ticket: the member posts their intro, pastes the link, and their account unlocks. */
 export async function entryTicketAction(wid: string, _prev: ClaimState, fd: FormData): Promise<ClaimState> {
-  const { user } = await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
+  const { user, viewAs } = await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
   const postUrl = field(fd, "postUrl", 500);
+  if (viewAs) return { error: "Preview only: nothing was claimed. A member pastes their post link here and their account opens. Switch View as back to Owner to carry on.", values: { postUrl } };
   const res = await claimEntryTicket(wid, { email: user.email, name: user.name }, postUrl);
   if (!res.ok) return { error: res.error, values: { postUrl } };
   redirect(`/app/w/${wid}/launch`);

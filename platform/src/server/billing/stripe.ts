@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { agencies, memberAccess, subscriptions, workspaces, type WalletOwner } from "@/lib/db/schema";
 import { hmacHex, safeEqual } from "@/lib/crypto";
@@ -119,7 +119,8 @@ type StripeObject = {
 async function applyPlan(ownerType: WalletOwner, ownerId: string, plan: "growth" | "agency", active: boolean) {
   const db = await getDb();
   if (ownerType === "workspace" && plan === "growth") {
-    await db.update(workspaces).set({ plan: active ? "growth" : "starter" }).where(eq(workspaces.id, ownerId));
+    // The platform owner's workspaces stay on Owner whatever a subscription does.
+    await db.update(workspaces).set({ plan: active ? "growth" : "starter" }).where(and(eq(workspaces.id, ownerId), ne(workspaces.plan, "owner")));
   }
   if (ownerType === "agency" && plan === "agency") {
     await db

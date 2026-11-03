@@ -47,6 +47,7 @@ export default async function AdminWorkspaces({ searchParams }: { searchParams: 
                     <NativeSelect size="sm" name="plan" defaultValue={w.plan} aria-label="Plan">
                       <NativeSelectOption value="starter">Member</NativeSelectOption>
                       <NativeSelectOption value="growth">Growth</NativeSelectOption>
+                      <NativeSelectOption value="owner">Owner (everything)</NativeSelectOption>
                     </NativeSelect>
                     <NativeSelect size="sm" name="status" defaultValue={w.status} aria-label="Status">
                       <NativeSelectOption value="active">active</NativeSelectOption>

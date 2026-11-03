@@ -13,6 +13,7 @@ import { checkAccessAction } from "@/actions/account";
 import { SubmitButton } from "@/components/client";
 import { Callout } from "@/components/ui";
 import { Button } from "@/components/ui/button";
+import { ViewAsBar } from "@/components/view-as-bar";
 
 export default async function WorkspaceLayout({ children, params }: { children: React.ReactNode; params: Promise<{ wid: string }> }) {
   const { wid } = await params;
@@ -31,6 +32,7 @@ export default async function WorkspaceLayout({ children, params }: { children: 
     {
       items: [
         { href: base, label: "Dashboard", icon: "dashboard", exact: true },
+        { href: `${base}/path`, label: "Your path", icon: "route" },
         { href: `${base}/launch`, label: "AI launch kit", icon: "sparkles" },
       ],
     },
@@ -157,7 +159,16 @@ export default async function WorkspaceLayout({ children, params }: { children: 
       groups={groups}
       places={places}
       user={{ email: user.email, name: user.name }}
-      banner={banner}
+      banner={
+        user.isPlatformAdmin ? (
+          <div className="flex flex-col gap-3">
+            <ViewAsBar wid={wid} current={ctx.viewAs ?? "owner"} />
+            {banner}
+          </div>
+        ) : (
+          banner
+        )
+      }
     >
       {children}
     </AppShell>

@@ -16,7 +16,7 @@ async function main() {
     console.log(`Password set for ${email}.`);
   }
   const u = await db.select({ email: users.email, admin: users.isPlatformAdmin }).from(users);
-  const w = await db.select({ name: workspaces.name, status: workspaces.status, source: workspaces.accessSource }).from(workspaces);
+  const w = await db.select({ name: workspaces.name, plan: workspaces.plan, status: workspaces.status, source: workspaces.accessSource }).from(workspaces);
   console.log(JSON.stringify({ users: u, workspaces: w }, null, 1));
   await closeDb();
 }

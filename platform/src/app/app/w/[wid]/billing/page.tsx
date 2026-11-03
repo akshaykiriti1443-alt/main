@@ -53,14 +53,14 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
         <Stat
           icon={ActivityIcon}
           label="Status"
-          value={workspace.status === "active" ? "Active" : workspace.status === "grace" ? "Needs code" : "Paused"}
+          value={workspace.status === "active" ? "Active" : workspace.status === "grace" ? "Membership ending" : "Paused"}
           hint={workspace.accessVerifiedUntil ? `Access confirmed to ${workspace.accessVerifiedUntil.toDateString()}` : workspace.accessSource === "admin" ? "Lifetime access" : undefined}
         />
       </div>
 
       {!agencyPays ? (
         <div className="grid gap-4 md:grid-cols-2">
-          {(Object.keys(PLANS) as (keyof typeof PLANS)[]).map((key) => {
+          {(Object.keys(PLANS) as (keyof typeof PLANS)[]).filter((key) => key !== "owner" || plan === "owner").map((key) => {
             const tier = PLANS[key];
             const current = key === plan;
             return (

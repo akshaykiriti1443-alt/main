@@ -13,10 +13,13 @@ export const metadata = { title: "Say hi" };
 // The entry ticket: the last step before the app opens is one intro post in the community.
 export default async function HelloPage({ params }: { params: Promise<{ wid: string }> }) {
   const { wid } = await params;
-  const { workspace, user } = await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
+  const { workspace, user, viewAs } = await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
   const ticket = await getEntryTicket();
-  if (!ticket?.unlock || !(await entryTicketPending(ticket, workspace))) redirect(`/app/w/${wid}`);
-  const u = ticket.unlock;
+  const preview = viewAs === "entry";
+  if (!preview && (!ticket?.unlock || !(await entryTicketPending(ticket, workspace)))) redirect(`/app/w/${wid}`);
+  // In "View as: Entry ticket" the owner sees this screen even before the ticket is set up.
+  const u = ticket?.unlock ?? { action: "post" as const, instructions: "Introduce yourself: who you are, what you're building, and your daily ad budget.", skoolPostUrl: "" };
+  const ticketOff = !ticket?.on;
   const first = user.name.split(" ")[0] || "there";
   const communityUrl = u.skoolPostUrl || env.skoolGroupUrl;
   const kind = u.action === "comment" ? "comment" : "post";
@@ -35,6 +38,11 @@ export default async function HelloPage({ params }: { params: Promise<{ wid: str
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
+        {preview && ticketOff ? (
+          <p className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-xs">
+            Preview: the entry ticket is off, so members don&apos;t see this yet. Turn it on in Platform admin › Members › Entry ticket.
+          </p>
+        ) : null}
         <ol className="flex flex-col gap-3 text-sm">
           <li className="flex gap-3">
             <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">1</span>

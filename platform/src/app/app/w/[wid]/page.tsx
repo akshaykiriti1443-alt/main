@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { and, desc, eq } from "drizzle-orm";
-import { ArrowRightIcon, CheckIcon, EyeIcon, FlameIcon, MailIcon, SparklesIcon, UsersIcon } from "lucide-react";
+import { desc, eq } from "drizzle-orm";
+import { ArrowRightIcon, EyeIcon, FlameIcon, MailIcon, SparklesIcon, UsersIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
-import { aiGenerations, channelConnections, contacts } from "@/lib/db/schema";
+import { contacts } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
 import { workspaceStats } from "@/server/analytics";
 import { listSites } from "@/server/sites";
 import { contactName } from "@/server/contacts";
-import { hasFeature } from "@/server/plans";
+import { computePath } from "@/server/path";
+import { getEntryTicket } from "@/server/unlocks";
 import { relativeTime } from "@/lib/util";
 import { cn } from "@/lib/utils";
 import { Empty, Flash, PageHead, Panel, Stat, TempBadge } from "@/components/ui";
@@ -18,35 +19,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 export default async function Dashboard({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
-  const { workspace } = await requireWorkspace(wid);
+  const { workspace, user } = await requireWorkspace(wid);
   const db = await getDb();
-  const [stats, sites, recent, kits, reviews, channels] = await Promise.all([
+  const [stats, sites, recent, path] = await Promise.all([
     workspaceStats(wid),
     listSites(wid),
     db.select().from(contacts).where(eq(contacts.workspaceId, wid)).orderBy(desc(contacts.createdAt)).limit(6),
-    db.select({ id: aiGenerations.id }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "launch_kit"))).limit(1),
-    db.select({ id: aiGenerations.id }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_review"))).limit(1),
-    db.select({ kind: channelConnections.kind }).from(channelConnections).where(and(eq(channelConnections.workspaceId, wid), eq(channelConnections.status, "active"))),
+    computePath(workspace, user.id, { entryTicketOn: Boolean((await getEntryTicket())?.on) }),
   ]);
   const max = Math.max(1, ...stats.series.map((d) => d.views));
   const base = `/app/w/${wid}`;
-  const s = workspace.settings;
-
-  const checklist = [
-    { done: kits.length > 0, label: "Generate your AI launch kit", href: `${base}/launch` },
-    { done: sites.some((x) => x.published), label: "Publish your funnel", href: sites[0] ? `${base}/sites/${sites[0].id}` : `${base}/sites` },
-    { done: Boolean(s.skoolUrl || sites.some((x) => x.skoolUrl)), label: "Add your Skool group link", href: `${base}/settings` },
-    { done: Boolean(s.metaPixelId), label: "Add your Meta Pixel", href: `${base}/settings#tracking` },
-    { done: stats.contactsTotal > 0, label: "Get your first lead", href: sites[0] ? `${base}/sites/${sites[0].id}` : `${base}/sites` },
-    {
-      done: channels.length > 0,
-      label: hasFeature(workspace.plan, "inbox") ? "Connect Instagram or WhatsApp" : "Unlock the inbox (Growth)",
-      href: hasFeature(workspace.plan, "inbox") ? `${base}/settings#channels` : `${base}/billing`,
-    },
-    { done: reviews.length > 0, label: "Get your custom ad review", href: `${base}/ads` },
-  ];
-  const doneCount = checklist.filter((c) => c.done).length;
-  const next = checklist.find((c) => !c.done);
+  // The dashboard shows the next few steps of "Your path" (the course as a guided flow).
+  const upcoming = path.stages.flatMap((st) => st.steps.map((step) => ({ ...step, tag: st.tag }))).filter((step) => !step.done).slice(0, 5);
+  const next = path.next;
 
   return (
     <>
@@ -114,42 +99,50 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
           </div>
         </Panel>
 
-        <Panel className="lg:col-span-2" title="Your 7-day sprint" sub={`${doneCount} of ${checklist.length} done`}>
-          <Progress value={(doneCount / checklist.length) * 100} aria-label="Sprint progress" />
-          <ul className="-mx-1 flex flex-col">
-            {checklist.map((c) => {
-              const isNext = c === next;
-              return (
-                <li key={c.label}>
-                  <Link
-                    href={c.href}
-                    data-slot="checklist-item"
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted",
-                      isNext && "bg-accent text-accent-foreground hover:bg-accent/80",
-                      c.done && "text-muted-foreground",
-                    )}
-                  >
-                    <span
+        <Panel
+          className="lg:col-span-2"
+          title="Your path"
+          sub={`${path.done} of ${path.total} steps · Skool level ${path.level}`}
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`${base}/path`}>
+                See it all <ArrowRightIcon data-icon="inline-end" />
+              </Link>
+            </Button>
+          }
+        >
+          <Progress value={(path.done / path.total) * 100} aria-label="Path progress" />
+          {upcoming.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Every step done. Keep the weekly rhythm going.</p>
+          ) : (
+            <ul className="-mx-1 flex flex-col">
+              {upcoming.map((c) => {
+                const isNext = c.key === next?.key;
+                return (
+                  <li key={c.key}>
+                    <Link
+                      href={c.href}
+                      data-slot="checklist-item"
                       className={cn(
-                        "grid size-5 shrink-0 place-items-center rounded-full border",
-                        c.done && "border-success bg-success text-background",
-                        isNext && "border-primary",
+                        "flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted",
+                        isNext && "bg-accent text-accent-foreground hover:bg-accent/80",
                       )}
                     >
-                      {c.done ? <CheckIcon className="size-3" strokeWidth={3} /> : null}
-                    </span>
-                    <span className={cn("flex-1", c.done && "line-through")}>{c.label}</span>
-                    {isNext ? (
-                      <span className="flex items-center gap-1 text-xs font-medium text-primary">
-                        Up next <ArrowRightIcon className="size-3.5" />
-                      </span>
-                    ) : null}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                      <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border", isNext && "border-primary")} />
+                      <span className="flex-1">{c.title}</span>
+                      {isNext ? (
+                        <span className="flex items-center gap-1 text-xs font-medium text-primary">
+                          Up next <ArrowRightIcon className="size-3.5" />
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">{c.tag}</span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </Panel>
       </div>
 

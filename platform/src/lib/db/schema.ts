@@ -85,7 +85,8 @@ export const agencyMembers = pgTable(
   (t) => [primaryKey({ columns: [t.agencyId, t.userId] })],
 );
 
-export type WorkspacePlan = "starter" | "growth";
+// "owner": the platform owner's own workspaces. Every feature, no usage caps, never billed.
+export type WorkspacePlan = "starter" | "growth" | "owner";
 export type WorkspaceStatus = "active" | "grace" | "paused";
 // "member": access follows the owner's membership (Skool or a direct purchase), see member_access.
 // "agency": an agency pays. "admin": lifetime access granted by the platform owner.

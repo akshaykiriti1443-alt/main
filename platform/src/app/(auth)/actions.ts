@@ -102,6 +102,7 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
     name: businessName,
     ownerUserId: user.id,
     accessSource: firstUser ? "admin" : "member",
+    ...(firstUser ? { plan: "owner" as const } : {}),
     accessVerifiedUntil: null,
     isPlatformAgency: true,
     settings: { businessName },
