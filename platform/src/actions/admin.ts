@@ -3,6 +3,7 @@
 import { requirePlatformAdmin } from "@/server/auth";
 import { applyRoster, grantAccess, previewRoster, revokeAccess, type RosterPreview } from "@/server/access";
 import { isEmail } from "@/lib/util";
+import { ROSTER_MAX_CHARS } from "@/lib/roster";
 import { adminAdjustWallet, adminSetAgency, adminSetWorkspace, retryJob } from "@/server/admin";
 import { runDueJobs } from "@/server/jobs/runner";
 import { tick } from "@/server/maintenance";
@@ -13,8 +14,10 @@ export type RosterState = { preview?: RosterPreview; error?: string; ok?: string
 /** Step 1 of a roster upload: show who would be added and removed. Changes nothing. */
 export async function rosterAction(_prev: RosterState, fd: FormData): Promise<RosterState> {
   const admin = await requirePlatformAdmin();
-  const raw = String(fd.get("members") ?? "").slice(0, 5_000_000);
+  const raw = String(fd.get("members") ?? "");
   if (!raw.trim()) return { error: "Upload or paste your Skool member export first." };
+  // Never cut a roster short: everyone past the cut would count as "left Skool" and be removed.
+  if (raw.length > ROSTER_MAX_CHARS) return { error: "That export is too big to sync in one go. Remove any extra columns (keep names and emails) and try again." };
   try {
     if (fd.get("apply") !== "1") return { preview: await previewRoster(raw) };
     const res = await applyRoster(raw, { byUserId: admin.id, confirmLargeDrop: fd.get("confirmLargeDrop") === "on" });

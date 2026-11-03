@@ -8,6 +8,9 @@ import { logActivity } from "./activity";
 import { emitEvent } from "./events";
 import { enqueue } from "./jobs/queue";
 import type { WorkspaceSettings } from "@/lib/db/types";
+import { normalizeStatus, splitRow } from "@/lib/roster";
+
+export { normalizeStatus, splitRow };
 
 // Keeps the CRM in step with a Skool community without touching anyone's Skool login.
 // The owner exports their member list from Skool (Members tab -> Export) and uploads it here,
@@ -34,34 +37,6 @@ export type SkoolSyncResult = {
 const CANCELLING_TAG = "skool-cancelling";
 const MEMBER_TAG = "skool-member";
 
-// Map a free-text status cell from any Skool export/paste onto our four states.
-export function normalizeStatus(raw: string): SkoolStatus {
-  const s = raw.toLowerCase();
-  if (/\b(trial|trialing|trialling)\b/.test(s)) return "trial";
-  if (/\b(cancel|cancelling|canceling|leaving|expiring|past.?due|declin)/.test(s)) return "cancelling";
-  if (/\b(churn|churned|left|lost|inactive|expired|removed|gone)\b/.test(s)) return "churned";
-  return "active";
-}
-
-export function splitRow(line: string, delim: string): string[] {
-  // Minimal CSV: handles quoted fields with embedded delimiters and "" escapes.
-  if (delim !== ",") return line.split(delim).map((c) => c.trim());
-  const out: string[] = [];
-  let cur = "";
-  let q = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (q) {
-      if (ch === '"') {
-        if (line[i + 1] === '"') { cur += '"'; i++; } else q = false;
-      } else cur += ch;
-    } else if (ch === '"') q = true;
-    else if (ch === ",") { out.push(cur); cur = ""; }
-    else cur += ch;
-  }
-  out.push(cur);
-  return out.map((c) => c.trim());
-}
 
 const findCol = (header: string[], names: string[]) =>
   header.findIndex((h) => names.some((n) => h === n || h.includes(n)));
@@ -231,6 +206,18 @@ export async function syncSkoolMembers(
   }
 
   return res;
+}
+
+/** Who a full-export sync would mark churned (trial/paid Skool members missing from the file). Changes nothing. */
+export async function skoolChurnPreview(workspaceId: string, raw: string) {
+  const seen = new Set(parseSkoolMembers(raw).members.map((m) => m.email));
+  const db = await getDb();
+  const existing = await db
+    .select({ email: contacts.email, stage: contacts.stage })
+    .from(contacts)
+    .where(and(eq(contacts.workspaceId, workspaceId), sql`${MEMBER_TAG} = any(${contacts.tags})`));
+  const gone = existing.filter((c) => c.email && !seen.has(c.email) && (c.stage === "trial" || c.stage === "member")).map((c) => c.email as string);
+  return { count: gone.length, sample: gone.slice(0, 20) };
 }
 
 export async function skoolMemberCounts(workspaceId: string) {

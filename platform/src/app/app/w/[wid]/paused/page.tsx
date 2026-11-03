@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { LockKeyholeIcon, PauseCircleIcon } from "lucide-react";
+import { LockKeyholeIcon, MailIcon, PauseCircleIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
-import { checkAccessAction } from "@/actions/account";
+import { checkAccessAction, resendVerifyAction } from "@/actions/account";
 import { memberCheckoutConfigured } from "@/server/billing/stripe";
 import { env } from "@/lib/env";
 import { Flash } from "@/components/ui";
@@ -17,6 +17,34 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
   const neverActive = workspace.pauseReason === "access" && !workspace.accessVerifiedUntil;
   const memberGate = !viaAgency && workspace.pauseReason === "access";
   const canBuy = memberCheckoutConfigured();
+
+  // Just signed up: the email has to be confirmed before any membership can turn the account on.
+  if (workspace.pauseReason === "verify") {
+    return (
+      <Card className="mx-auto w-full max-w-xl">
+        <CardHeader className="gap-3">
+          <span className="grid size-10 place-items-center rounded-xl bg-accent text-primary">
+            <MailIcon className="size-5" />
+          </span>
+          <CardTitle>
+            <h1 className="text-xl font-semibold tracking-tight">Confirm your email</h1>
+          </CardTitle>
+          <CardDescription>
+            We sent a link to <strong>{user.email}</strong>. Click it and your account opens. It proves the email is yours, because your access follows it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <Flash searchParams={await searchParams} />
+          <form action={resendVerifyAction.bind(null, wid)}>
+            <SubmitButton variant="outline" pendingText="Sending…">
+              Send the link again
+            </SubmitButton>
+          </form>
+          <p className="text-xs text-muted-foreground">Not there? Check spam or promotions. The link works for 3 days.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="mx-auto w-full max-w-xl">
@@ -47,7 +75,12 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-2 rounded-lg border p-3">
                 <span className="font-medium">Member of the Skool community</span>
-                <span className="text-sm text-muted-foreground">Join with this same email. Paid members are picked up within about 15 minutes. Trials show up at the next member sync.</span>
+                <span className="text-sm text-muted-foreground">
+                  Join with this same email.{" "}
+                  {env.skoolWebhookSecret
+                    ? "Paid members are picked up within about 15 minutes. Trials show up at the next weekly member update."
+                    : "We update the member list about once a week. If you joined in the last few days, you'll be switched on at the next update."}
+                </span>
                 {env.skoolGroupUrl ? (
                   <Button asChild variant="outline" size="sm" className="mt-auto self-start">
                     <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer">Join on Skool</a>

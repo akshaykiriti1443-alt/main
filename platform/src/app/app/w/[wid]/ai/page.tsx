@@ -26,14 +26,22 @@ const APPS: { name: string; plan: string; free: "yes" | "limited" | "no"; steps:
     name: "Claude (claude.ai, desktop and mobile)",
     plan: "Free plan: 1 custom connector. Pro and up: more.",
     free: "yes",
-    steps: ["Settings › Connectors (on some versions: Customize › Connectors).", "Click Add custom connector. Paste your connector URL. Leave the OAuth fields empty. Click Add.", "In a chat, open the tools menu and switch the connector on. Then say: “Run my Monday review.”"],
+    steps: [
+      "Customize › Connectors, then + Add › Add custom connector.",
+      "Give it a name (e.g. OneX), paste your connector URL and click Continue. Click Continue again, set Authentication to No sign in, then click Add.",
+      "In a chat, open the tools menu and switch the connector on. Then say: “Run my Monday check-in.”",
+    ],
   },
   {
-    name: "Gemini CLI (Google, free tier)",
-    plan: "Free with a personal Google account, with daily limits.",
-    free: "yes",
-    steps: ["Install Gemini CLI, then open ~/.gemini/settings.json.", "Add the server below, save, and restart Gemini CLI.", "Type /mcp to check it's connected, then ask for a playbook."],
-    snippet: JSON.stringify({ mcpServers: { onex: { httpUrl: URL_PH } } }, null, 2),
+    name: "Antigravity CLI (Google, replaces Gemini CLI)",
+    plan: "Google's terminal AI. Check Google's plans page for the current free allowance. Gemini CLI now needs a paid Gemini API key; use the same server with httpUrl in ~/.gemini/settings.json.",
+    free: "limited",
+    steps: [
+      "Install Antigravity CLI (agy), then open ~/.gemini/config/mcp_config.json (or .agents/mcp_config.json in a project).",
+      "Add the server below and save.",
+      "Restart agy and check the server is connected, then ask for a playbook.",
+    ],
+    snippet: JSON.stringify({ mcpServers: { onex: { serverUrl: URL_PH } } }, null, 2),
   },
   {
     name: "VS Code with GitHub Copilot",
@@ -51,9 +59,14 @@ const APPS: { name: string; plan: string; free: "yes" | "limited" | "no"; steps:
   },
   {
     name: "ChatGPT",
-    plan: "Needs a paid plan with Developer mode. Free accounts can't add custom connectors yet.",
+    plan: "Business, Enterprise and Edu on the web: full support. Plus and Pro: can connect, but ChatGPT may only allow reading (OpenAI limits write actions on personal plans). Free can't add custom MCP servers.",
     free: "no",
-    steps: ["Settings › Apps & Connectors › Advanced settings › turn on Developer mode.", "Create a connector, paste your connector URL, choose No authentication.", "On ChatGPT Free? Use the copy-and-paste route under AI tasks below instead."],
+    steps: [
+      "On chatgpt.com (web), open Plugins (chatgpt.com/plugins). If you don't see the option, turn on Developer mode in Settings first.",
+      "Click + › Add custom MCP server, paste your connector URL, set authentication to none, accept the warning and click Create as a plugin.",
+      "On Plus or Pro, if saving fails, use the copy-and-paste route under AI tasks below.",
+      "On ChatGPT Free? Use the copy-and-paste route under AI tasks below instead.",
+    ],
   },
   {
     name: "Cursor and other MCP apps",
@@ -63,6 +76,14 @@ const APPS: { name: string; plan: string; free: "yes" | "limited" | "no"; steps:
     snippet: JSON.stringify({ mcpServers: { onex: { url: URL_PH } } }, null, 2),
   },
 ];
+
+/** Who finished an AI task, in plain words. */
+function doneByLabel(doneBy: string) {
+  if (doneBy.startsWith("api:")) return `Done by your ${doneBy.slice(4)} key`;
+  if (doneBy === "connected AI app") return "Done by your connected AI";
+  if (doneBy === "pasted by hand") return "Pasted by you";
+  return doneBy;
+}
 
 const FREE_BADGE = { yes: { label: "Free works", cls: "bg-success-soft text-success" }, limited: { label: "Free with limits", cls: "bg-warning-soft text-warning" }, no: { label: "Paid only", cls: "" } };
 
@@ -110,7 +131,8 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
                   <span>
                     <span className="font-medium">{c.name}</span>
                     <span className="block text-xs text-muted-foreground">
-                      Created {relativeTime(c.createdAt)} · {c.lastUsedAt ? `used ${relativeTime(c.lastUsedAt)}` : "never used"}
+                      Created {relativeTime(c.createdAt)}
+                      {c.createdByName || c.createdByEmail ? ` by ${c.createdByName || c.createdByEmail}` : ""} · {c.lastUsedAt ? `used ${relativeTime(c.lastUsedAt)}` : "never used"}
                     </span>
                   </span>
                   {isAdmin ? (
@@ -201,7 +223,7 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
                   </div>
                   <form action={completeAiTaskAction.bind(null, wid, r.task.id)} className="flex flex-col gap-2">
                     <Textarea name="result" rows={2} placeholder="Paste what your AI wrote…" aria-label="AI result" />
-                    <SubmitButton size="sm" variant="outline" className="self-start">Save on contact</SubmitButton>
+                    <SubmitButton size="sm" variant="outline" className="self-start">{r.contact?.id ? "Save on contact" : "Save"}</SubmitButton>
                   </form>
                 </li>
               );
@@ -213,11 +235,19 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
             <summary className="cursor-pointer text-muted-foreground">Recently done ({done.length})</summary>
             <ul className="mt-2 flex flex-col divide-y">
               {done.map((r) => (
-                <li key={r.task.id} className="flex flex-col gap-1 py-2">
+                <li key={r.task.id} className="flex flex-col gap-1.5 py-2">
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <CheckCircle2Icon className="size-3.5 text-success" /> {r.task.doneBy} · {relativeTime(r.task.completedAt)}
+                    <CheckCircle2Icon className="size-3.5 text-success" /> {doneByLabel(r.task.doneBy)} · {relativeTime(r.task.completedAt)}
                   </span>
-                  <span className="line-clamp-2">{r.task.result}</span>
+                  <p className="whitespace-pre-line">{r.task.result}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CopyButton text={r.task.result} label="Copy" />
+                    {r.contact?.id ? (
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`${base}/leads/${r.contact.id}`}>Open contact</Link>
+                      </Button>
+                    ) : null}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -288,6 +318,11 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
                 </Button>
               ) : null}
             </div>
+          ) : null}
+          {isAdmin ? (
+            <SubmitButton className="self-start" pendingText="Checking your key…">
+              Save key
+            </SubmitButton>
           ) : null}
         </Panel>
       </form>

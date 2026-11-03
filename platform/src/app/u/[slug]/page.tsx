@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { ExternalLinkIcon, LockOpenIcon } from "lucide-react";
-import { publicUnlock } from "@/server/unlocks";
+import { publicUnlock, unlockAvailable } from "@/server/unlocks";
 import { claimUnlockAction } from "@/actions/unlocks";
 import { ThemeToggle } from "@/components/theme";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ export default async function UnlockPage({ params }: { params: Promise<{ slug: s
   if (!row) notFound();
   const { unlock, workspace } = row;
   const community = workspace.settings.businessName || workspace.name;
-  const available = unlock.active && workspace.status !== "paused";
+  const available = unlockAvailable(row);
   const verb = unlock.action === "comment" ? "Comment" : "Post";
 
   return (
@@ -64,14 +64,16 @@ export default async function UnlockPage({ params }: { params: Promise<{ slug: s
                 </li>
                 <li className="flex gap-3">
                   <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">2</span>
-                  <span>Copy the link to your {unlock.action === "comment" ? "comment (or the post you commented on)" : "post"} and paste it below.</span>
+                  <span>
+                    {unlock.action === "comment" ? "Copy the link to your comment (⋯ on your comment › Copy link)" : "Copy the link to your post (⋯ › Copy link)"} and paste it below.
+                  </span>
                 </li>
                 <li className="flex gap-3">
                   <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">3</span>
                   <span>Get it right away, plus a copy by email.</span>
                 </li>
               </ol>
-              <ClaimForm action={claimUnlockAction.bind(null, unlock.slug)} postLabel={`Link to your ${unlock.action === "comment" ? "comment" : "post"}`} />
+              <ClaimForm action={claimUnlockAction.bind(null, unlock.slug)} kind={unlock.action === "comment" ? "comment" : "post"} />
             </>
           )}
         </CardContent>

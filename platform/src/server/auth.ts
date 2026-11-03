@@ -70,7 +70,8 @@ export async function findUserByEmail(email: string) {
   return rows[0] ?? null;
 }
 
-export async function createUser(input: { email: string; name: string; password: string }) {
+/** emailVerified: false for self-signups, who must click the emailed link before access turns on. */
+export async function createUser(input: { email: string; name: string; password: string; emailVerified?: boolean }) {
   const db = await getDb();
   const email = normalizeEmail(input.email);
   const [row] = await db
@@ -79,6 +80,7 @@ export async function createUser(input: { email: string; name: string; password:
       email,
       name: input.name.trim(),
       passwordHash: await hashPassword(input.password),
+      ...(input.emailVerified === false ? { emailVerifiedAt: null } : {}),
     })
     .returning();
   return row;

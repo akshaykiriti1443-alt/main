@@ -1,6 +1,6 @@
 import { env } from "@/lib/env";
 
-// Playbooks: ready-made jobs the owner runs from their OWN AI app (Claude, ChatGPT, Gemini CLI,
+// Playbooks: ready-made jobs the owner runs from their OWN AI app (Claude, ChatGPT, Antigravity CLI,
 // VS Code…) through the MCP connector. Their AI does the thinking on their plan; our tools do the
 // reading and saving. Served as MCP prompts (slash commands in many apps) and through the
 // get_playbook tool for apps that only support tools. Words match the course on purpose.
@@ -9,10 +9,10 @@ export type Playbook = { name: string; title: string; description: string; say: 
 
 export const PLAYBOOKS: Playbook[] = [
   {
-    name: "monday_review",
-    title: "Monday review",
+    name: "monday_check_in",
+    title: "Monday check-in",
     description: "Your weekly weigh-in: Skool level, what's missing, and this week's 3 moves.",
-    say: `Run my Monday review in ${env.platformName}.`,
+    say: `Run my Monday check-in in ${env.platformName}.`,
     steps: `1. Call get_overview.
 2. Ask me for this week's numbers from Skool › Settings › Growth (About-page visitors, new customers, Skool Network sign-ups and the level Skool shows), unless I already gave them. Also ask my ad spend per day and posts per week.
 3. Call save_growth_checkin with them.
@@ -62,10 +62,10 @@ export const PLAYBOOKS: Playbook[] = [
 4. Call update_page to save the draft and show me before and after. Only call publish_site if I say yes.`,
   },
   {
-    name: "engagement_drop",
-    title: "Plan an engagement drop",
+    name: "plan_this_weeks_unlock",
+    title: "Plan this week's Unlock",
     description: "Create this week's Unlock: a small reward for a post or comment, plus the Skool post.",
-    say: `Plan this week's engagement drop in ${env.platformName}.`,
+    say: `Plan this week's Unlock in ${env.platformName}.`,
     steps: `1. Call get_overview and list_unlocks to see what I've already given away.
 2. Suggest 3 small, genuinely useful rewards my members would comment for, each with an easy comment prompt (answerable in under 2 minutes, and asking them to reply to one other person).
 3. When I pick one, ask me for the reward link, then call create_unlock.
@@ -73,4 +73,7 @@ export const PLAYBOOKS: Playbook[] = [
   },
 ];
 
-export const playbookByName = (name: string) => PLAYBOOKS.find((p) => p.name === name);
+// Earlier names, so chats that saved them still work.
+const ALIASES: Record<string, string> = { monday_review: "monday_check_in", engagement_drop: "plan_this_weeks_unlock" };
+
+export const playbookByName = (name: string) => PLAYBOOKS.find((p) => p.name === (ALIASES[name] ?? name));

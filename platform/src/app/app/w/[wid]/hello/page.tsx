@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { ExternalLinkIcon, HandIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
-import { getEntryTicket, needsEntryTicket } from "@/server/unlocks";
+import { entryTicketPending, getEntryTicket } from "@/server/unlocks";
+import { env } from "@/lib/env";
 import { entryTicketAction } from "@/actions/unlocks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,9 +15,11 @@ export default async function HelloPage({ params }: { params: Promise<{ wid: str
   const { wid } = await params;
   const { workspace, user } = await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
   const ticket = await getEntryTicket();
-  if (!ticket?.unlock || !needsEntryTicket(ticket, workspace)) redirect(`/app/w/${wid}`);
+  if (!ticket?.unlock || !(await entryTicketPending(ticket, workspace))) redirect(`/app/w/${wid}`);
   const u = ticket.unlock;
   const first = user.name.split(" ")[0] || "there";
+  const communityUrl = u.skoolPostUrl || env.skoolGroupUrl;
+  const kind = u.action === "comment" ? "comment" : "post";
 
   return (
     <Card className="mx-auto w-full max-w-xl">
@@ -39,10 +42,10 @@ export default async function HelloPage({ params }: { params: Promise<{ wid: str
               <span>
                 <b>{u.action === "comment" ? "Comment" : "Post"} in the community.</b> {u.instructions || "Who you are, what you're building, and your daily ad budget."}
               </span>
-              {u.skoolPostUrl ? (
+              {communityUrl ? (
                 <Button asChild variant="outline" size="sm" className="self-start">
-                  <a href={u.skoolPostUrl} target="_blank" rel="noreferrer">
-                    Open the community <ExternalLinkIcon data-icon="inline-end" />
+                  <a href={communityUrl} target="_blank" rel="noreferrer">
+                    {u.skoolPostUrl ? "Open the post" : "Open the community"} <ExternalLinkIcon data-icon="inline-end" />
                   </a>
                 </Button>
               ) : null}
@@ -50,10 +53,21 @@ export default async function HelloPage({ params }: { params: Promise<{ wid: str
           </li>
           <li className="flex gap-3">
             <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">2</span>
-            <span>Copy the link to your post (the ⋯ menu › Copy link) and paste it here. Your account opens straight away.</span>
+            <span>Copy the link to your {kind} (the ⋯ menu › Copy link) and paste it here. Your account opens straight away.</span>
           </li>
         </ol>
-        <EntryForm action={entryTicketAction.bind(null, wid)} />
+        <EntryForm action={entryTicketAction.bind(null, wid)} kind={kind} />
+        <p className="text-xs text-muted-foreground">
+          Not in the community yet?{" "}
+          {env.skoolGroupUrl ? (
+            <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer" className="font-medium text-primary underline-offset-4 hover:underline">
+              Join it on Skool
+            </a>
+          ) : (
+            "Join it on Skool"
+          )}{" "}
+          with this same email, then post. Bought the app directly with a card? You skip this step: refresh this page a minute after paying.
+        </p>
       </CardContent>
     </Card>
   );

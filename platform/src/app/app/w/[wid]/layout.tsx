@@ -5,6 +5,9 @@ import { conversations } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { getWorkspaceContext, listUserAgencies, listUserWorkspaces } from "@/server/tenancy";
 import { hasFeature, PLANS } from "@/server/plans";
+import { membershipFor, pastChannels } from "@/server/access";
+import { memberCheckoutConfigured } from "@/server/billing/stripe";
+import { workspaceOwnerEmail } from "@/server/email/send";
 import { AppShell, type NavGroup, type Place } from "@/components/AppShell";
 import { checkAccessAction } from "@/actions/account";
 import { SubmitButton } from "@/components/client";
@@ -66,7 +69,11 @@ export default async function WorkspaceLayout({ children, params }: { children: 
   ];
 
   let banner: React.ReactNode = null;
+  const canBuy = memberCheckoutConfigured();
   if (ctx.effectiveStatus === "grace" && workspace.accessSource === "member") {
+    // Only the free welcome days so far: they never joined, so "rejoin" would be wrong.
+    const past = await pastChannels((await workspaceOwnerEmail(wid)) ?? user.email);
+    const join = past.every((c) => c === "welcome") ? "Join" : "Rejoin";
     banner = (
       <Callout
         tone="warn"
@@ -75,7 +82,7 @@ export default async function WorkspaceLayout({ children, params }: { children: 
           <div className="flex flex-wrap gap-2">
             {env.skoolGroupUrl ? (
               <Button asChild variant="outline" size="sm">
-                <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer">Rejoin on Skool</a>
+                <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer">{join} on Skool</a>
               </Button>
             ) : null}
             <form action={checkAccessAction.bind(null, wid)}>
@@ -84,7 +91,14 @@ export default async function WorkspaceLayout({ children, params }: { children: 
           </div>
         }
       >
-        Your pages stay live until {workspace.graceEndsAt?.toDateString() ?? "soon"}. Rejoin, or <Link href={`/join?email=${encodeURIComponent(user.email)}`}>buy access directly</Link>, and everything stays on.
+        Your pages stay live until {workspace.graceEndsAt?.toDateString() ?? "soon"}.{" "}
+        {canBuy ? (
+          <>
+            {join}, or <Link href={`/join?email=${encodeURIComponent(user.email)}`}>buy access directly</Link>, and everything stays on.
+          </>
+        ) : (
+          `${join} the community with this email and everything stays on.`
+        )}
       </Callout>
     );
   } else if (
@@ -92,7 +106,15 @@ export default async function WorkspaceLayout({ children, params }: { children: 
     workspace.accessVerifiedUntil &&
     workspace.accessVerifiedUntil.getTime() - Date.now() < 4 * 86_400_000
   ) {
-    banner = (
+    // Say what keeps it on for how this owner got in: a card renews by itself, the free welcome
+    // days need a membership, a Skool member is confirmed by the next sync.
+    const ownerEmail = (await workspaceOwnerEmail(wid)) ?? user.email;
+    const channels = (await membershipFor(ownerEmail)).channels;
+    const until = workspace.accessVerifiedUntil.toDateString();
+    const welcomeOnly = channels.length > 0 && channels.every((c) => c === "welcome");
+    banner = channels.includes("stripe") ? (
+      <Callout tone="info">Renews with your card on {until}.</Callout>
+    ) : (
       <Callout
         tone="info"
         action={
@@ -101,7 +123,27 @@ export default async function WorkspaceLayout({ children, params }: { children: 
           </form>
         }
       >
-        You&apos;re in until {workspace.accessVerifiedUntil.toDateString()}. Use the same email as your Skool account ({user.email}) and we confirm you automatically. Nothing to type.
+        {welcomeOnly ? (
+          <>
+            Your free days end on {until}.{" "}
+            {env.skoolGroupUrl ? (
+              <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer">
+                Join the Skool community
+              </a>
+            ) : (
+              "Join the Skool community"
+            )}
+            {canBuy ? " or buy access" : ""} with {ownerEmail} to keep going.
+            {canBuy ? (
+              <>
+                {" "}
+                <Link href={`/join?email=${encodeURIComponent(ownerEmail)}`}>Buy access</Link>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <>You&apos;re in until {until}. Use the same email as your Skool account ({ownerEmail}) and we confirm you automatically. Nothing to type.</>
+        )}
       </Callout>
     );
   } else if (ctx.effectiveStatus === "grace") {

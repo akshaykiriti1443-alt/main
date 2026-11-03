@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { forgotAction, joinAction, loginAction, resetAction, signupAction, type FormState } from "./actions";
+import { forgotAction, joinAction, loginAction, resetAction, signupAction, verifyAction, type FormState } from "./actions";
 
 function Msg({ state }: { state: FormState }) {
   if (state.error)
@@ -147,6 +147,21 @@ export function ResetForm({ token }: { token: string }) {
   );
 }
 
+export function VerifyForm({ token }: { token: string }) {
+  const [state, action, pending] = useActionState(verifyAction, {});
+  return (
+    <form action={action}>
+      <FieldGroup className="gap-5">
+        <Msg state={state} />
+        <input type="hidden" name="token" value={token} />
+        <Submit pending={pending} pendingText="Confirming…">
+          Confirm my email
+        </Submit>
+      </FieldGroup>
+    </form>
+  );
+}
+
 export function JoinForm({ defaultEmail, priceLabel }: { defaultEmail?: string; priceLabel?: string }) {
   const [state, action, pending] = useActionState(joinAction, {});
   return (
@@ -160,7 +175,7 @@ export function JoinForm({ defaultEmail, priceLabel }: { defaultEmail?: string; 
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.values?.email ?? defaultEmail} />
-          <FieldDescription>Your account is tied to this email. Use the same one when you create your login.</FieldDescription>
+          <FieldDescription>Your account is tied to this email. Use the same one when you create your login. You'll confirm it by email once.</FieldDescription>
         </Field>
         <Submit pending={pending} pendingText="Opening secure checkout…">
           {priceLabel ? `Continue to payment · ${priceLabel}` : "Continue to payment"}

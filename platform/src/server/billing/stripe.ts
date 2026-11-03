@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { agencies, subscriptions, workspaces, type WalletOwner } from "@/lib/db/schema";
+import { agencies, memberAccess, subscriptions, workspaces, type WalletOwner } from "@/lib/db/schema";
 import { hmacHex, safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { creditWallet, getOrCreateWallet } from "../wallet";
@@ -129,7 +129,28 @@ async function applyPlan(ownerType: WalletOwner, ownerId: string, plan: "growth"
   }
 }
 
-export async function handleStripeEvent(event: { id: string; type: string; data: { object: StripeObject } }) {
+/**
+ * Stripe doesn't guarantee event order and retries failures for days, so a member grant must never
+ * undo something newer. The stripe row remembers the time of the last event applied to it.
+ */
+async function staleMemberEvent(email: string, ref: string, eventAt: number, isCheckout: boolean) {
+  const db = await getDb();
+  const [row] = await db
+    .select({ status: memberAccess.status, ref: memberAccess.ref, payload: memberAccess.payload })
+    .from(memberAccess)
+    .where(and(eq(memberAccess.email, normalizeEmail(email)), eq(memberAccess.channel, "stripe")))
+    .limit(1);
+  if (!row) return false;
+  const lastAt = Number(row.payload?.stripeEventAt ?? 0);
+  if (eventAt && lastAt && eventAt < lastAt) return true;
+  // Only the subscription access currently follows may change it: a late event from an older
+  // subscription (the buyer bought again on /join) never revokes or rewrites the newer one.
+  if (!isCheckout && row.status === "active" && row.ref && row.ref !== ref) return true;
+  // A retried checkout for a subscription that has since ended must not turn it back on.
+  return isCheckout && row.status === "removed" && row.ref === ref;
+}
+
+export async function handleStripeEvent(event: { id: string; type: string; created?: number; data: { object: StripeObject } }) {
   const obj = event.data.object;
   const meta = obj.metadata ?? {};
   const ownerType = meta.owner_type as WalletOwner | undefined;
@@ -142,9 +163,13 @@ export async function handleStripeEvent(event: { id: string; type: string; data:
   if (meta.kind === "member") {
     const email = meta.member_email;
     if (!email || !isEmail(email)) return;
+    const eventAt = event.created ?? 0;
+    const stamp = { stripeEventAt: eventAt };
     if (isCheckout) {
       if (obj.payment_status === "unpaid") return;
-      await grantAccess({ email, name: meta.member_name, channel: "stripe", until: addDays(new Date(), 35), ref: obj.subscription ?? obj.id });
+      const ref = obj.subscription ?? obj.id;
+      if (await staleMemberEvent(email, ref, eventAt, true)) return;
+      await grantAccess({ email, name: meta.member_name, channel: "stripe", until: addDays(new Date(), 35), ref, payload: stamp });
       if (env.skoolInviteWebhookUrl) {
         await enqueue("member.skool_invite", { email, name: meta.member_name ?? "" }, { dedupeKey: `skool-invite:${email}` });
       }
@@ -153,11 +178,12 @@ export async function handleStripeEvent(event: { id: string; type: string; data:
     if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
       const status = event.type === "customer.subscription.deleted" ? "canceled" : (obj.status ?? "");
       const periodEnd = obj.current_period_end ?? obj.items?.data?.[0]?.current_period_end;
+      if (await staleMemberEvent(email, obj.id, eventAt, false)) return;
       if (status === "active" || status === "trialing" || status === "past_due") {
         const until = addDays(periodEnd ? new Date(periodEnd * 1000) : new Date(), STRIPE_BUFFER_DAYS);
-        await grantAccess({ email, channel: "stripe", until, ref: obj.id });
+        await grantAccess({ email, channel: "stripe", until, ref: obj.id, payload: stamp });
       } else {
-        await revokeAccess(email, "stripe", `stripe:${status}`);
+        await revokeAccess(email, "stripe", `stripe:${status}`, stamp);
       }
     }
     return;

@@ -32,7 +32,8 @@ export function BudgetPlanner({ initialBudget, initialOrganic, initialPrice }: {
   const [budget, setBudget] = useState(String(initialBudget || 10));
   const [cpv, setCpv] = useState("1");
   const [organic, setOrganic] = useState(String(initialOrganic || 0));
-  const [conv, setConv] = useState("1");
+  // Empty until they type their own: a made-up conversion rate would read like an income promise.
+  const [conv, setConv] = useState("");
   const [price, setPrice] = useState(String(initialPrice || 29));
 
   const b = num(budget);
@@ -49,15 +50,21 @@ export function BudgetPlanner({ initialBudget, initialOrganic, initialPrice }: {
         <NumField id="pl-budget" label="Your ad budget / day" prefix="$" value={budget} onChange={setBudget} />
         <NumField id="pl-cpv" label="Cost per About-page visit" prefix="$" value={cpv} onChange={setCpv} hint="Start at $1. Use your real number after a week." />
         <NumField id="pl-organic" label="Organic visitors / 30 days" value={organic} onChange={setOrganic} hint="Bio links, posts, YouTube." />
-        <NumField id="pl-conv" label="Visitors who pay (%)" value={conv} onChange={setConv} />
+        <NumField id="pl-conv" label="Visitors who pay (%)" value={conv} onChange={setConv} hint="Your real rate, once you have one." />
         <NumField id="pl-price" label="Price / month" prefix="$" value={price} onChange={setPrice} />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Out label="Visitors / 30 days" value={Math.round(visitors).toLocaleString()} sub={`${Math.round(fromAds).toLocaleString()} from ads`} />
-        <Out label="New paying members" value={paid.toFixed(paid < 10 ? 1 : 0)} sub={`${money(paid * num(price))} new MRR`} />
+        <Out
+          label="New paying members"
+          value={conv.trim() ? paid.toFixed(paid < 10 ? 1 : 0) : "–"}
+          sub={conv.trim() ? `${money(paid * num(price))} a month, if these numbers hold` : "Add “Visitors who pay” to see this"}
+        />
         <Out label="Ad spend / month" value={money(b * 30)} />
       </div>
+
+      <p className="text-xs text-muted-foreground">A what-if, not a forecast. Use your real cost per visit and conversion after a week of ads.</p>
 
       <ol className="grid gap-2 sm:grid-cols-3">
         {THRESHOLDS.map((t) => {
@@ -72,7 +79,7 @@ export function BudgetPlanner({ initialBudget, initialOrganic, initialPrice }: {
         })}
       </ol>
       <p className="text-xs text-muted-foreground">
-        It&apos;s a rolling 30-day window. Skool only looks at the last 30 days, so visitors don&apos;t stack up month after month. Levels 3 and 4 also need Skool Network sign-ups, your Skool link in your bios and consistent organic promo.
+        It&apos;s a rolling 30-day window. Skool only looks at the last 30 days, so visitors don&apos;t stack up month after month. Levels 3 and 4 also need Skool Network sign-ups and consistent organic promo.
       </p>
     </div>
   );
@@ -80,7 +87,7 @@ export function BudgetPlanner({ initialBudget, initialOrganic, initialPrice }: {
 
 /** What-if: if Skool spends X/day on your community, what do you keep at each Growth Boost %? */
 export function BoostCalculator({ initialBoost }: { initialBoost: number }) {
-  const [spend, setSpend] = useState("1000");
+  const [spend, setSpend] = useState("0");
   const [roas, setRoas] = useState("2");
   const [boost, setBoost] = useState(String(initialBoost || 30));
   const [retention, setRetention] = useState("80");
@@ -94,7 +101,7 @@ export function BoostCalculator({ initialBoost }: { initialBoost: number }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <NumField id="b-spend" label="Skool spends / day" prefix="$" value={spend} onChange={setSpend} hint="Level 3: up to $1,000. Level 4: ~$10,000." />
+        <NumField id="b-spend" label="Skool spends / day" prefix="$" value={spend} onChange={setSpend} hint="What Skool actually spends. It isn't guaranteed." />
         <NumField id="b-roas" label="Revenue per $1 spent" value={roas} onChange={setRoas} hint="First month." />
         <NumField id="b-boost" label="Your Growth Boost %" value={boost} onChange={setBoost} hint="Skool's cut. Default 30%." />
         <NumField id="b-ret" label="Monthly retention %" value={retention} onChange={setRetention} />
@@ -121,7 +128,7 @@ export function BoostCalculator({ initialBoost }: { initialBoost: number }) {
         </table>
       </div>
       <p className="text-xs text-muted-foreground">
-        A higher boost % gives Skool more reason to spend on you, but you keep less of each member. Skool only takes its cut on members it brings. Members you bring yourself pay you in full, minus processing fees. Retention is the multiplier: it raises your Discovery rank and your monthly take.
+        A higher boost % gives Skool more reason to spend on you, but you keep less of each member. Skool only takes its Growth Boost cut on members it brings. Members you bring yourself pay you minus Skool&apos;s transaction fee (10% + 30c on Hobby, 2.9% + 30c on Pro). Retention is the multiplier: it raises your Discovery rank and your monthly take.
       </p>
     </div>
   );

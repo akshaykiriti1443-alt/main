@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { FlagIcon, GiftIcon, HeartHandshakeIcon, LockOpenIcon, MessageCircleIcon, TrophyIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
-import { claimUrlFor, engagedContactCount, engagementLeaders, listUnlocks, recentClaims, unlockPostText } from "@/server/unlocks";
-import { createUnlockAction, toggleUnlockAction } from "@/actions/unlocks";
+import { claimCountSince, claimUrlFor, engagedContactCount, engagementLeaders, listUnlocks, recentClaims, unlockPostText, type Unlock } from "@/server/unlocks";
+import { createUnlockAction, toggleUnlockAction, updateUnlockAction } from "@/actions/unlocks";
 import { relativeTime } from "@/lib/util";
 import { Callout, Empty, Flash, PageHead, Panel, Stat } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
@@ -23,11 +23,18 @@ const IDEAS = [
 
 export default async function UnlocksPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
-  const { workspace } = await requireWorkspace(wid);
-  const [list, claims, leaders, engaged] = await Promise.all([listUnlocks(wid), recentClaims(wid, 25), engagementLeaders(wid, 30, 8), engagedContactCount(wid)]);
+  const { workspace, role } = await requireWorkspace(wid);
+  // Creating and editing unlocks is for owners and admins (the Zapier link is a secret).
+  const canEdit = role === "owner" || role === "admin";
+  const [list, claims, leaders, engaged, month] = await Promise.all([
+    listUnlocks(wid),
+    recentClaims(wid, 25),
+    engagementLeaders(wid, 30, 8),
+    engagedContactCount(wid),
+    claimCountSince(wid, 30),
+  ]);
   const live = list.filter((u) => u.unlock.active).length;
   const flagged = list.reduce((n, u) => n + u.flagged, 0);
-  const month = claims.filter((c) => Date.now() - c.claim.createdAt.getTime() < 30 * 86_400_000).length;
   const base = `/app/w/${wid}`;
 
   return (
@@ -53,46 +60,18 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
       ) : null}
 
       <div className="grid items-start gap-4 lg:grid-cols-[1.1fr_1fr]">
-        <form action={createUnlockAction.bind(null, wid)}>
-          <Panel title="New unlock" sub="Something small and genuinely useful, in return for one post or comment." action={<SubmitButton size="sm">Create unlock</SubmitButton>}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field className="sm:col-span-2">
-                <FieldLabel htmlFor="title">What they unlock</FieldLabel>
-                <Input id="title" name="title" required maxLength={80} placeholder="The 7-day starter plan" />
-              </Field>
-              <Field className="sm:col-span-2">
-                <FieldLabel htmlFor="reward">One line about it</FieldLabel>
-                <Input id="reward" name="reward" maxLength={300} placeholder="The exact first week I give every new member." />
-              </Field>
-              <Field className="sm:col-span-2">
-                <FieldLabel htmlFor="rewardUrl">Reward link</FieldLabel>
-                <Input id="rewardUrl" name="rewardUrl" type="url" placeholder="https://… (a Google Doc, a lesson, a download)" />
-                <FieldDescription>Shown right after they claim, and emailed to them.</FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="action">They have to…</FieldLabel>
-                <NativeSelect id="action" name="action" defaultValue="comment">
-                  <NativeSelectOption value="comment">Comment on a post</NativeSelectOption>
-                  <NativeSelectOption value="post">Make their own post</NativeSelectOption>
-                </NativeSelect>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="skoolPostUrl">Where (Skool link)</FieldLabel>
-                <Input id="skoolPostUrl" name="skoolPostUrl" type="url" placeholder="https://www.skool.com/your-group/…" />
-              </Field>
-              <Field className="sm:col-span-2">
-                <FieldLabel htmlFor="instructions">What to write</FieldLabel>
-                <Textarea id="instructions" name="instructions" rows={2} maxLength={600} placeholder="Comment your #1 goal for this month, and reply to one other person." />
-                <FieldDescription>Make it easy to answer in under 2 minutes. Asking them to reply to someone else doubles the comments.</FieldDescription>
-              </Field>
-              <Field className="sm:col-span-2">
-                <FieldLabel htmlFor="zapierWebhookUrl">Also unlock a Skool course (optional, Skool Pro)</FieldLabel>
-                <Input id="zapierWebhookUrl" name="zapierWebhookUrl" type="url" placeholder="https://hooks.zapier.com/…" />
-                <FieldDescription>A Zapier catch hook wired to Skool &ldquo;Unlock Course for Member&rdquo;. We send the member&apos;s email.</FieldDescription>
-              </Field>
-            </div>
-          </Panel>
-        </form>
+        {canEdit ? (
+          <form action={createUnlockAction.bind(null, wid)}>
+            <Panel title="New unlock" sub="Something small and genuinely useful, in return for one post or comment." action={<SubmitButton size="sm">Create unlock</SubmitButton>}>
+              <div className="flex flex-col gap-4">
+                <UnlockFields />
+                <SubmitButton className="self-start" pendingText="Creating…">
+                  Create unlock
+                </SubmitButton>
+              </div>
+            </Panel>
+          </form>
+        ) : null}
 
         <Panel title="How it works" sub="No Skool login, no scraping. Members paste the link to their own post.">
           <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
@@ -101,8 +80,8 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
             <li>Members comment or post, paste the link on the claim page, and get the reward at once.</li>
             <li>They&apos;re tagged <code>engaged</code> in your CRM, so an automation can welcome them, and you see who your most active members are.</li>
           </ol>
-          <Callout tone="info" title="Stack it with Skool's own levels">
-            Every like a member gets is 1 point. Level 2 is 5 points, Level 3 is 20. Set a bonus course to &ldquo;Level unlock&rdquo;, like every intro within 24 hours, and the course opens by itself.
+          <Callout tone="info" title="Stack it with Skool's member levels (points)">
+            Members earn 1 point for every like their posts and comments get. Member level 2 needs 5 points, level 3 needs 20. Set a bonus course to unlock at level 2. Like every intro post within 24 hours, and ask members to like and reply to new intros. About 5 likes opens the course by itself.
           </Callout>
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium">Ideas that get comments</span>
@@ -125,7 +104,7 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
             {list.map(({ unlock: u, claims: n, flagged: f }) => {
               const url = claimUrlFor(u.slug);
               return (
-                <li key={u.id} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+                <li key={u.id} className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{u.title}</span>
@@ -140,10 +119,24 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
                   <div className="flex flex-wrap gap-2">
                     <CopyButton text={unlockPostText(u)} label="Copy Skool post" />
                     <CopyButton text={url} label="Copy link" />
-                    <form action={toggleUnlockAction.bind(null, wid, u.id, !u.active)}>
-                      <SubmitButton variant="ghost" size="sm">{u.active ? "Pause" : "Resume"}</SubmitButton>
-                    </form>
+                    {canEdit ? (
+                      <form action={toggleUnlockAction.bind(null, wid, u.id, !u.active)}>
+                        <SubmitButton variant="ghost" size="sm">{u.active ? "Pause" : "Resume"}</SubmitButton>
+                      </form>
+                    ) : null}
                   </div>
+                  {canEdit ? (
+                  <details className="w-full sm:basis-full">
+                    <summary className="cursor-pointer text-sm font-medium text-primary">Edit</summary>
+                    <form action={updateUnlockAction.bind(null, wid, u.id)} className="mt-3 flex flex-col gap-4">
+                      <UnlockFields u={u} />
+                      <p className="text-xs text-muted-foreground">The claim link stays the same, so your pinned Skool post keeps working.</p>
+                      <SubmitButton size="sm" className="self-start">Save changes</SubmitButton>
+                    </form>
+                  </details>
+                  ) : u.zapierWebhookUrl ? (
+                    <span className="text-xs text-muted-foreground">Zapier: connected</span>
+                  ) : null}
                 </li>
               );
             })}
@@ -210,5 +203,55 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
         </Panel>
       </div>
     </>
+  );
+}
+
+/** The unlock form fields: empty for a new unlock, prefilled to edit one (ids stay unique per form). */
+function UnlockFields({ u }: { u?: Unlock }) {
+  const id = (name: string) => (u ? `${name}-${u.id}` : name);
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field className="sm:col-span-2">
+        <FieldLabel htmlFor={id("title")}>What they unlock</FieldLabel>
+        <Input id={id("title")} name="title" required maxLength={80} placeholder="The 7-day starter plan" defaultValue={u?.title} />
+      </Field>
+      <Field className="sm:col-span-2">
+        <FieldLabel htmlFor={id("reward")}>One line about it</FieldLabel>
+        <Input id={id("reward")} name="reward" maxLength={300} placeholder="The exact first week I give every new member." defaultValue={u?.reward} />
+      </Field>
+      <Field className="sm:col-span-2">
+        <FieldLabel htmlFor={id("rewardUrl")}>Reward link</FieldLabel>
+        <Input id={id("rewardUrl")} name="rewardUrl" type="url" placeholder="https://… (a Google Doc, a lesson, a download)" defaultValue={u?.rewardUrl} />
+        <FieldDescription>Shown right after they claim, and emailed to them. Open it in a private window to check it works for someone who isn&apos;t you.</FieldDescription>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={id("action")}>They have to…</FieldLabel>
+        <NativeSelect id={id("action")} name="action" defaultValue={u?.action ?? "comment"}>
+          <NativeSelectOption value="comment">Comment on a post</NativeSelectOption>
+          <NativeSelectOption value="post">Make their own post</NativeSelectOption>
+        </NativeSelect>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={id("skoolPostUrl")}>Where to engage (Skool link, optional)</FieldLabel>
+        <Input id={id("skoolPostUrl")} name="skoolPostUrl" type="url" placeholder="https://www.skool.com/your-group/…" defaultValue={u?.skoolPostUrl} />
+        <FieldDescription>The post they comment on, or the category they post in. Members get an Open button for it.</FieldDescription>
+      </Field>
+      <Field className="sm:col-span-2">
+        <FieldLabel htmlFor={id("instructions")}>What to write</FieldLabel>
+        <Textarea id={id("instructions")} name="instructions" rows={2} maxLength={600} placeholder="Comment your #1 goal for this month, and reply to one other person." defaultValue={u?.instructions} />
+        <FieldDescription>Make it easy to answer in under 2 minutes. Asking them to reply to someone else doubles the comments.</FieldDescription>
+      </Field>
+      <Field className="sm:col-span-2">
+        <FieldLabel htmlFor={id("zapierWebhookUrl")}>Also unlock a Skool course (optional, Skool Pro)</FieldLabel>
+        {/* The saved link is never sent back to the browser: empty keeps it. */}
+        <Input id={id("zapierWebhookUrl")} name="zapierWebhookUrl" type="url" placeholder={u?.zapierWebhookUrl ? "Connected. Leave empty to keep it, or paste a new one." : "https://hooks.zapier.com/…"} />
+        <FieldDescription>A Zapier catch hook wired to Skool &ldquo;Unlock Course for Member&rdquo;. We send the member&apos;s email.</FieldDescription>
+        {u?.zapierWebhookUrl ? (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="clearZapier" /> Disconnect Zapier
+          </label>
+        ) : null}
+      </Field>
+    </div>
   );
 }

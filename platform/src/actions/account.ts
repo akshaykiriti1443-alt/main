@@ -6,6 +6,7 @@ import { users, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { safeUrl } from "@/lib/html";
 import { isEmail } from "@/lib/util";
+import { env } from "@/lib/env";
 import { requireWorkspace } from "@/server/tenancy";
 import { membershipFor, refreshOwnerAccess } from "@/server/access";
 import { createCheckout, stripeConfigured } from "@/server/billing/stripe";
@@ -13,24 +14,40 @@ import { billingWalletFor } from "@/server/wallet";
 import { disconnectChannel } from "@/server/inbox";
 import { buyNumber, searchNumbers } from "@/server/sms";
 import { hasFeature } from "@/server/plans";
+import { isSkoolUrl } from "@/server/growth";
 import { errMsg, field, go } from "./helpers";
 
 /** "Check again": re-read the owner's membership now (after joining Skool or paying). */
+/** Send the "Confirm your email" link again (the signup one may have expired or gone to spam). */
+export async function resendVerifyAction(wid: string) {
+  const { user } = await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
+  const { isEmailVerified, sendVerifyEmail } = await import("@/server/emailVerify");
+  if (await isEmailVerified(user.id)) go(`/app/w/${wid}`, { ok: "Your email is already confirmed." });
+  try {
+    await sendVerifyEmail(user.id);
+  } catch (err) {
+    go(`/app/w/${wid}/paused`, { error: errMsg(err) });
+  }
+  go(`/app/w/${wid}/paused`, { ok: `We sent a new link to ${user.email}. Check spam if it isn't there in a minute.` });
+}
+
 export async function checkAccessAction(wid: string, fd: FormData) {
   await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
   const back = field(fd, "back") || `/app/w/${wid}`;
   const db = await getDb();
   const [owner] = await db
-    .select({ email: users.email })
+    .select({ email: users.email, emailVerifiedAt: users.emailVerifiedAt })
     .from(workspaceMembers)
     .innerJoin(users, eq(users.id, workspaceMembers.userId))
     .where(and(eq(workspaceMembers.workspaceId, wid), eq(workspaceMembers.role, "owner")))
     .limit(1);
   if (!owner) go(back, { error: "This account has no owner. Contact support." });
+  if (!owner.emailVerifiedAt) go(back, { error: `Confirm ${owner.email} first: click the link we emailed you.` });
   await refreshOwnerAccess(owner.email);
   const m = await membershipFor(owner.email);
   if (!m.active) {
-    go(back, { error: `We can't see an active membership for ${owner.email} yet. Paid on Skool just now? Give it 15 minutes.` });
+    const wait = env.skoolWebhookSecret ? "Paid on Skool just now? Give it 15 minutes." : "Joined in the last few days? You'll be switched on at the next weekly member update.";
+    go(back, { error: `We can't see an active membership for ${owner.email} yet. ${wait}` });
   }
   go(`/app/w/${wid}`, { ok: "You're an active member. Your account is on." });
 }
@@ -40,6 +57,7 @@ export async function saveBusinessAction(wid: string, fd: FormData) {
   const replyTo = field(fd, "replyToEmail", 200);
   if (replyTo && !isEmail(replyTo)) go(`/app/w/${wid}/settings`, { error: "Reply-to must be a valid email." });
   const skoolUrl = field(fd, "skoolUrl", 300);
+  if (skoolUrl && !isSkoolUrl(skoolUrl)) go(`/app/w/${wid}/settings`, { error: "Your Skool link must be a skool.com link, like https://www.skool.com/your-group" });
   const db = await getDb();
   await db
     .update(workspaces)

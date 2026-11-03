@@ -96,6 +96,7 @@ export async function analyzeCompetitorAds(workspaceId: string, input: { ads: Re
     try {
       const res = await generateStructured({
         workspaceId,
+        creds: charge.creds,
         effort: "medium",
         maxTokens: 12000,
         schema: analysisSchema,

@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
-import { workspaces } from "@/lib/db/schema";
+import { workspaceMembers, workspaces } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
-import { aboutUrl, computeLadder, saveCheckin, skoolVisits, visitSource } from "@/server/growth";
+import { LEVELS, aboutUrl, computeLadder, saveCheckin, skoolVisits, visitSource } from "@/server/growth";
 import { GET as goRoute } from "@/app/go/[slug]/route";
 import { POST as mcpRoute } from "@/app/api/mcp/[token]/route";
 import { createConnectorToken, revokeConnectorToken, listConnectorTokens } from "@/server/connectors";
 import { chargeAi } from "@/server/ai/client";
 import { usageThisMonth } from "@/server/wallet";
 import { makeWorkspace, setPlan } from "./helpers";
+import { createUser } from "@/server/auth";
+import { removeMember } from "@/server/team";
 
 const base = { aboutVisitors: 0, newPaid: 0, networkSignups: 0, members: 0, skoolLevel: 1, boostPercent: 30, linkInBio: false, postsPerWeek: 0, adSpendPerDay: 0, note: "" };
 
@@ -24,16 +26,28 @@ describe("growth ladder", () => {
     // 3,000 visitors and 10 network sign-ups still need organic promotion for Level 3.
     expect(computeLadder({ ...base, aboutVisitors: 3200, newPaid: 4, networkSignups: 12 }).qualifies).toBe(2);
     expect(computeLadder({ ...base, aboutVisitors: 3200, newPaid: 4, networkSignups: 12, linkInBio: true, adSpendPerDay: 30 }).qualifies).toBe(3);
-    expect(computeLadder({ ...base, aboutVisitors: 12000, networkSignups: 31, linkInBio: true, postsPerWeek: 5 }).qualifies).toBe(4);
-    // Link in bio is its own requirement: posting alone doesn't count.
+    expect(computeLadder({ ...base, aboutVisitors: 12000, newPaid: 2, networkSignups: 31, linkInBio: true, postsPerWeek: 5 }).qualifies).toBe(4);
+    // Cumulative: big numbers without a paying customer are still Level 1, and the next step is pricing.
+    const free = computeLadder({ ...base, aboutVisitors: 12000, networkSignups: 31, postsPerWeek: 5 });
+    expect(free.qualifies).toBe(1);
+    expect(free.next?.level).toBe(2);
+    expect(free.moves.some((m) => m.startsWith("Turn on subscription or tiers"))).toBe(true);
+    // Skool's help center lists no link-in-bio requirement: it's only a tip.
     const noBio = computeLadder({ ...base, aboutVisitors: 3200, newPaid: 4, networkSignups: 12, postsPerWeek: 7 });
-    expect(noBio.qualifies).toBe(2);
-    expect(noBio.gaps.find((g) => g.label.startsWith("Skool link in bio"))?.done).toBe(false);
+    expect(noBio.qualifies).toBe(3);
+    expect(noBio.gaps.find((g) => g.label.startsWith("Skool link in bio"))).toBeUndefined();
+    expect(noBio.moves.some((m) => m.startsWith("Tip: put your plain skool.com link"))).toBe(true);
+    // No promised dollar amounts anywhere on the ladder.
+    expect(JSON.stringify(LEVELS)).not.toMatch(/\$\d|upload/i);
+    expect([...l2.moves, ...noBio.moves].join(" ")).not.toMatch(/1,000|10,000|upload/i);
   });
 
   it("normalises group links to the About page and reads visit sources", () => {
     expect(aboutUrl("https://www.skool.com/fit-dads/classroom?x=1")).toBe("https://www.skool.com/fit-dads/about");
     expect(aboutUrl("javascript:alert(1)")).toBe("");
+    // Never an open redirect: only skool.com targets.
+    expect(aboutUrl("https://evil.example/login")).toBe("");
+    expect(aboutUrl("https://skool.com.evil.example/x")).toBe("");
     expect(visitSource(new URLSearchParams("src=bio"), "")).toBe("bio");
     expect(visitSource(new URLSearchParams("fbclid=abc"), "")).toBe("meta-ad");
     expect(visitSource(new URLSearchParams(""), "https://l.instagram.com/")).toBe("meta");
@@ -53,6 +67,14 @@ describe("growth ladder", () => {
     const visits = await skoolVisits(ws.id);
     expect(visits.total).toBe(1);
     expect(visits.bySource[0]).toEqual({ source: "ads", count: 1 });
+
+    // A loop from one address is still redirected, but only counted a few times a minute.
+    const loop = { ...ua, "x-real-ip": `10.7.${Date.now() % 250}.9` };
+    for (let i = 0; i < 6; i++) {
+      const r = await goRoute(new NextRequest(`http://localhost/go/${ws.slug}`, { headers: loop }), { params: Promise.resolve({ slug: ws.slug }) });
+      expect(r.status).toBe(302);
+    }
+    expect((await skoolVisits(ws.id)).total).toBe(4);
   });
 });
 
@@ -98,6 +120,24 @@ describe("Claude / ChatGPT connector (MCP)", () => {
     await revokeConnectorToken(ws.id, row.id);
     expect((await rpc(token, { jsonrpc: "2.0", id: 8, method: "ping" })).status).toBe(401);
   });
+
+  it("a teammate's connector URL stops working when they are demoted or removed", async () => {
+    const { ws } = await makeWorkspace();
+    const va = await createUser({ email: `va-${Date.now()}@example.com`, name: "Val Assist", password: "password123" });
+    const db = await getDb();
+    await db.insert(workspaceMembers).values({ workspaceId: ws.id, userId: va.id, role: "admin" });
+    const { token } = await createConnectorToken(ws.id, va.id, "VA's Claude");
+    expect((await listConnectorTokens(ws.id))[0].createdByName).toBe("Val Assist");
+    expect((await rpc(token, { jsonrpc: "2.0", id: 1, method: "ping" })).status).toBe(200);
+
+    await db.update(workspaceMembers).set({ role: "user" }).where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, va.id)));
+    expect((await rpc(token, { jsonrpc: "2.0", id: 2, method: "ping" })).status).toBe(401);
+
+    await db.update(workspaceMembers).set({ role: "admin" }).where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, va.id)));
+    await removeMember(ws.id, va.id);
+    expect(await listConnectorTokens(ws.id)).toHaveLength(0);
+    expect((await rpc(token, { jsonrpc: "2.0", id: 3, method: "ping" })).status).toBe(401);
+  });
 });
 
 describe("bring your own AI key", () => {
@@ -105,7 +145,7 @@ describe("bring your own AI key", () => {
     const { ws } = await makeWorkspace();
     const db = await getDb();
     await db.update(workspaces).set({ settings: { ...ws.settings, aiProvider: "anthropic", aiKeyEnc: encrypt("sk-ant-test"), aiKeyHint: "…test" } }).where(eq(workspaces.id, ws.id));
-    for (let i = 0; i < 5; i++) expect(await chargeAi(ws.id, "ai_generation", "test")).toEqual({ billedMicros: 0, byo: true });
+    for (let i = 0; i < 5; i++) expect(await chargeAi(ws.id, "ai_generation", "test")).toMatchObject({ billedMicros: 0, byo: true, creds: { provider: "anthropic", apiKey: "sk-ant-test" } });
     const usage = await usageThisMonth(ws.id);
     expect(JSON.stringify(usage)).not.toContain("ai_generation");
   });

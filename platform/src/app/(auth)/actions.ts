@@ -1,20 +1,24 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { sql } from "drizzle-orm";
+import { headers } from "next/headers";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { isEmail, normalizeEmail } from "@/lib/util";
 import { safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
-import { checkCredentials, createSession, createUser, findUserByEmail, requestHost } from "@/server/auth";
-import { FOREVER, grantWelcomeAccess, membershipFor } from "@/server/access";
-import { workspaces } from "@/lib/db/schema";
+import { checkCredentials, createSession, createUser, findUserByEmail, getCurrentUser, requestHost } from "@/server/auth";
+import { sendVerifyEmail, verifyEmail } from "@/server/emailVerify";
+import { clientIp } from "@/lib/ip";
+import { workspaceMembers, workspaces } from "@/lib/db/schema";
+import { grantWelcomeAccess, membershipFor, refreshOwnerAccess } from "@/server/access";
 import { getPlatformAgency } from "@/server/tenancy";
 import { createWorkspace } from "@/server/workspace";
 import { passwordLinkFor, resetPassword } from "@/server/passwords";
 import { sendSystemEmail } from "@/server/email/send";
 import { agencyForHost } from "@/server/agency";
+import { EMAIL_SEND_LIMIT, takeRateLimit } from "@/server/rateLimit";
 
 export type FormState = { error?: string; ok?: string; values?: Record<string, string> };
 
@@ -29,7 +33,8 @@ export async function loginAction(_prev: FormState, fd: FormData): Promise<FormS
   if (!user) return { error: "That email and password don't match.", values };
   await createSession(user.id);
   const next = str(fd, "next");
-  redirect(next.startsWith("/app") ? next : "/app");
+  // Back to where they were going: an app page, or the confirm link that sent them here.
+  redirect(next.startsWith("/app") || next.startsWith("/verify?") ? next : "/app");
 }
 
 export async function signupAction(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -43,9 +48,39 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
   if (!name) return { error: "Enter your name.", values };
   if (!isEmail(email)) return { error: "Enter a valid email.", values };
   if (password.length < 8) return { error: "Use a password with at least 8 characters.", values };
-  if (await findUserByEmail(email)) return { error: "You already have an account. Log in instead.", values };
-
   const db = await getDb();
+  const existing = await findUserByEmail(email);
+  if (existing) {
+    // A login can exist without a community account of its own (a team invite, an agency client).
+    // Whoever proves its password can add their own member account, so an invite never blocks it.
+    const agency = await getPlatformAgency();
+    const [ownsMember] = await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .innerJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, workspaces.id), eq(workspaceMembers.role, "owner")))
+      .where(and(eq(workspaceMembers.userId, existing.id), eq(workspaces.accessSource, "member")))
+      .limit(1);
+    if (ownsMember) return { error: "You already have an account. Log in instead.", values };
+    const user = await checkCredentials(email, password);
+    if (!user) {
+      return { error: "This email already has a login (maybe from a team invite). Enter its password to add your own account, or reset it with \"Forgot password\" on the login page.", values };
+    }
+    const ws = await createWorkspace({ agencyId: agency.id, name: businessName, ownerUserId: user.id, accessSource: "member", accessVerifiedUntil: null, isPlatformAgency: true, settings: { businessName } });
+    if (!user.emailVerifiedAt) {
+      await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "verify" }).where(eq(workspaces.id, ws.id));
+      const brand = await agencyForHost(await requestHost());
+      await sendVerifyEmail(user.id, brand?.brand.name).catch((err) => console.error("[auth] verify email failed", err));
+    } else {
+      // Already proven: access follows the email straight away, like after the confirm link.
+      await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "access" }).where(eq(workspaces.id, ws.id));
+      if ((await membershipFor(email)).active) await refreshOwnerAccess(email);
+      else await grantWelcomeAccess(email, user.name, { ip: clientIp(await headers()) });
+    }
+    await createSession(user.id);
+    redirect(`/app/w/${ws.id}`);
+  }
+
+
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
   const firstUser = count === 0;
   if (firstUser) {
@@ -56,12 +91,10 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
     }
   }
 
-  // No codes: anyone can create a login. The app turns on while the email is an active member
-  // (Skool or a direct purchase) and waits on the "unlock" screen until then.
-  const membership = firstUser ? null : await membershipFor(email);
-  const active = firstUser || Boolean(membership?.active);
-
-  const user = await createUser({ email, name, password });
+  // No codes: anyone can create a login. Access follows the email address, so nothing turns on until
+  // they click the link we email them (that proves the address is theirs). Then the app turns on while
+  // the email is an active member (Skool or a direct purchase), or for the one-time welcome window.
+  const user = await createUser({ email, name, password, emailVerified: firstUser });
   if (firstUser) await db.update(users).set({ isPlatformAdmin: true }).where(sql`${users.id} = ${user.id}`);
   const agency = await getPlatformAgency();
   const ws = await createWorkspace({
@@ -69,24 +102,26 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
     name: businessName,
     ownerUserId: user.id,
     accessSource: firstUser ? "admin" : "member",
-    accessVerifiedUntil: membership?.active ? (membership.until ?? FOREVER) : null,
+    accessVerifiedUntil: null,
     isPlatformAgency: true,
     settings: { businessName },
   });
-  // Not confirmed yet: a one-time welcome window lets them start now (it also turns the workspace on).
-  const welcomed = !active && (await grantWelcomeAccess(email, name));
-  if (!active && !welcomed) {
-    await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "access" }).where(sql`${workspaces.id} = ${ws.id}`);
+  if (!firstUser) {
+    await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "verify" }).where(sql`${workspaces.id} = ${ws.id}`);
+    const brand = await agencyForHost(await requestHost());
+    await sendVerifyEmail(user.id, brand?.brand.name).catch((err) => console.error("[auth] verify email failed", err));
   }
   await createSession(user.id);
-  redirect(active || welcomed ? `/app/w/${ws.id}/launch` : `/app/w/${ws.id}/paused`);
+  redirect(firstUser ? `/app/w/${ws.id}/launch` : `/app/w/${ws.id}/paused`);
 }
 
 export async function forgotAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const email = str(fd, "email");
   if (!isEmail(email)) return { error: "Enter a valid email." };
   const user = await findUserByEmail(email);
-  if (user) {
+  // One reset email a minute and five a day per address, so this form can't mail-bomb anyone.
+  // The reply is the same either way, so it never says whether an account exists.
+  if (user && (await takeRateLimit(`reset-email:${user.id}`, EMAIL_SEND_LIMIT))) {
     const link = await passwordLinkFor(user.id, 2);
     const agency = await agencyForHost(await requestHost());
     await sendSystemEmail({
@@ -100,9 +135,21 @@ export async function forgotAction(_prev: FormState, fd: FormData): Promise<Form
 }
 
 export async function resetAction(_prev: FormState, fd: FormData): Promise<FormState> {
-  const res = await resetPassword(str(fd, "token"), String(fd.get("password") ?? ""));
+  const res = await resetPassword(str(fd, "token"), String(fd.get("password") ?? ""), { ip: clientIp(await headers()) });
   if (!res.ok) return { error: res.error };
   await createSession(res.userId);
+  redirect("/app");
+}
+
+/** /verify: the "Confirm my email" button. Only works for the account the link is for, logged in. */
+export async function verifyAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Log in first, then press Confirm." };
+  const res = await verifyEmail(str(fd, "token"), { userId: user.id, ip: clientIp(await headers()) });
+  if (!res.ok) return { error: res.error };
+  // Confirming signs out every session (someone may have signed up with this email first), so sign
+  // the clicker back in. They proved the password by being logged in.
+  if (!res.alreadyVerified) await createSession(res.userId);
   redirect("/app");
 }
 

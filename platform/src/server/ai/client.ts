@@ -9,9 +9,12 @@ import { decrypt } from "@/lib/crypto";
 import { isPublicHttpsUrl } from "@/lib/html";
 
 let client: Anthropic | null = null;
+const ANTHROPIC_API_BASE = "https://api.anthropic.com";
 export function anthropic(creds?: AiCreds | null): Anthropic {
   // The workspace's own key (bring your own AI), else ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN.
-  if (creds?.provider === "anthropic") return new Anthropic({ apiKey: creds.apiKey });
+  // The owner's client is pinned to Anthropic with only their key: otherwise the SDK adds the
+  // platform's ANTHROPIC_AUTH_TOKEN and sends the request to the platform's ANTHROPIC_BASE_URL.
+  if (creds?.provider === "anthropic") return new Anthropic({ apiKey: creds.apiKey, authToken: null, baseURL: ANTHROPIC_API_BASE });
   return (client ??= new Anthropic());
 }
 
@@ -24,7 +27,8 @@ export function anthropic(creds?: AiCreds | null): Anthropic {
 
 export type AiProvider = "anthropic" | "openai" | "gemini" | "groq" | "openrouter" | "custom";
 export type AiCreds = { provider: AiProvider; apiKey: string; model?: string; baseUrl?: string };
-export const DEFAULT_OPENAI_MODEL = "gpt-5";
+// OpenAI removes plain "gpt-5" on Dec 11, 2026. verifyAiKey also saves the newest gpt-5.x the key can use.
+export const DEFAULT_OPENAI_MODEL = "gpt-5.6-sol";
 
 export const AI_PROVIDERS: Record<AiProvider, { label: string; free: boolean; base: string; keyUrl: string; note: string }> = {
   gemini: {
@@ -76,31 +80,42 @@ export function pickModel(provider: AiProvider, ids: string[]): string | undefin
     provider === "gemini"
       ? [/^gemini-[\d.]+-flash$/, /^gemini-[\d.]+-flash(?!-lite)/, /flash/, /gemini/]
       : provider === "groq"
-        ? [/llama-3\.3-70b/, /70b/, /llama/, /qwen|mixtral|gemma/]
+        ? [/gpt-oss-120b/, /qwen3\.6/, /gpt-oss/, /qwen|llama/]
         : provider === "openrouter"
           ? [/:free$/]
-          : [/./];
+          : provider === "openai"
+            ? [/^gpt-5\.\d+(?:-sol)?$/, /^gpt-5\.\d+(?!.*(?:mini|nano|codex|search|audio|preview|\d{4}-\d{2}-\d{2}))/, /^gpt-5(?:-sol)?$/]
+            : [/./];
   for (const re of prefer) {
     const hit = clean.filter((id) => re.test(id)).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0];
     if (hit) return hit;
   }
-  return clean[0];
+  return provider === "openai" ? undefined : clean[0];
 }
 
 /**
  * Check a key works without spending tokens, and find a default model.
  * Returns ok:false with a reason the owner can act on.
  */
-export async function verifyAiKey(provider: AiProvider, apiKey: string, baseUrl?: string): Promise<{ ok: boolean; model?: string; error?: string }> {
+export async function verifyAiKey(provider: AiProvider, apiKey: string, baseUrl?: string, model?: string): Promise<{ ok: boolean; model?: string; error?: string }> {
   const t = AbortSignal.timeout(15_000);
   try {
     if (provider === "anthropic") {
-      const res = await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, signal: t });
-      return res.ok ? { ok: true } : { ok: false, error: "Anthropic didn't accept that key." };
+      const headers = { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
+      const res = await fetch(`${ANTHROPIC_API_BASE}/v1/models?limit=1`, { headers, signal: t });
+      if (!res.ok) return { ok: false, error: "Anthropic didn't accept that key." };
+      if (model) {
+        const m = await fetch(`${ANTHROPIC_API_BASE}/v1/models/${encodeURIComponent(model)}`, { headers, signal: t });
+        if (!m.ok) return { ok: false, error: `Anthropic doesn't know the model "${model}". Check the name, or leave Model empty.` };
+      }
+      return { ok: true };
     }
     if (provider === "openai") {
       const res = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${apiKey}` }, signal: t });
-      return res.ok ? { ok: true } : { ok: false, error: "OpenAI didn't accept that key." };
+      if (!res.ok) return { ok: false, error: "OpenAI didn't accept that key." };
+      const ids = await modelIds(res);
+      if (model) return knownModel(ids, model) ? { ok: true, model } : { ok: false, error: `OpenAI doesn't know the model "${model}". Check the name, or leave Model empty.` };
+      return { ok: true, model: pickModel("openai", ids) };
     }
     if (provider === "custom" && !(baseUrl && isPublicHttpsUrl(baseUrl))) return { ok: false, error: "Use a public https:// base URL." };
     const base = compatBase({ provider, baseUrl });
@@ -110,23 +125,42 @@ export async function verifyAiKey(provider: AiProvider, apiKey: string, baseUrl?
     }
     const res = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${apiKey}` }, signal: t, redirect: "error" });
     if (!res.ok) return { ok: false, error: `${AI_PROVIDERS[provider].label} didn't accept that key (${res.status}).` };
-    const data = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] };
-    const ids = (data.data ?? []).map((m) => m.id ?? "").filter(Boolean);
+    const ids = await modelIds(res);
+    if (model) {
+      // Some OpenAI-compatible APIs return an empty list; only a list that leaves the model out is a no.
+      if (ids.length && !knownModel(ids, model)) return { ok: false, error: `${AI_PROVIDERS[provider].label} doesn't know the model "${model}". Check the name, or leave Model empty.` };
+      return { ok: true, model };
+    }
     return { ok: true, model: pickModel(provider, ids) };
   } catch (err) {
     return { ok: false, error: `Couldn't reach ${AI_PROVIDERS[provider].label}: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
-async function openaiResponse(creds: AiCreds, opts: { system: string; prompt: string; maxTokens: number; jsonSchema?: unknown }) {
+async function modelIds(res: Response): Promise<string[]> {
+  const data = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] };
+  return (data.data ?? []).map((m) => (m.id ?? "").replace(/^models\//, "")).filter(Boolean);
+}
+
+const knownModel = (ids: string[], model: string) => ids.includes(model.replace(/^models\//, ""));
+
+/** gpt-5 and the o-series reason before they answer, and those tokens count against max_output_tokens. */
+const OPENAI_REASONING_MIN_TOKENS = 8000;
+const isOpenAiReasoningModel = (model: string) => /^(?:gpt-5|o\d)/.test(model);
+
+async function openaiResponse(creds: AiCreds, opts: { system: string; prompt: string; maxTokens: number; effort?: "low" | "medium" | "high"; jsonSchema?: unknown }) {
+  const model = creds.model || DEFAULT_OPENAI_MODEL;
+  const reasoning = isOpenAiReasoningModel(model);
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
+    signal: AbortSignal.timeout(180_000),
     headers: { Authorization: `Bearer ${creds.apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: creds.model || DEFAULT_OPENAI_MODEL,
+      model,
       instructions: opts.system,
       input: opts.prompt,
-      max_output_tokens: opts.maxTokens,
+      max_output_tokens: reasoning ? Math.max(opts.maxTokens, OPENAI_REASONING_MIN_TOKENS) : opts.maxTokens,
+      ...(reasoning ? { reasoning: { effort: opts.effort === "high" ? "medium" : "low" } } : {}),
       ...(opts.jsonSchema ? { text: { format: { type: "json_schema", name: "output", schema: opts.jsonSchema, strict: false } } } : {}),
     }),
   });
@@ -146,6 +180,11 @@ async function openaiResponse(creds: AiCreds, opts: { system: string; prompt: st
 }
 
 /** OpenAI-compatible Chat Completions (Gemini, Groq, OpenRouter, custom). */
+// Thinking models (Gemini 2.5+, gpt-oss, DeepSeek R1, QwQ...) spend max_tokens on reasoning before
+// the answer, so a small cap cuts them off with nothing written. Give them room.
+const COMPAT_THINKING_MIN_TOKENS = 8000;
+export const isCompatThinkingModel = (model: string | null | undefined) => /gemini-(2\.5|[3-9])|gpt-oss|deepseek-r|qwq|reason|think/i.test(model ?? "");
+
 async function chatCompletion(creds: AiCreds, opts: { system: string; prompt: string; maxTokens: number; json?: boolean; extra?: { role: "assistant" | "user"; content: string }[] }) {
   const base = compatBase(creds);
   if (creds.provider === "custom" && !isPublicHttpsUrl(base)) throw new AiOutputError("Your AI base URL must be a public https:// address.");
@@ -162,7 +201,7 @@ async function chatCompletion(creds: AiCreds, opts: { system: string; prompt: st
       body: JSON.stringify({
         model: creds.model,
         messages: [{ role: "system", content: opts.system }, { role: "user", content: opts.prompt }, ...(opts.extra ?? [])],
-        max_tokens: Math.min(opts.maxTokens, COMPAT_MAX_TOKENS),
+        max_tokens: Math.min(isCompatThinkingModel(creds.model) ? Math.max(opts.maxTokens, COMPAT_THINKING_MIN_TOKENS) : opts.maxTokens, COMPAT_MAX_TOKENS),
         ...(withFormat ? { response_format: { type: "json_object" } } : {}),
       }),
     });
@@ -198,6 +237,36 @@ export function extractJson(text: string): unknown {
   return JSON.parse(start >= 0 && end > start ? raw.slice(start, end + 1) : raw);
 }
 
+/** Parse a Claude model id like "claude-sonnet-4-6" or "claude-opus-5-20260101". */
+function claudeVersion(model: string): { family: string; major: number; minor: number } | null {
+  const m = model.match(/^claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/);
+  return m ? { family: m[1], major: Number(m[2]), minor: Number(m[3] ?? 0) } : null;
+}
+
+/** output_config.effort: Opus 4.5+, Sonnet 4.6+, Haiku 5.5+ and Fable. Older models reject it. */
+export function claudeSupportsEffort(model: string): boolean {
+  const v = claudeVersion(model);
+  if (!v) return false;
+  const atLeast = (major: number, minor: number) => v.major > major || (v.major === major && v.minor >= minor);
+  if (v.family === "fable") return true;
+  if (v.family === "opus") return atLeast(4, 5);
+  if (v.family === "sonnet") return atLeast(4, 6);
+  return atLeast(5, 5);
+}
+
+/** Server-side fallback exists only on some models; a fallbacks list is a 400 on the rest. */
+export function claudeSupportsFallback(model: string): boolean {
+  return /^claude-(?:opus-5|opus-5-5|fable-5-1|sonnet-5-5)(?:-\d{8})?$/.test(model);
+}
+
+/** The model-dependent request fields for one Claude call. */
+function claudeOptions(model: string, effort: "low" | "medium" | "high") {
+  return {
+    fallback: claudeSupportsFallback(model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {},
+    effort: claudeSupportsEffort(model) ? { effort } : {},
+  };
+}
+
 export class AiRefusalError extends Error {}
 export class AiOutputError extends Error {}
 
@@ -227,10 +296,12 @@ export async function generateStructured<T extends z.ZodType>(opts: {
   maxTokens?: number;
   /** Uses this workspace's own AI key when it has one. */
   workspaceId?: string;
+  /** Credentials already loaded (e.g. by chargeAi), so the key is read once. null = the platform key. */
+  creds?: AiCreds | null;
 }): Promise<{ data: z.infer<T>; usage: AiUsage }> {
-  const creds = opts.workspaceId ? await aiCredsFor(opts.workspaceId) : null;
+  const creds = await resolveCreds(opts);
   if (creds?.provider === "openai") {
-    const res = await openaiResponse(creds, { system: opts.system, prompt: opts.prompt, maxTokens: opts.maxTokens ?? 16000, jsonSchema: z.toJSONSchema(opts.schema) });
+    const res = await openaiResponse(creds, { system: opts.system, prompt: opts.prompt, maxTokens: opts.maxTokens ?? 16000, effort: opts.effort, jsonSchema: z.toJSONSchema(opts.schema) });
     let parsed: unknown;
     try {
       parsed = opts.schema.parse(JSON.parse(res.text));
@@ -268,12 +339,13 @@ export async function generateStructured<T extends z.ZodType>(opts: {
     if (!parsed.ok) throw new AiOutputError("The AI returned an unexpected format. Please try again, or pick a stronger model.");
     return { data: parsed.data, usage: res.usage };
   }
+  const model = creds?.model || env.aiModel;
+  const claude = claudeOptions(model, opts.effort);
   const message = await anthropic(creds).beta.messages.parse({
-    model: creds?.model || env.aiModel,
+    model,
     max_tokens: opts.maxTokens ?? 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: opts.effort, format: betaZodOutputFormat(opts.schema) },
+    ...claude.fallback,
+    output_config: { ...claude.effort, format: betaZodOutputFormat(opts.schema) },
     system: opts.system,
     messages: [{ role: "user", content: opts.prompt }],
   });
@@ -297,9 +369,16 @@ export async function generateStructured<T extends z.ZodType>(opts: {
   };
 }
 
+/** The key to use: the one the caller already loaded, else the workspace's own (if any), else the platform's. */
+async function resolveCreds(opts: { workspaceId?: string; creds?: AiCreds | null; ownKeyOnly?: boolean }): Promise<AiCreds | null> {
+  const creds = opts.creds !== undefined ? opts.creds : opts.workspaceId ? await aiCredsFor(opts.workspaceId) : null;
+  if (opts.ownKeyOnly && !creds) throw new AiOutputError("Your own AI key isn't available any more. Add it again in Your AI.");
+  return creds;
+}
+
 export function describeAiError(err: unknown): string {
   if (err instanceof AiRefusalError || err instanceof AiOutputError) return err.message;
-  if (err instanceof Anthropic.AuthenticationError) return "The AI key is invalid. Check your key in Settings › AI & connectors.";
+  if (err instanceof Anthropic.AuthenticationError) return "The AI key is invalid. Check your key in Your AI.";
   if (err instanceof Anthropic.RateLimitError) return "The AI is busy right now. Please try again in a minute.";
   if (err instanceof Anthropic.BadRequestError) return `The AI rejected the request: ${err.message}`;
   if (err instanceof Anthropic.APIError) return `AI error (${err.status ?? "network"}). Please try again.`;
@@ -314,10 +393,14 @@ export async function generateText(opts: {
   maxTokens?: number;
   /** Uses this workspace's own AI key when it has one. */
   workspaceId?: string;
+  /** Credentials already loaded (e.g. by chargeAi), so the key is read once. null = the platform key. */
+  creds?: AiCreds | null;
+  /** Never fall back to the platform key (used by "Ask my AI"). */
+  ownKeyOnly?: boolean;
 }): Promise<{ text: string; usage: AiUsage }> {
-  const creds = opts.workspaceId ? await aiCredsFor(opts.workspaceId) : null;
+  const creds = await resolveCreds(opts);
   if (creds?.provider === "openai") {
-    const res = await openaiResponse(creds, { system: opts.system, prompt: opts.prompt, maxTokens: opts.maxTokens ?? 4000 });
+    const res = await openaiResponse(creds, { system: opts.system, prompt: opts.prompt, maxTokens: opts.maxTokens ?? 4000, effort: opts.effort });
     if (!res.text) throw new AiOutputError("The AI returned an empty reply.");
     return res;
   }
@@ -326,12 +409,13 @@ export async function generateText(opts: {
     if (!res.text) throw new AiOutputError("The AI returned an empty reply.");
     return res;
   }
+  const model = creds?.model || env.aiModel;
+  const claude = claudeOptions(model, opts.effort);
   const message = await anthropic(creds).beta.messages.create({
-    model: creds?.model || env.aiModel,
+    model,
     max_tokens: opts.maxTokens ?? 4000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: opts.effort },
+    ...claude.fallback,
+    ...(claude.effort.effort ? { output_config: claude.effort } : {}),
     system: opts.system,
     messages: [{ role: "user", content: opts.prompt }],
   });
@@ -347,19 +431,21 @@ export async function generateText(opts: {
   };
 }
 
-export type AiCharge = { billedMicros: number; byo: boolean };
+/** creds: the workspace's own key when byo, else null (the platform key). Pass it on to generate*, so the key is read once. */
+export type AiCharge = { billedMicros: number; byo: boolean; creds: AiCreds | null };
 
 /**
  * Pay for one AI call. Returns null when AI can't run (no key anywhere, or the wallet can't cover it),
  * so the caller uses its rule-based fallback. Workspaces with their own key are never charged.
  */
 export async function chargeAi(workspaceId: string, unit: "ai_generation" | "ai_assist", description: string): Promise<AiCharge | null> {
-  if (await aiCredsFor(workspaceId)) return { billedMicros: 0, byo: true };
+  const creds = await aiCredsFor(workspaceId);
+  if (creds) return { billedMicros: 0, byo: true, creds };
   if (!env.aiEnabled) return null;
   const { chargeUsage, InsufficientBalanceError } = await import("../wallet");
   try {
     const c = await chargeUsage(workspaceId, unit, 1, { description });
-    return { billedMicros: c.billedMicros, byo: false };
+    return { billedMicros: c.billedMicros, byo: false, creds: null };
   } catch (err) {
     if (err instanceof InsufficientBalanceError) return null;
     throw err;

@@ -308,7 +308,7 @@ export async function runLaunchKit(workspaceId: string, rawInput: unknown): Prom
   }
   if (charge) {
     try {
-      const res = await generateStructured({ workspaceId, system: SYSTEM, prompt: buildPrompt(input), schema: launchKitSchema, effort: "medium" });
+      const res = await generateStructured({ workspaceId, creds: charge.creds, system: SYSTEM, prompt: buildPrompt(input), schema: launchKitSchema, effort: "medium" });
       kit = normalizeKit(res.data);
       usage = res.usage;
       usedAi = true;

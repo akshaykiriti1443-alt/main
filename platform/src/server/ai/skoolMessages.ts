@@ -73,7 +73,8 @@ export async function draftSkoolMessage(
   if (charge) {
     try {
       const res = await generateText({
-        workspaceId: workspaceId,
+        workspaceId,
+        creds: charge.creds,
         effort: "low",
         maxTokens: 2000,
         system: `You write a single direct message for ${businessName}, a coach who runs a paid Skool community${

@@ -96,8 +96,8 @@ export async function requireWorkspace(workspaceId: string, minRole: WorkspaceRo
   if (ctx.effectiveStatus === "paused" && !opts.allowPaused) redirect(`/app/w/${workspaceId}/paused`);
   // The entry ticket: new members post their intro in the community before the app opens.
   if (!opts.allowEntry && !ctx.user.isPlatformAdmin && ctx.workspace.accessSource === "member") {
-    const { needsEntryTicket } = await import("./unlocks");
-    if (needsEntryTicket(await entryTicket(), ctx.workspace)) redirect(`/app/w/${workspaceId}/hello`);
+    const { entryTicketPending } = await import("./unlocks");
+    if (await entryTicketPending(await entryTicket(), ctx.workspace)) redirect(`/app/w/${workspaceId}/hello`);
   }
   return ctx;
 }

@@ -38,7 +38,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
       <PageHead
         eyebrow="Skool growth"
         title="Growth ladder"
-        sub="Skool runs ads for communities that climb its levels: 6 custom ads at Level 2, up to $1,000/day at Level 3, around $10,000/day at Level 4. All with Skool's money. Every requirement is the last 30 days."
+        sub="Skool advertises communities that climb its levels: custom ads at Level 2, a dedicated campaign at Level 3, a partnership campaign with video ads at Level 4. Skool decides the spend, and it isn't guaranteed. Every requirement is the last 30 days."
       />
       <Flash searchParams={await searchParams} />
 
@@ -190,6 +190,9 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
             <FieldLabel htmlFor="note">Note to self</FieldLabel>
             <Input id="note" name="note" placeholder="What I changed this week" />
           </Field>
+          <SubmitButton className="self-start" pendingText="Saving…">
+            Save check-in
+          </SubmitButton>
         </Panel>
       </form>
 
@@ -197,7 +200,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
         <BudgetPlanner initialBudget={last?.adSpendPerDay ?? 10} initialOrganic={0} initialPrice={workspace.settings.skoolMemberPrice ?? 29} />
       </Panel>
 
-      <Panel title="If Skool spends on you" sub="Skool's Growth tab: up to $1,000/day at Level 3, around $10,000/day at Level 4. Plug in what Skool actually spends and see what you keep.">
+      <Panel title="If Skool spends on you" sub="Skool decides what it spends on your ads, and it isn't guaranteed. Plug in what Skool actually spends and see what you keep.">
         <BoostCalculator initialBoost={last?.boostPercent ?? 30} />
       </Panel>
 

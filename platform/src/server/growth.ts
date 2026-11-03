@@ -4,23 +4,29 @@ import { activities, sites, skoolCheckins, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { safeUrl } from "@/lib/html";
 
-// The Skool growth ladder, exactly as Skool's Growth tab shows it (Community → Settings → Growth,
-// checked Nov 2026). Every requirement is the last 30 days, so a level can drop as well as rise.
-//   L1  Discovery            Shown in Skool Discovery and suggested communities.
-//   L2  6 custom ads         100 About-page visitors · 1 new customer · subscription or tiers pricing
-//   L3  Upload your own      3,000 visitors · Skool link in bio · consistent organic promo · 10 Skool Network sign-ups
-//                            → upload your own ads + up to $1,000/day in ad spend (Skool's money)
-//   L4  Partnership ads      10,000 visitors · link in bio · organic promo · 30 Skool Network sign-ups
-//                            → partnership ads + upload videos, ~$10,000/day spend
-// Running your own ads counts as organic promotion.
+// The Skool growth ladder, in the words of Skool's help center (help.skool.com/article/245-growth-tab-and-skool-ads)
+// and its Growth tab. Every requirement is the last 30 days, so a level can drop as well as rise.
+//   L1  Carousel ads          Paid communities (subscription or tiers) appear in Skool's carousel ads.
+//                             Skool runs no ads for free or freemium communities.
+//   L2  Custom ads            100 About-page visitors · 1 new customer · subscription or tiers pricing
+//                             → Skool generates custom ads (up to 10 variations). Spend isn't guaranteed.
+//   L3  Dedicated campaign    3,000 visitors · consistent organic promo · 10 Skool Network sign-ups
+//   L4  Partnership campaign  10,000 visitors · consistent organic promo · 30 Skool Network sign-ups
+// Skool makes the ads (you can't upload your own) and decides the spend; it names no amounts.
+// Running your own ads counts as organic promotion. A skool.com link in your bios is a tip, not a requirement.
 
 export type LevelReq = { visitors: number; newPaid: number; networkSignups: number; linkInBio: boolean; organic: boolean; paidPricing: boolean };
 const req = (r: Partial<LevelReq>): LevelReq => ({ visitors: 0, newPaid: 0, networkSignups: 0, linkInBio: false, organic: false, paidPricing: false, ...r });
-export const LEVELS: { level: 1 | 2 | 3 | 4; name: string; reward: string; spendPerDay: number; req: LevelReq }[] = [
-  { level: 1, name: "Discovery", reward: "Shown in Skool Discovery and suggested communities.", spendPerDay: 0, req: req({}) },
-  { level: 2, name: "6 custom ads", reward: "Skool runs 6 custom ads promoting your community.", spendPerDay: 0, req: req({ visitors: 100, newPaid: 1, paidPricing: true }) },
-  { level: 3, name: "Upload your own", reward: "Upload your own ads, and Skool spends up to $1,000/day on them.", spendPerDay: 1000, req: req({ visitors: 3000, networkSignups: 10, linkInBio: true, organic: true }) },
-  { level: 4, name: "Partnership ads", reward: "Partnership ads and video uploads, around $10,000/day in spend.", spendPerDay: 10000, req: req({ visitors: 10000, networkSignups: 30, linkInBio: true, organic: true }) },
+export const LEVELS: { level: 1 | 2 | 3 | 4; name: string; reward: string; req: LevelReq }[] = [
+  { level: 1, name: "Carousel ads", reward: "Paid communities (subscription or tiers) appear in Skool's carousel ads. Free and freemium communities get no Skool ads.", req: req({}) },
+  {
+    level: 2,
+    name: "Custom ads",
+    reward: "Skool generates custom ads for you (up to 10 variations). Spend isn't guaranteed; it depends on how the ads perform.",
+    req: req({ visitors: 100, newPaid: 1, paidPricing: true }),
+  },
+  { level: 3, name: "Dedicated campaign", reward: "A dedicated ad campaign with more creatives and meaningful daily spend.", req: req({ visitors: 3000, networkSignups: 10, organic: true }) },
+  { level: 4, name: "Partnership campaign", reward: "A partnership-level campaign with the highest spend and custom video ads.", req: req({ visitors: 10000, networkSignups: 30, organic: true }) },
 ];
 
 /** The requirement lines for a level card, in Skool's own words. */
@@ -61,7 +67,12 @@ export function computeLadder(c: CheckinInput | null): Ladder {
   const meets = (r: LevelReq) =>
     v.aboutVisitors >= r.visitors && v.newPaid >= r.newPaid && v.networkSignups >= r.networkSignups && (!r.linkInBio || v.linkInBio) && (!r.organic || organic);
   let qualifies: 1 | 2 | 3 | 4 = 1;
-  for (const l of LEVELS) if (meets(l.req)) qualifies = l.level;
+  // Cumulative: each level needs the ones below it (Level 3 still needs Level 2's paid pricing and
+  // a new customer), so stop at the first level that isn't met.
+  for (const l of LEVELS) {
+    if (!meets(l.req)) break;
+    qualifies = l.level;
+  }
   const next = LEVELS.find((l) => l.level === qualifies + 1) ?? null;
 
   const gaps: Gap[] = [];
@@ -82,11 +93,12 @@ export function computeLadder(c: CheckinInput | null): Ladder {
   if (next?.req.paidPricing && v.newPaid < 1) moves.push("Turn on subscription or tiers pricing in Skool, then get one new customer: message your hot leads today and invite the ones who replied.");
   else if (next?.req.newPaid && v.newPaid < next.req.newPaid) moves.push("Get one new customer: message your hot leads today and invite the ones who replied.");
   if (next?.req.linkInBio && !v.linkInBio) moves.push("Put your plain skool.com link in your Instagram, TikTok and YouTube bios. Skool checks this one directly.");
+  else if (next && next.level >= 3 && !v.linkInBio) moves.push("Tip: put your plain skool.com link in your Instagram, TikTok and YouTube bios. It sends more people to your About page.");
   if (next?.req.organic && !organic) moves.push("Post at least 3 times a week, or keep your own ad running. Both count as consistent organic promo.");
   if (next?.req.networkSignups && v.networkSignups < next.req.networkSignups) {
-    moves.push("Skool Network sign-ups only come from Discovery, Skool's ads and member profiles. Raise them with a sharper cover and About page, daily posts (engagement), keeping members (retention), and a higher Growth Boost %.");
+    moves.push("Skool Network sign-ups come from Discovery, Skool's ads, the recommended communities sidebar and other members' profiles. Raise them with a sharper cover and About page, daily posts (engagement), keeping members (retention), and a higher Growth Boost %.");
   }
-  if (next?.level === 3) moves.push("Get your own ad creatives ready now. At Level 3 you upload them and Skool spends up to $1,000/day on them.");
+  if (next?.level === 3) moves.push("At Level 3 Skool runs a dedicated campaign for you. Skool makes the ads and decides the spend, so make your About page and cover as sharp as they can be.");
   if (!next) moves.push("You're at the top level. Protect it: retention and engagement keep you there.");
   return { qualifies, reported: v.skoolLevel, next, gaps, moves };
 }
@@ -125,19 +137,27 @@ export async function saveCheckin(workspaceId: string, input: Partial<CheckinInp
 
 export const skoolLinkFor = (slug: string) => `${env.appUrl}/go/${slug}`;
 
-/** Normalise a group URL to its About page: https://www.skool.com/<group>/about */
-export function aboutUrl(raw: string): string {
+/** Is this an http(s) link on skool.com? */
+export function isSkoolUrl(raw: string): boolean {
   const url = safeUrl(raw);
-  if (!url) return "";
-  const u = new URL(url);
-  if (!/(^|\.)skool\.com$/i.test(u.hostname)) return url;
+  return Boolean(url && /(^|\.)skool\.com$/i.test(new URL(url).hostname));
+}
+
+/**
+ * Normalise a group URL to its About page: https://www.skool.com/<group>/about.
+ * Anything not on skool.com gives "", so /go/<slug> can never redirect off Skool.
+ */
+export function aboutUrl(raw: string): string {
+  if (!isSkoolUrl(raw)) return "";
+  const u = new URL(safeUrl(raw));
   const group = u.pathname.split("/").filter(Boolean)[0];
-  if (!group) return url;
+  if (!group) return `https://www.skool.com/`;
   return `https://www.skool.com/${group}/about`;
 }
 
 export async function skoolTargetFor(workspaceId: string, settingsUrl?: string) {
-  if (settingsUrl) return aboutUrl(settingsUrl);
+  const fromSettings = settingsUrl ? aboutUrl(settingsUrl) : "";
+  if (fromSettings) return fromSettings;
   const db = await getDb();
   const [site] = await db.select({ skoolUrl: sites.skoolUrl }).from(sites).where(and(eq(sites.workspaceId, workspaceId), sql`${sites.skoolUrl} <> ''`)).limit(1);
   return site ? aboutUrl(site.skoolUrl) : "";

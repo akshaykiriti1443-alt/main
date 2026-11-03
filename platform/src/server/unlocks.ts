@@ -1,12 +1,13 @@
 import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { contacts, platformSettings, unlockClaims, unlocks, workspaces, type UnlockAction } from "@/lib/db/schema";
+import { agencies, contacts, platformSettings, unlockClaims, unlocks, workspaces, type UnlockAction } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { isPublicHttpsUrl, safeUrl } from "@/lib/html";
 import { isEmail, normalizeEmail, shortId, slugify } from "@/lib/util";
 import { addTag, upsertContact } from "./contacts";
 import { logActivity } from "./activity";
 import { enqueue } from "./jobs/queue";
+import { takeRateLimit } from "./rateLimit";
 
 // Unlocks: "post or comment in my Skool community, get this free thing". Engagement is what Skool's
 // Discovery ranks on, so rewarding it helps the community climb. How a claim works:
@@ -51,34 +52,54 @@ async function communityGroup(workspaceId: string) {
   return skoolGroupOf(ws?.settings.skoolUrl);
 }
 
-export async function createUnlock(
-  workspaceId: string,
-  input: { title: string; reward: string; rewardUrl: string; action: UnlockAction; instructions: string; skoolPostUrl: string; zapierWebhookUrl: string },
-) {
+export type UnlockInput = { title: string; reward: string; rewardUrl: string; action: UnlockAction; instructions: string; skoolPostUrl: string; zapierWebhookUrl: string; clearZapier?: boolean };
+
+/** Check and tidy what the owner typed. Throws a message they can act on. */
+function cleanUnlockInput(input: UnlockInput) {
   const title = input.title.trim().slice(0, 80);
   if (!title) throw new Error("Give your unlock a name.");
   const rewardUrl = input.rewardUrl.trim() ? safeUrl(input.rewardUrl) : "";
   if (input.rewardUrl.trim() && !rewardUrl) throw new Error("The reward link must start with https://.");
   if (!input.reward.trim() && !rewardUrl) throw new Error("Say what they get, or add the reward link.");
   const skoolPostUrl = input.skoolPostUrl.trim() ? safeUrl(input.skoolPostUrl) : "";
-  if (skoolPostUrl && !skoolGroupOf(skoolPostUrl)) throw new Error("The \"where to engage\" link must be a Skool link.");
+  if (skoolPostUrl && !skoolGroupOf(skoolPostUrl)) throw new Error("The \"where to engage\" link must be a skool.com link.");
   const zapier = input.zapierWebhookUrl.trim();
   if (zapier && !isPublicHttpsUrl(zapier)) throw new Error("The Zapier link must be a public https:// URL.");
+  return {
+    title,
+    reward: input.reward.trim().slice(0, 300),
+    rewardUrl,
+    action: (input.action === "post" ? "post" : "comment") as UnlockAction,
+    instructions: input.instructions.trim().slice(0, 600),
+    skoolPostUrl,
+    zapierWebhookUrl: zapier,
+  };
+}
+
+export async function createUnlock(workspaceId: string, input: UnlockInput) {
+  const clean = cleanUnlockInput(input);
   const db = await getDb();
   const [row] = await db
     .insert(unlocks)
-    .values({
-      workspaceId,
-      slug: `${slugify(title, 30) || "unlock"}-${shortId(5).toLowerCase()}`,
-      title,
-      reward: input.reward.trim().slice(0, 300),
-      rewardUrl,
-      action: input.action === "post" ? "post" : "comment",
-      instructions: input.instructions.trim().slice(0, 600),
-      skoolPostUrl,
-      zapierWebhookUrl: zapier,
-    })
+    .values({ workspaceId, slug: `${slugify(clean.title, 30) || "unlock"}-${shortId(5).toLowerCase()}`, ...clean })
     .returning();
+  return row;
+}
+
+/**
+ * Fix an unlock in place. The slug stays, so the claim link in the pinned Skool post keeps working.
+ * The edit form never shows the saved Zapier link (it's a secret), so an empty one keeps it unless
+ * clearZapier is set.
+ */
+export async function updateUnlock(workspaceId: string, id: string, input: UnlockInput) {
+  const { zapierWebhookUrl, ...clean } = cleanUnlockInput(input);
+  const db = await getDb();
+  const [row] = await db
+    .update(unlocks)
+    .set({ ...clean, ...(zapierWebhookUrl || input.clearZapier ? { zapierWebhookUrl } : {}) })
+    .where(and(eq(unlocks.id, id), eq(unlocks.workspaceId, workspaceId)))
+    .returning();
+  if (!row) throw new Error("That unlock doesn't exist any more.");
   return row;
 }
 
@@ -103,12 +124,22 @@ export async function setUnlockActive(workspaceId: string, id: string, active: b
 export async function publicUnlock(slug: string) {
   const db = await getDb();
   const [row] = await db
-    .select({ unlock: unlocks, workspace: { id: workspaces.id, name: workspaces.name, settings: workspaces.settings, status: workspaces.status } })
+    .select({
+      unlock: unlocks,
+      workspace: { id: workspaces.id, name: workspaces.name, settings: workspaces.settings, status: workspaces.status },
+      agencyStatus: agencies.status,
+    })
     .from(unlocks)
     .innerJoin(workspaces, eq(workspaces.id, unlocks.workspaceId))
+    .innerJoin(agencies, eq(agencies.id, workspaces.agencyId))
     .where(eq(unlocks.slug, slug.toLowerCase().slice(0, 80)))
     .limit(1);
   return row ?? null;
+}
+
+/** Can this unlock be claimed right now? (Active, and neither its workspace nor its agency is paused.) */
+export function unlockAvailable(row: { unlock: Pick<Unlock, "active">; workspace: { status: string }; agencyStatus: string } | null) {
+  return Boolean(row && row.unlock.active && row.workspace.status !== "paused" && row.agencyStatus !== "paused");
 }
 
 /** The ready-to-paste Skool post that announces an unlock. */
@@ -118,7 +149,7 @@ export function unlockPostText(u: Pick<Unlock, "title" | "reward" | "action" | "
 
 How to get it (takes 1 minute):
 1. ${step1}
-2. Copy the link to your ${u.action === "comment" ? "comment or this post" : "post"} (the ⋯ menu › Copy link)
+2. Copy the link to your ${u.action === "comment" ? "comment (the ⋯ menu on your comment" : "post (the ⋯ menu"} › Copy link)
 3. Paste it here: ${claimUrlFor(u.slug)}
 
 It lands in your inbox in seconds. 👇`;
@@ -128,10 +159,22 @@ export type ClaimResult =
   | { ok: true; already: boolean; title: string; reward: string; rewardUrl: string }
   | { ok: false; error: string };
 
-export async function claimUnlock(input: { slug: string; email: string; name?: string; postUrl: string; honeypot?: string }): Promise<ClaimResult> {
+/** Public claims: per network per unlock, per unlock, and per email across all unlocks. */
+export const CLAIM_LIMITS = {
+  ipPerUnlock: [{ seconds: 3600, max: 5 }],
+  perUnlock: [{ seconds: 3600, max: 200 }],
+  perEmail: [{ seconds: 86_400, max: 10 }],
+};
+const TOO_MANY = "Too many claims right now. Please try again in an hour.";
+
+/**
+ * limits: set for the public claim page (the visitor's IP, or null when unknown). The entry ticket
+ * leaves it out: that claimant is a logged-in member.
+ */
+export async function claimUnlock(input: { slug: string; email: string; name?: string; postUrl: string; honeypot?: string; limits?: { ip: string | null } }): Promise<ClaimResult> {
   if (input.honeypot) return { ok: false, error: "Something went wrong. Please try again." };
   const row = await publicUnlock(input.slug);
-  if (!row || !row.unlock.active || row.workspace.status === "paused") return { ok: false, error: "This unlock isn't available any more." };
+  if (!row || !unlockAvailable(row)) return { ok: false, error: "This unlock isn't available any more." };
   const { unlock } = row;
   const email = normalizeEmail(input.email);
   if (!isEmail(email)) return { ok: false, error: "Enter the email you want the reward sent to." };
@@ -140,19 +183,40 @@ export async function claimUnlock(input: { slug: string; email: string; name?: s
   if (!link.ok) return link;
 
   const db = await getDb();
-  const name = (input.name ?? "").trim().slice(0, 120);
+  // Names are letters, spaces and simple punctuation only: they land in the owner's CRM and emails.
+  const name = (input.name ?? "")
+    .replace(/[^\p{L}\p{M}\s.,'-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
   const [existing] = await db.select().from(unlockClaims).where(and(eq(unlockClaims.unlockId, unlock.id), eq(unlockClaims.email, email))).limit(1);
   if (existing) return { ok: true, already: true, title: unlock.title, reward: unlock.reward, rewardUrl: unlock.rewardUrl };
 
+  // Each new claim adds a CRM contact, sends an email the owner pays for and can run their
+  // automations, so a script can't loop through made-up emails.
+  if (input.limits) {
+    const ip = input.limits.ip ?? "unknown";
+    if (!(await takeRateLimit(`claim-ip:${ip}:${unlock.id}`, CLAIM_LIMITS.ipPerUnlock))) return { ok: false, error: TOO_MANY };
+    if (!(await takeRateLimit(`claim-unlock:${unlock.id}`, CLAIM_LIMITS.perUnlock))) return { ok: false, error: TOO_MANY };
+    if (!(await takeRateLimit(`claim-email:${email}`, CLAIM_LIMITS.perEmail))) return { ok: false, error: TOO_MANY };
+  }
+
   // Trust, then spot-check: flag links that look reused.
   let flagReason = "";
-  const [reused] = await db
-    .select({ id: unlockClaims.id })
-    .from(unlockClaims)
-    .where(and(eq(unlockClaims.unlockId, unlock.id), eq(unlockClaims.postUrl, link.url), ne(unlockClaims.email, email)))
-    .limit(1);
+  const base = (url: string) => url.split("?")[0];
+  const isAnnouncement = Boolean(unlock.skoolPostUrl) && base(link.url) === base(unlock.skoolPostUrl);
+  // For a comment, the bare announcement link is expected (older posts asked for it), so many
+  // members share it. A link to one specific comment (it carries a query) is still checked.
+  const [reused] =
+    unlock.action === "comment" && isAnnouncement && base(link.url) === link.url
+      ? []
+      : await db
+          .select({ id: unlockClaims.id })
+          .from(unlockClaims)
+          .where(and(eq(unlockClaims.unlockId, unlock.id), eq(unlockClaims.postUrl, link.url), ne(unlockClaims.email, email)))
+          .limit(1);
   if (reused) flagReason = "Same link as another claim";
-  else if (unlock.action === "post" && unlock.skoolPostUrl && link.url.split("?")[0] === unlock.skoolPostUrl.split("?")[0]) flagReason = "Linked the announcement, not their own post";
+  else if (unlock.action === "post" && isAnnouncement) flagReason = "Linked the announcement, not their own post";
 
   const [first, ...rest] = name.split(/\s+/);
   const { contact } = await upsertContact({ workspaceId: unlock.workspaceId, email, firstName: first ?? "", lastName: rest.join(" "), source: "skool", tags: [`unlock-${unlock.slug}`.slice(0, 60)] });
@@ -164,7 +228,8 @@ export async function claimUnlock(input: { slug: string; email: string; name?: s
   if (inserted.length === 0) return { ok: true, already: true, title: unlock.title, reward: unlock.reward, rewardUrl: unlock.rewardUrl };
 
   await logActivity({ workspaceId: unlock.workspaceId, contactId: contact.id, type: "skool_engaged", refId: unlock.id, data: { unlock: unlock.title, postUrl: link.url, flagged: Boolean(flagReason) } });
-  await addTag(unlock.workspaceId, contact.id, ENGAGED_TAG); // fires "tag added" automations the first time
+  // A flagged claim still gets its reward, but runs nothing for the owner until they've looked.
+  if (!flagReason) await addTag(unlock.workspaceId, contact.id, ENGAGED_TAG); // fires "tag added" automations the first time
 
   const { queueEmail } = await import("./email/send");
   await queueEmail({
@@ -175,7 +240,7 @@ export async function claimUnlock(input: { slug: string; email: string; name?: s
     body: `Hi {{first_name}},\n\nThanks for jumping in. Here's your reward.\n\n**${unlock.title}**\n${unlock.reward}\n\n${unlock.rewardUrl ? `[Open it here](${unlock.rewardUrl})` : ""}\n\nSee you in the community.`,
     vars: { first_name: first || "there" },
   });
-  if (unlock.zapierWebhookUrl) {
+  if (unlock.zapierWebhookUrl && !flagReason) {
     await enqueue("unlock.webhook", { url: unlock.zapierWebhookUrl, email, name, unlock: unlock.title, slug: unlock.slug, postUrl: link.url }, { dedupeKey: `unlock-hook:${unlock.id}:${email}` });
   }
   return { ok: true, already: false, title: unlock.title, reward: unlock.reward, rewardUrl: unlock.rewardUrl };
@@ -204,6 +269,17 @@ export async function recentClaims(workspaceId: string, limit = 30) {
     .where(eq(unlockClaims.workspaceId, workspaceId))
     .orderBy(desc(unlockClaims.createdAt))
     .limit(limit);
+}
+
+/** Claims in the last N days, counted in the database (the recent list is capped). */
+export async function claimCountSince(workspaceId: string, days = 30) {
+  const db = await getDb();
+  const since = new Date(Date.now() - days * 86_400_000);
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(unlockClaims)
+    .where(and(eq(unlockClaims.workspaceId, workspaceId), gte(unlockClaims.createdAt, since)));
+  return row?.n ?? 0;
 }
 
 /** The members who engage most, by claims in the last N days. */
@@ -242,13 +318,21 @@ export async function engagedContactCount(workspaceId: string) {
 export type EntryTicket = { on: boolean; unlockId: string; since: string };
 const ENTRY_KEY = "entry_ticket";
 
-export async function getEntryTicket(): Promise<(EntryTicket & { unlock: Unlock | null }) | null> {
+/** on: in force right now. enabled: what the admin chose (it waits while its unlock can't be claimed). */
+export async function getEntryTicket(): Promise<(EntryTicket & { enabled: boolean; unlock: Unlock | null }) | null> {
   const db = await getDb();
   const [row] = await db.select().from(platformSettings).where(eq(platformSettings.key, ENTRY_KEY)).limit(1);
   const v = row?.value as Partial<EntryTicket> | undefined;
   if (!v?.unlockId) return null;
-  const [unlock] = await db.select().from(unlocks).where(eq(unlocks.id, v.unlockId)).limit(1);
-  return { on: Boolean(v.on) && Boolean(unlock?.active), unlockId: v.unlockId, since: v.since ?? new Date(0).toISOString(), unlock: unlock ?? null };
+  const [found] = await db
+    .select({ unlock: unlocks, workspace: { status: workspaces.status }, agencyStatus: agencies.status })
+    .from(unlocks)
+    .innerJoin(workspaces, eq(workspaces.id, unlocks.workspaceId))
+    .innerJoin(agencies, eq(agencies.id, workspaces.agencyId))
+    .where(eq(unlocks.id, v.unlockId))
+    .limit(1);
+  // Only "on" while a claim can actually succeed, so nobody is trapped on /hello.
+  return { on: Boolean(v.on) && unlockAvailable(found ?? null), enabled: Boolean(v.on), unlockId: v.unlockId, since: v.since ?? new Date(0).toISOString(), unlock: found?.unlock ?? null };
 }
 
 export async function setEntryTicket(input: EntryTicket) {
@@ -267,6 +351,26 @@ export function needsEntryTicket(
   if (!ticket?.on || !ticket.unlock) return false;
   if (ws.accessSource !== "member" || ws.settings.entryClaimedAt) return false;
   return ws.createdAt.getTime() >= new Date(ticket.since).getTime();
+}
+
+/**
+ * People who bought the app directly (Stripe on /join) may not be in the community at all, so the
+ * intro-post step would trap them. They skip it.
+ */
+export async function boughtDirectly(email: string) {
+  const { membershipFor } = await import("./access");
+  return (await membershipFor(email)).channels.includes("stripe");
+}
+
+/**
+ * needsEntryTicket, plus the direct-buyer exception. What the app's gate and the connector use.
+ * The exception follows the workspace owner, never whoever is looking: a buyer's teammates get in too.
+ */
+export async function entryTicketPending(ticket: Awaited<ReturnType<typeof getEntryTicket>>, ws: Parameters<typeof needsEntryTicket>[1] & { id: string }) {
+  if (!needsEntryTicket(ticket, ws)) return false;
+  const { workspaceOwnerEmail } = await import("./email/send");
+  const owner = await workspaceOwnerEmail(ws.id);
+  return !owner || !(await boughtDirectly(owner));
 }
 
 export async function claimEntryTicket(workspaceId: string, user: { email: string; name: string }, postUrl: string): Promise<ClaimResult> {

@@ -35,13 +35,22 @@
 - Skool link (/go/<slug>): instant redirect to the About page, click counts by source, Meta ViewContent
 - Budget planner and Growth Boost what-if calculator
 
+**Engagement (Unlocks)**
+- Comment-to-claim rewards: members post or comment in Skool, paste the link on /u/<slug>, get the reward by page and email
+- Claims tag contacts "engaged" (automations react), reused links are flagged, optional Zapier → Skool "Unlock Course for Member"
+- Entry ticket (admin switch): new member accounts open after one intro post in the community
+- Engagement leaderboard and a ready-to-paste Skool post for each unlock
+
 **Ad research**
 - Meta Ad Library search by keyword or competitor Page, longest-running first; website link for full coverage
 - AI analysis of competitor ads (hooks, angles, offers, gaps) and 3 original ads; paste mode when live search is off
 
-**Bring your own AI**
-- Own Claude or OpenAI key per workspace: AI features run on it and are never billed to the wallet
-- Claude / ChatGPT connector: private MCP URL (leads, pages, publish, automation recipes, check-in, Skool sync)
+**Your AI (bring your own AI, free tiers included)**
+- Own API key per workspace: Claude, OpenAI, Google Gemini (free tier), Groq (free tier), OpenRouter (free models), any OpenAI-compatible URL; never billed to the wallet
+- Connector: private MCP URL for Claude (Free plan: 1 custom connector), Antigravity CLI (replaces Gemini CLI, `serverUrl` in ~/.gemini/config/mcp_config.json), VS Code, LM Studio, Cursor, ChatGPT (paid plans, Plugins › Add custom MCP server)
+- Playbooks as MCP prompts and tools: Monday review, Write my 3-Pack, Member messages, Do my AI tasks, Fix my page, Plan an engagement drop
+- "Ask my AI" automation step: runs on the owner's key, or waits for their connected AI; copy/paste route for any chat AI
+- Ads follow the course framework everywhere: the 3-Pack (Pain, Dream, Lesson) written as Hook · Turn · Door
 
 **Agency tier**
 - Agency creation, plan activation, agency wallet that pays for client usage

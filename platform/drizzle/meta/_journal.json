@@ -43,6 +43,20 @@
       "when": 1793649301314,
       "tag": "0005_unlocks_ai_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793688976324,
+      "tag": "0006_email_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793689913585,
+      "tag": "0007_rate_limits",
+      "breakpoints": true
     }
   ]
 }

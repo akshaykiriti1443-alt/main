@@ -1,5 +1,6 @@
 import { env } from "@/lib/env";
 import { graph } from "./graph";
+import { takeRateLimit } from "../rateLimit";
 
 // Meta Ad Library: see what ads competitors are running right now.
 //
@@ -25,6 +26,21 @@ export type LibraryAd = {
 };
 
 export const adLibraryConfigured = () => Boolean(env.metaAdLibraryToken);
+
+/** Live searches one workspace may run per hour. The token is the platform's and shared by everyone. */
+export const AD_LIBRARY_SEARCHES_PER_HOUR = 30;
+
+/**
+ * searchAdLibrary for one workspace, within its hourly budget, so no single account (or a leaked
+ * connector URL) can use up Meta's rate limit on the shared token.
+ */
+export async function searchAdLibraryFor(workspaceId: string, input: { q?: string; pageIds?: string[]; countries?: string[]; limit?: number }) {
+  if (!(await takeRateLimit(`adlib:${workspaceId}`, [{ seconds: 3600, max: AD_LIBRARY_SEARCHES_PER_HOUR }]))) {
+    const website = adLibraryWebUrl({ q: input.q, pageId: input.pageIds?.[0], country: input.countries?.[0] });
+    throw new Error(`You've used this hour's ${AD_LIBRARY_SEARCHES_PER_HOUR} live searches. Try again later, or search on the Ad Library website: ${website}`);
+  }
+  return searchAdLibrary(input);
+}
 
 /** The Ad Library website search: shows every active ad, in any country. */
 export function adLibraryWebUrl(input: { q?: string; pageId?: string; country?: string }) {

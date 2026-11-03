@@ -104,6 +104,7 @@ export async function scoreContact(contactId: string): Promise<ScoreResult | nul
       const transcript = history.map((m) => `${m.direction === "in" ? "LEAD" : "BUSINESS"}: ${m.body}`).join("\n");
       const res = await generateStructured({
         workspaceId: ws.id,
+        creds: charge.creds,
         effort: "low",
         maxTokens: 4000,
         schema: scoreSchema,

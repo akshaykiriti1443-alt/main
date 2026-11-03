@@ -77,7 +77,8 @@ export async function runAdReview(workspaceId: string, raw: unknown) {
     try {
       const m = computeMetrics(input);
       const res = await generateStructured({
-        workspaceId: workspaceId,
+        workspaceId,
+        creds: charge.creds,
         effort: "medium",
         maxTokens: 8000,
         schema: reviewSchema,

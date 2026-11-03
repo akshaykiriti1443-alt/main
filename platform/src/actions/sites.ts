@@ -19,7 +19,10 @@ import { connectDomain, removeDomain } from "@/server/domains";
 import { siteThemeSchema } from "@/lib/db/types";
 import { safeUrl } from "@/lib/html";
 import { PLANS, hasFeature } from "@/server/plans";
+import { isSkoolUrl } from "@/server/growth";
 import { errMsg, field, go } from "./helpers";
+
+const SKOOL_URL_ERROR = "Your Skool link must be a skool.com link, like https://www.skool.com/your-group";
 
 export async function launchKitAction(wid: string, fd: FormData) {
   const { workspace } = await requireWorkspace(wid, "admin");
@@ -27,6 +30,8 @@ export async function launchKitAction(wid: string, fd: FormData) {
   if (sites.length >= PLANS[workspace.plan].maxSites) {
     go(`/app/w/${wid}/launch`, { error: `Your plan includes ${PLANS[workspace.plan].maxSites} sites. Delete one or upgrade to add more.` });
   }
+  const launchSkoolUrl = field(fd, "skoolUrl", 300);
+  if (launchSkoolUrl && !isSkoolUrl(launchSkoolUrl)) go(`/app/w/${wid}/launch`, { error: SKOOL_URL_ERROR });
   const res = await runLaunchKit(wid, {
     businessName: field(fd, "businessName", 80),
     ownerName: field(fd, "ownerName", 60),
@@ -35,7 +40,7 @@ export async function launchKitAction(wid: string, fd: FormData) {
     outcome: field(fd, "outcome", 200),
     leadMagnetIdea: field(fd, "leadMagnetIdea", 200),
     offer: field(fd, "offer", 200),
-    skoolUrl: safeUrl(field(fd, "skoolUrl", 300)),
+    skoolUrl: safeUrl(launchSkoolUrl),
     tone: field(fd, "tone") || "friendly",
     brandColor: field(fd, "brandColor") || "#2A44EE",
   });
@@ -66,7 +71,7 @@ export async function updateSiteAction(wid: string, siteId: string, fd: FormData
   const theme = siteThemeSchema.safeParse({ style: field(fd, "style"), brandColor: field(fd, "brandColor"), font: field(fd, "font") });
   const skoolUrl = field(fd, "skoolUrl", 300);
   const leadMagnetUrl = field(fd, "leadMagnetUrl", 500);
-  if (skoolUrl && !safeUrl(skoolUrl)) go(`/app/w/${wid}/sites/${siteId}`, { error: "Your Skool link must start with https://" });
+  if (skoolUrl && !isSkoolUrl(skoolUrl)) go(`/app/w/${wid}/sites/${siteId}`, { error: SKOOL_URL_ERROR });
   if (leadMagnetUrl && !leadMagnetUrl.startsWith("/") && !safeUrl(leadMagnetUrl)) {
     go(`/app/w/${wid}/sites/${siteId}`, { error: "The lead magnet link must start with https:// or be a page like /guide" });
   }

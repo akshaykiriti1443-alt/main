@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-export function ClaimForm({ action, postLabel }: { action: (prev: ClaimState, fd: FormData) => Promise<ClaimState>; postLabel: string }) {
+export function ClaimForm({ action, kind }: { action: (prev: ClaimState, fd: FormData) => Promise<ClaimState>; kind: "post" | "comment" }) {
   const [state, formAction, pending] = useActionState(action, {});
 
   if (state.done) {
@@ -38,9 +38,9 @@ export function ClaimForm({ action, postLabel }: { action: (prev: ClaimState, fd
       {state.error ? <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{state.error}</p> : null}
       <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hidden" aria-hidden />
       <Field>
-        <FieldLabel htmlFor="postUrl">{postLabel}</FieldLabel>
+        <FieldLabel htmlFor="postUrl">Link to your {kind}</FieldLabel>
         <Input id="postUrl" name="postUrl" type="url" required placeholder="https://www.skool.com/…" defaultValue={state.values?.postUrl} />
-        <FieldDescription>In Skool, open the ⋯ menu on your post and choose Copy link.</FieldDescription>
+        <FieldDescription>In Skool, open the ⋯ menu on your {kind} and choose Copy link.</FieldDescription>
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field>

@@ -15,6 +15,23 @@ export const shortId = (len = 6) =>
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
+/**
+ * One key per mailbox, for once-per-person checks: drops "+tags", and for Gmail the dots too
+ * (me+1@gmail.com, m.e@googlemail.com and me@gmail.com all land in the same inbox).
+ */
+export function canonicalEmail(email: string): string {
+  const clean = normalizeEmail(email);
+  const at = clean.lastIndexOf("@");
+  if (at < 1) return clean;
+  let local = clean.slice(0, at).split("+")[0] || clean.slice(0, at);
+  let domain = clean.slice(at + 1);
+  if (domain === "gmail.com" || domain === "googlemail.com") {
+    local = local.replace(/\./g, "");
+    domain = "gmail.com";
+  }
+  return `${local}@${domain}`;
+}
+
 export function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
 }

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { memberCheckoutConfigured } from "@/server/billing/stripe";
 import { env } from "@/lib/env";
 import { relativeTime } from "@/lib/util";
-import { Callout, Flash, PageHead, Panel, Stat } from "@/components/ui";
+import { Callout, Empty, Flash, PageHead, Panel, Stat } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -91,12 +91,14 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
               </Field>
               <div className="flex flex-col gap-2 text-sm">
                 <Label className="flex items-center gap-2 font-normal">
-                  <input type="checkbox" name="on" defaultChecked={ticket?.on ?? false} /> Turn the entry ticket on
+                  <input type="checkbox" name="on" defaultChecked={ticket?.enabled ?? false} /> Turn the entry ticket on
                 </Label>
                 <Label className="flex items-center gap-2 font-normal">
                   <input type="checkbox" name="everyone" defaultChecked={ticket ? new Date(ticket.since).getTime() === 0 : false} /> Also ask existing members who haven&apos;t posted yet
                 </Label>
-                <span className="text-xs text-muted-foreground">{ticket?.on ? "On now." : "Off now."} Admins and agency accounts never see it.</span>
+                <span className="text-xs text-muted-foreground">
+                  {ticket?.on ? "On now." : ticket?.enabled ? "Waiting: its unlock can't be claimed right now (switched off, or its workspace is paused), so nobody is asked." : "Off now."} Admins and agency accounts never see it.
+                </span>
               </div>
             </div>
           )}
@@ -140,50 +142,54 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
           </form>
         }
       >
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Email</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Active until</TableHead>
-              <TableHead className="text-right">
-                <span className="sr-only">Actions</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r) => {
-              const live = r.status === "active" && (!r.activeUntil || r.activeUntil.getTime() > now);
-              return (
-                <TableRow key={r.id}>
-                  <TableCell>
-                    <span className="block font-medium">{r.email}</span>
-                    {r.name ? <span className="block text-xs text-muted-foreground">{r.name}</span> : null}
-                  </TableCell>
-                  <TableCell>{CHANNEL[r.channel] ?? r.channel}</TableCell>
-                  <TableCell>
-                    {live ? (
-                      <Badge variant="secondary" className="bg-success-soft text-success">Active</Badge>
-                    ) : (
-                      <Badge variant="outline">{r.status === "removed" ? "Removed" : "Expired"}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{r.activeUntil ? r.activeUntil.toDateString() : "Lifetime"}</TableCell>
-                  <TableCell className="text-right">
-                    {live ? (
-                      <form action={revokeMemberAction.bind(null, r.email, r.channel)}>
-                        <SubmitButton variant="ghost" size="sm" confirm={`Remove ${r.email}?`}>
-                          Remove
-                        </SubmitButton>
-                      </form>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+        {rows.length === 0 ? (
+          <Empty title={sp.q ? `No one matches “${sp.q}”` : "No members yet"} body="Upload your Skool export above or give someone access." />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Active until</TableHead>
+                <TableHead className="text-right">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r) => {
+                const live = r.status === "active" && (!r.activeUntil || r.activeUntil.getTime() > now);
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell>
+                      <span className="block font-medium">{r.email}</span>
+                      {r.name ? <span className="block text-xs text-muted-foreground">{r.name}</span> : null}
+                    </TableCell>
+                    <TableCell>{CHANNEL[r.channel] ?? r.channel}</TableCell>
+                    <TableCell>
+                      {live ? (
+                        <Badge variant="secondary" className="bg-success-soft text-success">Active</Badge>
+                      ) : (
+                        <Badge variant="outline">{r.status === "removed" ? "Removed" : "Expired"}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{r.activeUntil ? r.activeUntil.toDateString() : "Lifetime"}</TableCell>
+                    <TableCell className="text-right">
+                      {live ? (
+                        <form action={revokeMemberAction.bind(null, r.email, r.channel)}>
+                          <SubmitButton variant="ghost" size="sm" confirm={`Remove ${r.email}?`}>
+                            Remove
+                          </SubmitButton>
+                        </form>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
       </Panel>
     </>
   );

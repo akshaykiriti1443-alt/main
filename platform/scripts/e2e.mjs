@@ -33,6 +33,8 @@ const env = {
   CRON_SECRET: "e2e-cron",
   APP_SECRET: "e2e-app-secret-0123456789abcdef0123456789abcdef",
   SETUP_TOKEN: "e2e-setup",
+  // No free welcome days: a non-member who confirms their email still waits on the unlock screen.
+  WELCOME_ACCESS_DAYS: "0",
   ANTHROPIC_API_KEY: "",
   NEXT_TELEMETRY_DISABLED: "1",
 };
@@ -53,6 +55,15 @@ const step = async (name, fn) => {
 };
 const expect = (cond, msg) => {
   if (!cond) throw new Error(msg);
+};
+// With EMAIL_PROVIDER=console the server prints each "Confirm your email" link; read the latest one.
+const verifyLinkFor = async (email) => {
+  for (let i = 0; i < 20; i++) {
+    const found = [...serverLog.matchAll(/\[email:console\] verify link for (\S+): (\S+)/g)].filter((m) => m[1] === email).pop();
+    if (found) return found[2];
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`No confirm link was logged for ${email}`);
 };
 
 async function waitForServer() {
@@ -186,6 +197,9 @@ try {
     await p.fill("#password", "supersecret2");
     await p.click("button:has-text('Create my account')");
     await p.waitForURL(/\/paused/);
+    await p.getByText("Confirm your email").waitFor();
+    await p.goto(await verifyLinkFor("member2@example.com"));
+    await p.waitForURL(/\/paused/);
     await p.getByText("Unlock your account").waitFor();
     await m.close();
   });
@@ -224,6 +238,13 @@ try {
     await p.fill("#email", "zapier@example.com");
     await p.fill("#password", "supersecret3");
     await p.click("button:has-text('Create my account')");
+    await p.waitForURL(/\/paused/);
+    await p.getByText("Confirm your email").waitFor();
+    // Confirming the email lets the Zapier pre-approval turn the account on.
+    await p.goto(await verifyLinkFor("zapier@example.com"));
+    await p.waitForURL(/\/app\/w\/[0-9a-f-]+$/);
+    expect(!p.url().includes("/paused"), "the Zapier-approved member is still paused after confirming");
+    await p.goto(p.url() + "/launch");
     await p.waitForURL(/\/launch/);
     await m.close();
   });

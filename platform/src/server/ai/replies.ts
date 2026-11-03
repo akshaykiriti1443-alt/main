@@ -35,6 +35,7 @@ export async function draftReply(conversationId: string): Promise<string | null>
     try {
       const res = await generateText({
         workspaceId: ws.id,
+        creds: charge.creds,
         effort: "low",
         maxTokens: 3000,
         system: `You draft direct-message replies for ${businessName}, a coach who runs a paid Skool community${

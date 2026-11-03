@@ -61,7 +61,7 @@ export async function createSubAccount(input: {
     let user = await findUserByEmail(email);
     let isNew = false;
     if (!user) {
-      user = await createUser({ email, name: input.ownerName ?? "", password: randomToken(24) });
+      user = await createUser({ email, name: input.ownerName ?? "", password: randomToken(24), emailVerified: false });
       isNew = true;
     }
     const db = await getDb();

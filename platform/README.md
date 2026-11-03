@@ -90,6 +90,14 @@ the console and the launch kit uses a smart template until you add
 Give a test email member access: **Admin › Members › Give access**, or stop the
 dev server and run `npm run db:seed -- you@example.com`.
 
+## Engagement and your own AI
+
+- **Unlocks** (`/app/w/<id>/unlocks`, public `/u/<slug>`): members post or comment in Skool, paste the link and get a reward.
+  Claims tag them `engaged`. The **entry ticket** (Admin › Members) can make one intro post the last step before a new member's app opens.
+- **Your AI** (`/app/w/<id>/ai`): connect the member's own AI app over MCP (`/api/mcp/<token>`, prompts + tools),
+  or add an API key (Claude, OpenAI, Gemini, Groq, OpenRouter, any OpenAI-compatible URL). **Ask my AI** automation
+  steps run on that AI, never on the platform key.
+
 ## Scripts
 
 | Command | What it does |

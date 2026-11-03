@@ -5,7 +5,7 @@ import { logActivity } from "./activity";
 
 // "Ask my AI": an automation step hands a task to the owner's OWN AI.
 //   - With their own API key (Settings › Your AI) it runs right away on that key.
-//   - Without one it waits here until their connected AI app (Claude, ChatGPT, Gemini CLI…)
+//   - Without one it waits here until their connected AI app (Claude, ChatGPT, Antigravity CLI…)
 //     picks it up through the MCP connector ("do my AI tasks").
 // The platform's own AI key is never used for these, so the cost is always the owner's.
 
@@ -41,8 +41,10 @@ export async function createAiTask(input: { workspaceId: string; contactId: stri
   const db = await getDb();
   const [ws] = await db.select({ settings: workspaces.settings, name: workspaces.name }).from(workspaces).where(eq(workspaces.id, input.workspaceId)).limit(1);
   const brief = await contactBrief(input.workspaceId, input.contactId);
+  // The instruction is the owner's, so the AI trusts it. A member types their own name, so it
+  // never goes in here: the AI reads it from the member brief, which is marked untrusted.
   const instruction = fill(input.instruction, {
-    first_name: brief?.firstName || "there",
+    first_name: "the member",
     skool_url: ws?.settings.skoolUrl ?? "",
     business_name: ws?.settings.businessName || ws?.name || "",
   }).slice(0, 2000);
@@ -56,8 +58,10 @@ export async function createAiTask(input: { workspaceId: string; contactId: stri
   const creds = await aiCredsFor(input.workspaceId);
   if (!creds) return { task, ranNow: false as const };
   try {
+    // The creds loaded above, never re-read: a key removed meanwhile must not fall back to the platform key.
     const res = await generateText({
-      workspaceId: input.workspaceId,
+      creds,
+      ownKeyOnly: true,
       effort: "low",
       maxTokens: 1500,
       system: `You help ${ws?.settings.businessName || ws?.name || "a coach"}, who runs a paid Skool community${ws?.settings.niche ? ` about ${ws.settings.niche}` : ""}. Do the task. Write like a real person, short and warm. Never invent results, testimonials or numbers. Return only the finished text.`,

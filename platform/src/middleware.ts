@@ -8,7 +8,7 @@ import { env } from "@/lib/env";
 //                                                                            except app paths, which serve the
 //                                                                            white-label dashboard for agencies.
 
-const APP_PATHS = ["/app", "/login", "/signup", "/join", "/go/", "/u/", "/logout", "/forgot", "/reset", "/legal", "/api", "/s/", "/d/", "/_next", "/favicon"];
+const APP_PATHS = ["/app", "/login", "/signup", "/join", "/go/", "/u/", "/logout", "/forgot", "/reset", "/verify", "/legal", "/api", "/s/", "/d/", "/_next", "/favicon"];
 
 const hostnameOf = (url: string) => {
   try {

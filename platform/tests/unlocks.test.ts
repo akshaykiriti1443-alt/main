@@ -3,11 +3,13 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { activities, contacts, emailMessages, unlockClaims, workspaces } from "@/lib/db/schema";
 import {
+  CLAIM_LIMITS,
   checkPostLink,
   claimEntryTicket,
   claimUnlock,
   createUnlock,
   engagementLeaders,
+  entryTicketPending,
   getEntryTicket,
   needsEntryTicket,
   setEntryTicket,
@@ -16,6 +18,8 @@ import {
   unlockPostText,
 } from "@/server/unlocks";
 import { makeWorkspace } from "./helpers";
+import { grantAccess } from "@/server/access";
+import { renderEmail } from "@/server/email/render";
 
 const stamp = () => `${Date.now()}${Math.floor(Math.random() * 1e6)}`;
 const base = { reward: "The 7-day plan", rewardUrl: "https://docs.example.com/plan", action: "comment" as const, instructions: "Comment your #1 goal.", skoolPostUrl: "https://www.skool.com/fit-dads/goals-thread", zapierWebhookUrl: "" };
@@ -51,6 +55,21 @@ describe("unlocks: engage in Skool, get the reward", () => {
     expect((await engagementLeaders(ws.id))[0]).toMatchObject({ email, claims: 1 });
   });
 
+  it("a claimant's typed name can't put a link into the owner's email", async () => {
+    const { ws } = await makeWorkspace();
+    const u = await createUnlock(ws.id, { title: "Phish test", ...base });
+    const email = `victim-${stamp()}@example.com`;
+    await claimUnlock({ slug: u.slug, email, name: "[Claim-your-reward](https://evil.example/login)", postUrl: `https://www.skool.com/fit-dads/goals-thread?c=${stamp()}` });
+    const db = await getDb();
+    const [c] = await db.select().from(contacts).where(and(eq(contacts.workspaceId, ws.id), eq(contacts.email, email)));
+    expect(c.firstName).not.toMatch(/[[\]()]/);
+    // Even a markdown-looking value from elsewhere renders as plain text.
+    const r = renderEmail({ subject: "Hi", body: "Hi {{first_name}}", vars: { first_name: "[x](https://evil.example)" }, businessName: "Fit Dads" });
+    expect(r.html).not.toContain("<a href=\"https://evil.example");
+    expect(r.html).toContain("&#91;x&#93;");
+    expect(r.text).toContain("[x](https://evil.example)");
+  });
+
   it("flags a link reused by someone else, rejects other communities and paused unlocks", async () => {
     const { ws } = await makeWorkspace();
     const u = await createUnlock(ws.id, { title: "Swipe file", ...base, action: "post" });
@@ -64,6 +83,34 @@ describe("unlocks: engage in Skool, get the reward", () => {
     expect((await claimUnlock({ slug: u.slug, email: `c-${stamp()}@example.com`, postUrl: "https://www.skool.com/someone-else/post" })).ok).toBe(false);
     await setUnlockActive(ws.id, u.id, false);
     expect((await claimUnlock({ slug: u.slug, email: `d-${stamp()}@example.com`, postUrl: `https://www.skool.com/fit-dads/p-${stamp()}` })).ok).toBe(false);
+  });
+
+  it("comment unlocks don't flag members who paste the announcement post, and flagged claims run nothing", async () => {
+    const { ws } = await makeWorkspace();
+    const u = await createUnlock(ws.id, { title: "Goals", ...base });
+    expect(unlockPostText(u)).not.toContain("or this post");
+    for (const who of ["a", "b", "c"]) await claimUnlock({ slug: u.slug, email: `${who}-${stamp()}@example.com`, postUrl: base.skoolPostUrl });
+    const db = await getDb();
+    expect((await db.select().from(unlockClaims).where(eq(unlockClaims.unlockId, u.id))).filter((c) => c.flagged)).toHaveLength(0);
+
+    // The same specific comment link from two people is still flagged, and the second gets no "engaged" tag.
+    const comment = `${base.skoolPostUrl}?c=${stamp()}`;
+    await claimUnlock({ slug: u.slug, email: `d-${stamp()}@example.com`, postUrl: comment });
+    const late = `e-${stamp()}@example.com`;
+    await claimUnlock({ slug: u.slug, email: late, postUrl: comment });
+    const [c] = await db.select().from(contacts).where(and(eq(contacts.workspaceId, ws.id), eq(contacts.email, late)));
+    expect(c.tags).not.toContain("engaged");
+  });
+
+  it("public claims are rate limited per network", async () => {
+    const { ws } = await makeWorkspace();
+    const u = await createUnlock(ws.id, { title: "Limits", ...base });
+    const ip = `10.9.${stamp().slice(-3)}.7`;
+    const results = [];
+    for (let i = 0; i < CLAIM_LIMITS.ipPerUnlock[0].max + 1; i++) {
+      results.push((await claimUnlock({ slug: u.slug, email: `r${i}-${stamp()}@example.com`, postUrl: `https://www.skool.com/fit-dads/p-${stamp()}`, limits: { ip } })).ok);
+    }
+    expect(results.filter(Boolean)).toHaveLength(CLAIM_LIMITS.ipPerUnlock[0].max);
   });
 
   it("the entry ticket gates new member accounts until they post, then lets them in", async () => {
@@ -89,6 +136,28 @@ describe("unlocks: engage in Skool, get the reward", () => {
     // The intro lands in the admin's CRM as an engaged member.
     const [c] = await db.select().from(contacts).where(and(eq(contacts.workspaceId, admin.ws.id), eq(contacts.email, user.email)));
     expect(c.tags).toContain("engaged");
+    await setEntryTicket({ on: false, unlockId: intro.id, since: new Date().toISOString() });
+  });
+
+  it("the entry ticket stands down while its unlock can't be claimed, and direct buyers skip it", async () => {
+    const admin = await makeWorkspace();
+    const intro = await createUnlock(admin.ws.id, { title: "Say hi", ...base, action: "post", instructions: "Introduce yourself." });
+    await setEntryTicket({ on: true, unlockId: intro.id, since: new Date(Date.now() - 60_000).toISOString() });
+    const { ws, user } = await makeWorkspace();
+    expect(await entryTicketPending(await getEntryTicket(), ws)).toBe(true);
+
+    // Bought on /join: may not be in the community at all, so no intro step. The exception follows
+    // the owner's purchase, so their teammates get in too (the gate never looks at the viewer).
+    await grantAccess({ email: user.email, channel: "stripe", until: new Date(Date.now() + 86_400_000) });
+    expect(await entryTicketPending(await getEntryTicket(), ws)).toBe(false);
+
+    // The unlock's workspace pauses: claims fail, so the ticket must not trap anyone.
+    const db = await getDb();
+    await db.update(workspaces).set({ status: "paused", pauseReason: "admin" }).where(eq(workspaces.id, admin.ws.id));
+    const paused = await getEntryTicket();
+    expect(paused).toMatchObject({ on: false, enabled: true });
+    expect(needsEntryTicket(paused, ws)).toBe(false);
+    await db.update(workspaces).set({ status: "active", pauseReason: null }).where(eq(workspaces.id, admin.ws.id));
     await setEntryTicket({ on: false, unlockId: intro.id, since: new Date().toISOString() });
   });
 });

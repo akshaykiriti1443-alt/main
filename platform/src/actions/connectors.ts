@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { workspaces } from "@/lib/db/schema";
-import { encrypt } from "@/lib/crypto";
+import { decrypt, encrypt } from "@/lib/crypto";
 import { isPublicHttpsUrl } from "@/lib/html";
 import { requireWorkspace } from "@/server/tenancy";
 import { AI_PROVIDERS, isAiProvider, verifyAiKey } from "@/server/ai/client";
@@ -28,9 +28,21 @@ export async function saveAiKeyAction(wid: string, fd: FormData) {
   const sameProvider = s.aiKeyEnc && s.aiProvider === provider && (provider !== "custom" || s.aiBaseUrl === baseUrl);
   if (!key && !sameProvider) go(back(wid), { error: `Paste your ${label} API key.` });
 
-  let model = modelField;
-  if (key) {
-    const check = await verifyAiKey(provider, key, baseUrl);
+  // The Model box is prefilled with the saved model. After a switch to another provider that
+  // name belongs to the old one, so it's dropped and the new provider's default is used.
+  let model = !sameProvider && modelField === s.aiModel ? "" : modelField;
+  const modelChanged = Boolean(model) && model !== s.aiModel;
+  // A new key is always checked; a new model on the saved key is checked with that key.
+  let checkKey = key;
+  if (!checkKey && modelChanged && s.aiKeyEnc) {
+    try {
+      checkKey = decrypt(s.aiKeyEnc);
+    } catch {
+      go(back(wid), { error: `Paste your ${label} API key again.` });
+    }
+  }
+  if (checkKey) {
+    const check = await verifyAiKey(provider, checkKey, baseUrl, model || undefined);
     if (!check.ok) go(back(wid), { error: check.error ?? "That key didn't work. Check you copied all of it." });
     if (!model) model = check.model ?? "";
   }

@@ -1,7 +1,7 @@
 "use server";
 
 import { requireWorkspace } from "@/server/tenancy";
-import { searchAdLibrary } from "@/server/meta/adLibrary";
+import { searchAdLibraryFor } from "@/server/meta/adLibrary";
 import { analyzeCompetitorAds, parsePastedAds, type ResearchAd } from "@/server/ai/adResearch";
 import { errMsg, field, go } from "./helpers";
 
@@ -19,7 +19,7 @@ export async function adResearchAction(wid: string, fd: FormData) {
     if (ads.length === 0) go(back, { error: "Paste at least one ad. Separate ads with a blank line." });
   } else {
     try {
-      const found = await searchAdLibrary({ q, pageIds: pageId ? [pageId] : [], countries: [country] });
+      const found = await searchAdLibraryFor(wid, { q, pageIds: pageId ? [pageId] : [], countries: [country] });
       ads = found.slice(0, 20).map((a) => ({ page: a.pageName, text: [...a.bodies.slice(0, 1), ...a.titles.slice(0, 1)].join(" · "), daysRunning: a.daysRunning }));
     } catch (err) {
       go(back, { error: errMsg(err) });

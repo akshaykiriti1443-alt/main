@@ -1,9 +1,10 @@
-import { and, desc, eq, gt, ilike, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { memberAccess, rosterImports, users, workspaceMembers, workspaces, type MemberChannel } from "@/lib/db/schema";
-import { addDays, isEmail, normalizeEmail } from "@/lib/util";
+import { addDays, canonicalEmail, isEmail, normalizeEmail } from "@/lib/util";
 import { env } from "@/lib/env";
-import { normalizeStatus, splitRow } from "./skool";
+import { parseRoster } from "@/lib/roster";
+import { takeRateLimit } from "./rateLimit";
 
 // Access is simple: if you're an active member, you're in. No codes.
 //
@@ -28,6 +29,8 @@ export const STRIPE_BUFFER_DAYS = 3;
 /** A full export that would remove more than this share of current members needs a second confirm. */
 export const LARGE_DROP_SHARE = 0.2;
 export const FOREVER = new Date("2999-12-31T00:00:00Z");
+/** Welcome windows one network can start per day, so a script can't farm free accounts. */
+export const WELCOME_PER_IP_PER_DAY = 3;
 
 const live = (at: Date) => and(eq(memberAccess.status, "active"), or(isNull(memberAccess.activeUntil), gt(memberAccess.activeUntil, at)));
 
@@ -46,10 +49,21 @@ export async function membershipFor(email: string, at = new Date()): Promise<Mem
   return { active: true, until, channels: rows.map((r) => r.channel) };
 }
 
+/** Every way this email has ever had access, live or not (so copy can say "join" vs "rejoin"). */
+export async function pastChannels(email: string): Promise<MemberChannel[]> {
+  const db = await getDb();
+  const rows = await db
+    .selectDistinct({ channel: memberAccess.channel })
+    .from(memberAccess)
+    .where(eq(memberAccess.email, normalizeEmail(email)));
+  return rows.map((r) => r.channel);
+}
+
 /**
  * Point every member-managed workspace this email owns at its current membership.
  * Active: access runs to the membership end and any lapse pause lifts.
  * Not active: an active workspace starts its grace period now. Admin and agency pauses are never touched.
+ * Owners who haven't confirmed their email are skipped: a membership only counts once the address is proven.
  */
 export async function refreshOwnerAccess(email: string, at = new Date()) {
   const db = await getDb();
@@ -58,7 +72,7 @@ export async function refreshOwnerAccess(email: string, at = new Date()) {
     .from(workspaces)
     .innerJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, workspaces.id), eq(workspaceMembers.role, "owner")))
     .innerJoin(users, eq(users.id, workspaceMembers.userId))
-    .where(and(eq(users.email, normalizeEmail(email)), eq(workspaces.accessSource, "member")));
+    .where(and(eq(users.email, normalizeEmail(email)), eq(workspaces.accessSource, "member"), isNotNull(users.emailVerifiedAt)));
   if (owned.length === 0) return { workspaces: 0 };
   const ids = owned.map((w) => w.id);
   const m = await membershipFor(email, at);
@@ -125,13 +139,14 @@ export async function grantAccess(input: {
   return { email, until: input.until };
 }
 
-export async function revokeAccess(email: string, channel: MemberChannel, reason = "") {
+export async function revokeAccess(email: string, channel: MemberChannel, reason = "", extra: Record<string, unknown> = {}) {
   const db = await getDb();
   const now = new Date();
   const clean = normalizeEmail(email);
+  const merge = { ...extra, ...(reason ? { removedReason: reason } : {}) };
   const rows = await db
     .update(memberAccess)
-    .set({ status: "removed", activeUntil: now, updatedAt: now, ...(reason ? { payload: sql`${memberAccess.payload} || ${JSON.stringify({ removedReason: reason })}::jsonb` } : {}) })
+    .set({ status: "removed", activeUntil: now, updatedAt: now, ...(Object.keys(merge).length ? { payload: sql`${memberAccess.payload} || ${JSON.stringify(merge)}::jsonb` } : {}) })
     .where(and(eq(memberAccess.email, clean), eq(memberAccess.channel, channel), eq(memberAccess.status, "active")))
     .returning({ id: memberAccess.id });
   if (rows.length) await refreshOwnerAccess(clean, now);
@@ -143,18 +158,22 @@ export async function revokeAccess(email: string, channel: MemberChannel, reason
  * start straight away. Zapier or the next Skool export then confirms them; if neither does, the
  * welcome window simply ends and the usual 7-day grace follows.
  */
-export async function grantWelcomeAccess(email: string, name = ""): Promise<boolean> {
+export async function grantWelcomeAccess(email: string, name = "", opts: { ip?: string | null } = {}): Promise<boolean> {
   const days = env.welcomeAccessDays;
   if (!(days > 0)) return false;
   const db = await getDb();
   const clean = normalizeEmail(email);
+  // Once per mailbox, not per spelling: me+1@gmail.com and m.e@gmail.com are the same person.
+  // The welcome row keeps that canonical address in `ref`.
+  const canon = canonicalEmail(clean);
   const [used] = await db
     .select({ id: memberAccess.id })
     .from(memberAccess)
-    .where(and(eq(memberAccess.email, clean), eq(memberAccess.channel, "welcome")))
+    .where(and(eq(memberAccess.channel, "welcome"), or(eq(memberAccess.email, clean), eq(memberAccess.ref, canon))))
     .limit(1);
   if (used) return false;
-  await grantAccess({ email: clean, name, channel: "welcome", until: addDays(new Date(), days) });
+  if (opts.ip && !(await takeRateLimit(`welcome-ip:${opts.ip}`, [{ seconds: 86_400, max: WELCOME_PER_IP_PER_DAY }]))) return false;
+  await grantAccess({ email: clean, name, channel: "welcome", until: addDays(new Date(), days), ref: canon });
   return true;
 }
 
@@ -170,39 +189,7 @@ export async function recordSkoolPaidMember(input: { email: string; name?: strin
 // Skool member export (the roster)
 // ---------------------------------------------------------------------------
 
-export type RosterRow = { emails: string[]; name: string };
-
-/**
- * Parse a Skool member export. Every email in a row counts, so the answer to a membership
- * question like "What email will you use for the app?" works as well as the Skool email.
- * Rows whose status says churned/left are ignored. A plain list of emails also works.
- */
-export function parseRoster(raw: string): { rows: RosterRow[]; skipped: number } {
-  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length === 0) return { rows: [], skipped: 0 };
-  const delim = lines[0].includes("\t") ? "\t" : ",";
-  const header = splitRow(lines[0], delim).map((c) => c.toLowerCase());
-  const hasHeader = header.some((c) => /e-?mail|name|status/.test(c)) && !header.some((c) => isEmail(c));
-  const statusCol = hasHeader ? header.findIndex((h) => /status|segment|state|membership/.test(h)) : -1;
-  const firstCol = hasHeader ? header.findIndex((h) => h.includes("first")) : -1;
-  const lastCol = hasHeader ? header.findIndex((h) => h.includes("last") && !h.includes("active")) : -1;
-  const nameCol = hasHeader ? header.findIndex((h) => h === "name" || h === "full name" || h === "member") : -1;
-
-  const rows: RosterRow[] = [];
-  let skipped = 0;
-  for (let i = hasHeader ? 1 : 0; i < lines.length; i++) {
-    const cells = splitRow(lines[i], delim);
-    if (statusCol >= 0 && normalizeStatus(cells[statusCol] ?? "") === "churned") continue;
-    const emails = [...new Set(cells.flatMap((c) => c.split(/[\s;]+/)).map((c) => c.replace(/^mailto:/i, "").trim()).filter(isEmail).map(normalizeEmail))];
-    if (emails.length === 0) {
-      skipped++;
-      continue;
-    }
-    const name = [firstCol >= 0 ? cells[firstCol] : "", lastCol >= 0 ? cells[lastCol] : ""].filter(Boolean).join(" ") || (nameCol >= 0 ? cells[nameCol] : "") || "";
-    rows.push({ emails, name: name.slice(0, 120) });
-  }
-  return { rows, skipped };
-}
+export { parseRoster, type RosterRow } from "@/lib/roster";
 
 export type RosterPreview = {
   rows: number;
@@ -315,6 +302,11 @@ export async function enforceAccess(now = new Date()) {
     .set({ status: "grace", graceEndsAt: addDays(now, GRACE_DAYS) })
     .where(and(eq(workspaces.status, "active"), eq(workspaces.accessSource, "member"), lt(workspaces.accessVerifiedUntil, now)))
     .returning({ id: workspaces.id });
+  // A grace with no end date (set by hand) would never pause: give it one.
+  await db
+    .update(workspaces)
+    .set({ graceEndsAt: addDays(now, GRACE_DAYS) })
+    .where(and(eq(workspaces.status, "grace"), isNull(workspaces.graceEndsAt)));
   const toPaused = await db
     .update(workspaces)
     .set({ status: "paused", pausedAt: now, pauseReason: "access" })

@@ -17,7 +17,7 @@ export async function passwordLinkFor(userId: string, ttlHours = 72) {
   return `${env.appUrl}/reset?token=${encodeURIComponent(token)}`;
 }
 
-export async function resetPassword(token: string, newPassword: string): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
+export async function resetPassword(token: string, newPassword: string, opts: { ip?: string | null } = {}): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
   if (newPassword.length < 8) return { ok: false, error: "Use at least 8 characters." };
   const data = openState<{ uid: string; fp: string }>(token);
   if (!data) return { ok: false, error: "This link expired. Ask for a new one." };
@@ -25,5 +25,9 @@ export async function resetPassword(token: string, newPassword: string): Promise
   const [u] = await db.select().from(users).where(eq(users.id, data.uid)).limit(1);
   if (!u || fingerprint(u.passwordHash) !== data.fp) return { ok: false, error: "This link was already used. Ask for a new one." };
   await db.update(users).set({ passwordHash: await hashPassword(newPassword) }).where(eq(users.id, u.id));
+  // The link reached the inbox, so the address is proven: sign out every old session (someone may
+  // have signed up with this email first) and confirm it. The caller signs this person back in.
+  const { markEmailVerified } = await import("./emailVerify");
+  await markEmailVerified(u, opts);
   return { ok: true, userId: u.id };
 }

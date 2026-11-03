@@ -3,6 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 import { UploadIcon } from "lucide-react";
 import { rosterAction, type RosterState } from "@/actions/admin";
+import { compactRoster } from "@/lib/roster";
 import { Callout } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,14 @@ export function RosterUpload() {
   const fileRef = useRef<HTMLInputElement>(null);
   const p = state.ok ? undefined : state.preview;
 
+  // A big Skool export (answers, dates…) can pass the 2 MB upload limit. Only names and emails
+  // matter, so send just those; the server reads the result exactly like the full file.
+  function submit(fd: FormData) {
+    const raw = String(fd.get("members") ?? "");
+    if (raw.length > 500_000) fd.set("members", compactRoster(raw));
+    return action(fd);
+  }
+
   async function onFile(file: File | undefined) {
     if (!file) return;
     setFileName(file.name);
@@ -24,7 +33,7 @@ export function RosterUpload() {
   }
 
   return (
-    <form action={action} className="flex flex-col gap-3">
+    <form action={submit} className="flex flex-col gap-3">
       <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>

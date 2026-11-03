@@ -15,7 +15,7 @@ export async function saveCheckinAction(wid: string, fd: FormData) {
     newPaid: n("newPaid"),
     members: n("members"),
     skoolLevel: n("skoolLevel") || 1,
-    boostPercent: n("boostPercent") || 30,
+    boostPercent: field(fd, "boostPercent") === "" ? 30 : n("boostPercent"),
     linkInBio: fd.get("linkInBio") === "on",
     postsPerWeek: n("postsPerWeek"),
     adSpendPerDay: n("adSpendPerDay"),

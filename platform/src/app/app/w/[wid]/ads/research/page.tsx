@@ -3,9 +3,9 @@ import { and, desc, eq } from "drizzle-orm";
 import { ExternalLinkIcon, FlameIcon, LightbulbIcon, SearchIcon, SparklesIcon, TargetIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { aiGenerations } from "@/lib/db/schema";
-import { isUuid, truncate } from "@/lib/util";
+import { isUuid, relativeTime, truncate } from "@/lib/util";
 import { requireWorkspace } from "@/server/tenancy";
-import { adLibraryConfigured, adLibraryWebUrl, searchAdLibrary, type LibraryAd } from "@/server/meta/adLibrary";
+import { adLibraryConfigured, adLibraryWebUrl, searchAdLibraryFor, type LibraryAd } from "@/server/meta/adLibrary";
 import type { AdAnalysis } from "@/server/ai/adResearch";
 import { ANGLE_HINT, ANGLE_LABEL } from "@/server/ai/adFramework";
 import { adResearchAction } from "@/actions/adResearch";
@@ -38,9 +38,11 @@ const COUNTRIES: [string, string][] = [
 export default async function AdResearchPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
   const sp = await searchParams;
-  const { workspace } = await requireWorkspace(wid);
+  const { workspace, user } = await requireWorkspace(wid);
   const q = (sp.q ?? "").slice(0, 100);
-  const pageId = /^\d{3,30}$/.test(sp.pageId ?? "") ? sp.pageId : "";
+  const pageIdRaw = (sp.pageId ?? "").trim();
+  const pageId = /^\d{3,30}$/.test(pageIdRaw) ? pageIdRaw : "";
+  const pageIdError = pageIdRaw && !pageId ? "A Page ID is only numbers. Open the competitor's ads in the Ad Library and copy the number after view_all_page_id= in the address bar." : "";
   const country = COUNTRIES.some(([c]) => c === sp.country) ? sp.country : "ALL";
   const configured = adLibraryConfigured();
   const webUrl = adLibraryWebUrl({ q: q || workspace.settings.niche || "", pageId, country });
@@ -49,7 +51,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
   let searchError = "";
   if (configured && (q || pageId)) {
     try {
-      ads = await searchAdLibrary({ q, pageIds: pageId ? [pageId] : [], countries: [country] });
+      ads = await searchAdLibraryFor(wid, { q, pageIds: pageId ? [pageId] : [], countries: [country] });
     } catch (err) {
       searchError = err instanceof Error ? err.message : "Search failed.";
     }
@@ -63,6 +65,9 @@ export default async function AdResearchPage({ params, searchParams }: { params:
     .orderBy(desc(aiGenerations.createdAt))
     .limit(1);
   const analysis = row?.output as unknown as AdAnalysis | undefined;
+  const analysisQuery = String((row?.input as { query?: unknown } | undefined)?.query ?? "");
+  const searchNow = q || pageId;
+  const oldAnalysis = Boolean(analysis && !isUuid(sp.analysis) && searchNow && searchNow !== analysisQuery);
   const hidden = (
     <>
       <input type="hidden" name="q" value={q} />
@@ -76,20 +81,41 @@ export default async function AdResearchPage({ params, searchParams }: { params:
       <PageHead
         eyebrow="Ads"
         title="Ad research"
-        sub="See what your competitors are running right now in the Meta Ad Library. The ads that have run longest are usually the ones making money. AI reads them and writes your next 3 ads."
+        sub="See what your competitors are running right now in the Meta Ad Library. The ads that have run longest are usually the ones making money. AI reads them and writes your 3-Pack: a Pain, a Dream and a Lesson ad."
       />
       <Flash searchParams={sp} />
 
       <Panel title="Search the Ad Library" sub="A keyword from your niche (“fat loss for dads”), or a competitor's Facebook Page ID for everything they run.">
-        <form className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end">
+        {!configured ? (
+          <Callout tone="info" title="Live search isn't switched on yet">
+            Open the Ad Library, copy the ads you like into the box below, and AI does the rest.
+            {user.isPlatformAdmin ? " (Platform admin: set META_AD_LIBRARY_TOKEN to turn it on.)" : ""}
+          </Callout>
+        ) : null}
+        {/* Without live search the form opens the same search on Meta's website in a new tab. */}
+        <form
+          className={`grid gap-3 sm:items-end ${configured ? "sm:grid-cols-[2fr_1fr_1fr_auto]" : "sm:grid-cols-[2fr_1fr_auto]"}`}
+          {...(configured ? {} : { action: "https://www.facebook.com/ads/library/", method: "get", target: "_blank", rel: "noreferrer" })}
+        >
+          {configured ? null : (
+            <>
+              <input type="hidden" name="active_status" value="active" />
+              <input type="hidden" name="ad_type" value="all" />
+              <input type="hidden" name="media_type" value="all" />
+              <input type="hidden" name="search_type" value="keyword_unordered" />
+            </>
+          )}
           <Field>
             <FieldLabel htmlFor="q">Keyword</FieldLabel>
             <Input id="q" name="q" defaultValue={q} placeholder={workspace.settings.niche || "e.g. skool community for coaches"} />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="pageId">Competitor Page ID</FieldLabel>
-            <Input id="pageId" name="pageId" defaultValue={pageId} inputMode="numeric" placeholder="Optional" />
-          </Field>
+          {configured ? (
+            <Field>
+              <FieldLabel htmlFor="pageId">Competitor Page ID</FieldLabel>
+              <Input id="pageId" name="pageId" defaultValue={pageIdRaw} inputMode="numeric" placeholder="Optional" aria-invalid={pageIdError ? true : undefined} />
+              <FieldDescription>In the Ad Library, open the competitor&apos;s ads; the number after view_all_page_id= in the address bar is their Page ID.</FieldDescription>
+            </Field>
+          ) : null}
           <Field>
             <FieldLabel htmlFor="country">Country</FieldLabel>
             <NativeSelect id="country" name="country" defaultValue={country}>
@@ -98,10 +124,17 @@ export default async function AdResearchPage({ params, searchParams }: { params:
               ))}
             </NativeSelect>
           </Field>
-          <Button type="submit">
-            <SearchIcon data-icon="inline-start" />
-            Search
-          </Button>
+          {configured ? (
+            <Button type="submit">
+              <SearchIcon data-icon="inline-start" />
+              Search
+            </Button>
+          ) : (
+            <Button type="submit">
+              Search in Meta Ad Library
+              <ExternalLinkIcon data-icon="inline-end" />
+            </Button>
+          )}
         </form>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Button asChild variant="outline" size="sm">
@@ -111,21 +144,18 @@ export default async function AdResearchPage({ params, searchParams }: { params:
           </Button>
           <span className="text-muted-foreground">The website shows every active ad, in every country, with images and videos.</span>
         </div>
-        {!configured ? (
-          <Callout tone="info" title="Live search isn't connected on this server yet">
-            Open the Ad Library link above, copy the ads you like into the box below, and AI does the rest. To search from here, the platform owner adds a Meta Ad Library token (META_AD_LIBRARY_TOKEN).
-          </Callout>
-        ) : (
+        {configured ? (
           <p className="text-xs text-muted-foreground">
             Meta&apos;s API returns ads that reached the EU, plus political ads. For ads shown only in your country, use the website link and paste them below.
           </p>
-        )}
+        ) : null}
+        {pageIdError ? <Callout tone="error">{pageIdError}</Callout> : null}
         {searchError ? <Callout tone="error">{searchError}</Callout> : null}
       </Panel>
 
       {configured && (q || pageId) && !searchError ? (
         <Panel
-          title={`${ads.length} active ads`}
+          title={`${ads.length} active ad${ads.length === 1 ? "" : "s"}${ads.length > 30 ? " (showing 30)" : ""}`}
           sub="Longest-running first. 🔥 = running 30+ days."
           action={
             ads.length ? (
@@ -181,9 +211,14 @@ export default async function AdResearchPage({ params, searchParams }: { params:
         </Panel>
       </form>
 
-      {analysis ? (
+      {analysis && row ? (
         <>
-          <Panel title="What's working in your niche" sub={analysis.summary}>
+          {oldAnalysis ? (
+            <Callout tone="info" title="This is from your last analysis">
+              Click Analyse with AI to redo it for this search.
+            </Callout>
+          ) : null}
+          <Panel title="What's working in your niche" sub={`Based on ${analysisQuery || "pasted ads"} · ${relativeTime(row.createdAt)}. ${analysis.summary}`}>
             <div className="grid gap-4 md:grid-cols-2">
               <List icon={FlameIcon} title="Likely winners" items={analysis.winners.map((w) => `${w.page} (${w.daysRunning} days): ${w.why}`)} />
               <List icon={TargetIcon} title="Hooks they open with" items={analysis.hooks} />

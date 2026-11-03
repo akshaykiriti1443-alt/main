@@ -97,6 +97,28 @@ buyers into Skool, point `SKOOL_INVITE_WEBHOOK_URL` at a Zapier catch hook wired
 Skool › Invite Member. Note: Skool's Discovery penalises *group* payments taken
 off-platform, so sell the software here and keep your community's own billing in Skool.
 
+## 6b. Engagement: Unlocks and the entry ticket — 10 minutes
+
+Skool ranks communities on member growth, engagement and retention. Unlocks turn engagement into a habit:
+
+1. In your own workspace: **Unlocks › New unlock**. Example: "Say hi", action "Make their own post",
+   instructions "Introduce yourself: who you are, what you're building, your daily ad budget".
+2. Click **Copy Skool post**, publish it in your community and pin it.
+3. Optional (Skool Pro): add a Zapier catch hook wired to Skool › **Unlock Course for Member** to open a
+   bonus course automatically on every claim.
+4. To make the intro the price of entry for the app: **Admin › Members › Entry ticket**, pick that unlock, switch it on.
+   New members then post their intro, paste the link and their account opens straight away.
+
+Also use Skool's own levels: set bonus courses to "Level unlock" (Level 2 = 5 points, 1 like = 1 point) and like every intro within 24 hours. One like is 1 point, so ask members to like new intros too: about 5 likes opens the course.
+
+## 6c. Your AI — 5 minutes per member
+
+Members connect their own AI in **Your AI** (sidebar): a private MCP connector URL for Claude (works on Claude's Free plan,
+one custom connector), Antigravity CLI (which replaced Gemini CLI; Gemini CLI now needs a paid Gemini API key), VS Code,
+LM Studio, Cursor or ChatGPT (paid plans, Plugins › Add custom MCP server), or an API key
+(Google Gemini, Groq and OpenRouter have free tiers). "Ask my AI" automation steps and playbooks then run on the
+member's AI, never on `ANTHROPIC_API_KEY`.
+
 ## 7. Payments (Stripe) — 20 minutes
 
 1. Create two products with monthly prices: **Growth** and **Agency**. Copy the price IDs.

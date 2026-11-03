@@ -21,7 +21,8 @@ export async function inviteMember(input: { workspaceId: string; workspaceName: 
   const email = normalizeEmail(input.email);
   let user = await findUserByEmail(email);
   const isNew = !user;
-  if (!user) user = await createUser({ email, name: input.name, password: randomToken(24) });
+  // Not confirmed: nobody has proven this address yet. The set-password link confirms it.
+  if (!user) user = await createUser({ email, name: input.name, password: randomToken(24), emailVerified: false });
   const db = await getDb();
   // Never change an existing member's role here (that would let an admin demote the owner).
   const added = await db
@@ -43,7 +44,13 @@ export async function inviteMember(input: { workspaceId: string; workspaceName: 
 export async function removeMember(workspaceId: string, userId: string) {
   const db = await getDb();
   // Owners can't be removed here; transfer ownership is a support task.
-  await db
+  const removed = await db
     .delete(workspaceMembers)
-    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId), ne(workspaceMembers.role, "owner")));
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId), ne(workspaceMembers.role, "owner")))
+    .returning({ userId: workspaceMembers.userId });
+  // Their connector URLs belong to the workspace, so they'd keep working: switch them off too.
+  if (removed.length) {
+    const { revokeConnectorTokensBy } = await import("./connectors");
+    await revokeConnectorTokensBy(workspaceId, userId);
+  }
 }

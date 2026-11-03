@@ -1,7 +1,9 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { agencies, jobs, subscriptions, users, walletTransactions, webhookEvents, workspaces } from "@/lib/db/schema";
+import { addDays } from "@/lib/util";
 import { creditWallet, getOrCreateWallet } from "./wallet";
+import { GRACE_DAYS } from "./access";
 
 export async function platformStats() {
   const db = await getDb();
@@ -62,6 +64,8 @@ export async function adminSetWorkspace(workspaceId: string, patch: { plan?: "st
     .set({
       ...patch,
       ...(patch.status === "active" ? { graceEndsAt: null, pausedAt: null, pauseReason: null } : {}),
+      // Grace always has an end date, or the cron would never pause it.
+      ...(patch.status === "grace" ? { graceEndsAt: addDays(new Date(), GRACE_DAYS), pausedAt: null, pauseReason: null } : {}),
       ...(patch.status === "paused" ? { pausedAt: new Date(), pauseReason: "admin" as const } : {}),
     })
     .where(eq(workspaces.id, workspaceId));

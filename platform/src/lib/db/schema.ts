@@ -56,6 +56,9 @@ export const users = pgTable("users", {
   name: text("name").notNull().default(""),
   passwordHash: text("password_hash").notNull(),
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false),
+  // null until the owner of the address clicks the link we email them at signup. Access never turns
+  // on for an unconfirmed email. (Existing and invited users count as confirmed.)
+  emailVerifiedAt: ts("email_verified_at").defaultNow(),
   createdAt: createdAt(),
 });
 
@@ -102,7 +105,8 @@ export const workspaces = pgTable(
     graceEndsAt: ts("grace_ends_at"),
     pausedAt: ts("paused_at"),
     // Why a workspace is paused: only "access" pauses lift by themselves when membership returns.
-    pauseReason: text("pause_reason").$type<"access" | "admin" | "agency">(),
+    // verify: waiting for the owner to confirm their email after signup.
+    pauseReason: text("pause_reason").$type<"access" | "admin" | "agency" | "verify">(),
     settings: jsonb("settings").$type<WorkspaceSettings>().notNull().default({}),
     createdAt: createdAt(),
   },
@@ -632,6 +636,14 @@ export const walletTransactions = pgTable(
   },
   (t) => [index("wallet_tx_wallet_idx").on(t.walletId, t.createdAt)],
 );
+
+// Fixed-window counters for throttles: resend-confirm emails, reset emails, welcome grants per IP,
+// Ad Library searches per workspace. One row per key; the window restarts once it has passed.
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  windowStart: ts("window_start").notNull().defaultNow(),
+  count: integer("count").notNull().default(0),
+});
 
 // Monthly included usage per workspace (AI generations, emails...).
 export const usageCounters = pgTable(
