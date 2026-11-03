@@ -49,10 +49,10 @@ export function ruleReview(i: AdReviewInput): AdReview {
     metrics.push({ name: "Cost per follower", value: `$${m.cpf.toFixed(2)}`, status: m.cpf <= 0.5 ? "good" : m.cpf <= 1 ? "ok" : "fix", note: "Aim for under $0.50." });
   }
   const actions: AdReview["actions"] = [];
-  if (m.ctr < 0.8) actions.push({ title: "Test 3 new hooks", detail: "Keep the same video body. Change only the first 2 seconds." });
-  if (m.optIn < 15 && i.linkClicks > 20) actions.push({ title: "Rewrite your headline", detail: "Lead with the result and the time frame." });
-  if (i.leads && m.cpl <= 5) actions.push({ title: "Scale the winner", detail: "Raise the best ad set's budget by 20% every 2-3 days." });
-  if (!actions.length) actions.push({ title: "Keep collecting data", detail: "Let ads run 3 more days before big changes." });
+  if (m.ctr < 0.8) actions.push({ title: "Fix the Hook", detail: "Few people stop to click. Keep the Turn and the Door. Test 3 new first lines (or first 2 seconds of video)." });
+  if (m.optIn < 15 && i.linkClicks > 20) actions.push({ title: "Fix the Door", detail: "People click but don't act. Check the link goes to your Skool About page (your Skool link), then sharpen the page's headline: result plus time frame." });
+  if (i.leads && m.cpl <= 5) actions.push({ title: "Keep it and scale", detail: "This one works. Raise its budget by about 20% every 2-3 days. Don't touch the ad itself." });
+  if (!actions.length) actions.push({ title: "Hands off for 3 more days", detail: "The 72-hour rule: let it learn before you change anything. Then fix one part only: Hook, Turn or Door." });
   const perDay = i.spend / i.days;
   return {
     verdict: i.leads && m.cpl <= 5 ? "Your funnel works. Scale it slowly." : "Fix the weakest number first, then scale.",
@@ -81,7 +81,8 @@ export async function runAdReview(workspaceId: string, raw: unknown) {
         effort: "medium",
         maxTokens: 8000,
         schema: reviewSchema,
-        system: `You are a Meta ads coach for Skool community owners. Review a beginner's numbers and give a short, specific plan.
+        system: `You are a Meta ads coach for Skool community owners who grow with small paid ads, not social media. Review a beginner's numbers and give a short, specific plan.
+Use the course's words: every ad has a Hook (first line or first 2 seconds), a Turn (the "wait, what?" line) and a Door (one way in: the Skool link to the About page). Say which ONE part to fix: low CTR means the Hook, clicks without action means the Door or the page behind it. Mention the 72-hour rule if the ad is under 3 days old. Budget tiers: $5-$10 a day to start, $30-$50 is the sweet spot.
 Benchmarks to judge against: link CTR 1%+ is good (under 0.8% needs a new hook); landing page opt-in 25%+ is good (under 15% needs a new headline); cost per lead under $5 is a good start; cost per follower under $0.50 is good. Scale winners by 20% every 2-3 days.
 ${VOICE_RULES}
 Give 3 to 5 actions.`,

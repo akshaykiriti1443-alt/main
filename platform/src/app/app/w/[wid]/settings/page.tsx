@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireWorkspace } from "@/server/tenancy";
 import { listConnections } from "@/server/inbox";
 import { hasFeature } from "@/server/plans";
@@ -17,10 +18,7 @@ import {
   searchNumbersAction,
 } from "@/actions/account";
 import { saveTemplateFromWorkspaceAction } from "@/actions/agency";
-import { removeAiKeyAction, revokeConnectorAction, saveAiKeyAction } from "@/actions/connectors";
-import { listConnectorTokens } from "@/server/connectors";
-import { relativeTime } from "@/lib/util";
-import { NewConnector } from "./connector";
+
 import { cn } from "@/lib/utils";
 import { Callout, Flash, PageHead, Panel } from "@/components/ui";
 import { Badge } from "@/components/ui/badge";
@@ -49,13 +47,12 @@ export default async function SettingsPage({ params, searchParams }: { params: P
   const myAgency = agencies.find((a) => a.agency.id === agency.id);
   const viaMember = workspace.accessSource === "member";
   const members = await listMembers(wid);
-  const connectors = await listConnectorTokens(wid);
   const showTemplate = Boolean(user.isPlatformAdmin || (myAgency && agency.plan === "agency"));
 
   const nav = [
     { href: "#business", label: "Business details" },
     ...(viaMember ? [{ href: "#access", label: "Member access" }] : []),
-    { href: "#ai", label: "AI & connectors" },
+    { href: "#ai", label: "Your AI" },
     { href: "#tracking", label: "Meta Pixel" },
     { href: "#channels", label: "Inbox channels" },
     { href: "#team", label: "Team" },
@@ -137,65 +134,13 @@ export default async function SettingsPage({ params, searchParams }: { params: P
             </form>
           ) : null}
 
-          <div id="ai" className="flex scroll-mt-20 flex-col gap-4">
-            <form action={saveAiKeyAction.bind(null, wid)}>
-              <Panel
-                title="Use your own AI"
-                sub="Add your own Claude or OpenAI key. Every AI feature (launch kit, ad review, lead scores, reply and member drafts) then runs on your key and never touches your wallet or plan allowance."
-                action={<SubmitButton variant="outline" size="sm">Save</SubmitButton>}
-              >
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <Field>
-                    <FieldLabel htmlFor="aiProvider">Provider</FieldLabel>
-                    <NativeSelect id="aiProvider" name="aiProvider" defaultValue={s.aiProvider ?? "anthropic"}>
-                      <NativeSelectOption value="anthropic">Claude (Anthropic)</NativeSelectOption>
-                      <NativeSelectOption value="openai">ChatGPT (OpenAI)</NativeSelectOption>
-                    </NativeSelect>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="aiKey">API key</FieldLabel>
-                    <Input id="aiKey" name="aiKey" type="password" autoComplete="off" placeholder={s.aiKeyHint ? `Saved (${s.aiKeyHint})` : "sk-..."} />
-                    <FieldDescription>From console.anthropic.com or platform.openai.com. Stored encrypted.</FieldDescription>
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="aiModel">Model (optional)</FieldLabel>
-                    <Input id="aiModel" name="aiModel" defaultValue={s.aiModel ?? ""} placeholder="Best default" />
-                  </Field>
-                </div>
-                {s.aiKeyEnc ? (
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <Badge variant="secondary" className="bg-success-soft text-success">On · {s.aiProvider === "openai" ? "OpenAI" : "Claude"} {s.aiKeyHint}</Badge>
-                    <Button formAction={removeAiKeyAction.bind(null, wid)} variant="ghost" size="sm">Remove key</Button>
-                  </div>
-                ) : null}
-              </Panel>
-            </form>
-
-            <Panel
-              title="Connect Claude or ChatGPT"
-              sub="Let your own Claude or ChatGPT work inside this account: read your leads, rewrite and publish pages, switch on automations and log your growth check-in. It runs on your Claude or ChatGPT plan."
-            >
-              <NewConnector wid={wid} />
-              <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-                <li><b className="text-foreground">Claude:</b> Settings › Connectors › Add custom connector. Paste the URL. Leave auth empty.</li>
-                <li><b className="text-foreground">ChatGPT:</b> Settings › Apps &amp; Connectors › Advanced › turn on Developer mode, then Create. Paste the URL, choose No authentication.</li>
-                <li>Then ask: &ldquo;Look at my workspace and tell me what to fix this week.&rdquo;</li>
-              </ol>
-              {connectors.length ? (
-                <ul className="flex flex-col divide-y rounded-lg border">
-                  {connectors.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                      <span>
-                        <span className="font-medium">{c.name}</span>
-                        <span className="block text-xs text-muted-foreground">Created {relativeTime(c.createdAt)} · {c.lastUsedAt ? `used ${relativeTime(c.lastUsedAt)}` : "never used"}</span>
-                      </span>
-                      <form action={revokeConnectorAction.bind(null, wid, c.id)}>
-                        <SubmitButton variant="ghost" size="sm" confirm="Remove this connector? The URL stops working.">Remove</SubmitButton>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+          <div id="ai" className="scroll-mt-20">
+            <Panel title="Your AI" sub="Connect the AI you already use (Claude, Gemini, ChatGPT…), run playbooks, or add your own API key so AI never touches your wallet.">
+              <div>
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/app/w/${wid}/ai`}>Open Your AI</Link>
+                </Button>
+              </div>
             </Panel>
           </div>
 

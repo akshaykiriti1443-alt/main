@@ -1,6 +1,13 @@
 import { requirePlatformAdmin } from "@/server/auth";
 import { lastRosterImport, listMemberAccess, memberStats } from "@/server/access";
 import { grantMemberAction, revokeMemberAction } from "@/actions/admin";
+import { saveEntryTicketAction } from "@/actions/unlocks";
+import { getEntryTicket } from "@/server/unlocks";
+import { getDb } from "@/lib/db";
+import { unlocks, workspaceMembers, workspaces as workspacesTable } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Label } from "@/components/ui/label";
 import { memberCheckoutConfigured } from "@/server/billing/stripe";
 import { env } from "@/lib/env";
 import { relativeTime } from "@/lib/util";
@@ -17,8 +24,18 @@ export const metadata = { title: "Members" };
 const CHANNEL: Record<string, string> = { skool_zapier: "Skool · Zapier", skool_export: "Skool · export", stripe: "Bought on /join", admin: "Manual", welcome: "Welcome days (unconfirmed)" };
 
 export default async function MembersPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  await requirePlatformAdmin();
+  const admin = await requirePlatformAdmin();
   const sp = await searchParams;
+  const db = await getDb();
+  const [ticket, myUnlocks] = await Promise.all([
+    getEntryTicket(),
+    db
+      .select({ id: unlocks.id, title: unlocks.title, active: unlocks.active, workspace: workspacesTable.name })
+      .from(unlocks)
+      .innerJoin(workspaceMembers, eq(workspaceMembers.workspaceId, unlocks.workspaceId))
+      .innerJoin(workspacesTable, eq(workspacesTable.id, unlocks.workspaceId))
+      .where(eq(workspaceMembers.userId, admin.id)),
+  ]);
   const [stats, last, rows] = await Promise.all([memberStats(), lastRosterImport(), listMemberAccess({ q: sp.q })]);
   const staleDays = last ? Math.floor((Date.now() - last.createdAt.getTime()) / 86_400_000) : null;
   const zapUrl = `${env.appUrl}/api/webhooks/skool?secret=${env.skoolWebhookSecret || "<SKOOL_WEBHOOK_SECRET>"}`;
@@ -51,6 +68,40 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
           Tip: add the membership question “What email will you use for the app?”. Its answers are in the export, so members who use a different email still match.
         </p>
       </Panel>
+
+      <form action={saveEntryTicketAction}>
+        <Panel
+          title="Entry ticket: post to get connected"
+          sub="Ask new members to introduce themselves in your community before their app account opens. They post, paste the link, and they're in. Every new member becomes a post, and Skool ranks communities on engagement."
+          action={<SubmitButton size="sm" variant="outline">Save</SubmitButton>}
+        >
+          {myUnlocks.length === 0 ? (
+            <Callout tone="info">Create an unlock in your own workspace first (Unlocks › New unlock, action: “Make their own post”, e.g. “Introduce yourself”). Then pick it here.</Callout>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="unlockId">The intro unlock</FieldLabel>
+                <NativeSelect id="unlockId" name="unlockId" defaultValue={ticket?.unlockId ?? ""}>
+                  <NativeSelectOption value="">Pick one…</NativeSelectOption>
+                  {myUnlocks.map((u) => (
+                    <NativeSelectOption key={u.id} value={u.id}>{u.title} · {u.workspace}{u.active ? "" : " (paused)"}</NativeSelectOption>
+                  ))}
+                </NativeSelect>
+                <FieldDescription>Its instructions and Skool link are what new members see.</FieldDescription>
+              </Field>
+              <div className="flex flex-col gap-2 text-sm">
+                <Label className="flex items-center gap-2 font-normal">
+                  <input type="checkbox" name="on" defaultChecked={ticket?.on ?? false} /> Turn the entry ticket on
+                </Label>
+                <Label className="flex items-center gap-2 font-normal">
+                  <input type="checkbox" name="everyone" defaultChecked={ticket ? new Date(ticket.since).getTime() === 0 : false} /> Also ask existing members who haven&apos;t posted yet
+                </Label>
+                <span className="text-xs text-muted-foreground">{ticket?.on ? "On now." : "Off now."} Admins and agency accounts never see it.</span>
+              </div>
+            </div>
+          )}
+        </Panel>
+      </form>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Instant access for paid joins (Skool Pro)" sub="Zapier: Skool “New Paid Member” → Webhooks by Zapier, POST JSON with email and name. Paid members get in about 15 minutes after joining.">

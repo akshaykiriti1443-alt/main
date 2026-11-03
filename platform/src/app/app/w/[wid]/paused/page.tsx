@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default async function PausedPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
-  const { workspace, agency, user } = await requireWorkspace(wid, "user", { allowPaused: true });
+  const { workspace, agency, user } = await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
   const viaAgency = !agency.isPlatform;
   // A brand-new account that hasn't been matched to a membership yet, vs one whose membership lapsed.
   const neverActive = workspace.pauseReason === "access" && !workspace.accessVerifiedUntil;

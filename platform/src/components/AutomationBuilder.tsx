@@ -30,6 +30,7 @@ const ACTION_LABELS: Record<ActionType, string> = {
   send_message: "Send a DM / WhatsApp / SMS",
   webhook: "Send to a webhook (Zapier, Make)",
   only_if_temperature: "Continue only if the lead is…",
+  ask_my_ai: "Ask my AI (your Claude, ChatGPT or Gemini)",
 };
 
 const TRIGGERS: { value: AutomationTrigger["type"]; label: string; hint: string }[] = [
@@ -61,6 +62,8 @@ function blankAction(type: ActionType): AutomationAction {
       return { type, url: "" };
     case "only_if_temperature":
       return { type, temperature: "hot" };
+    case "ask_my_ai":
+      return { type, instruction: "" };
     default:
       return { type } as AutomationAction;
   }
@@ -262,6 +265,20 @@ function ActionFields({ a, sequences, onChange }: { a: AutomationAction; sequenc
       return <Textarea value={a.body} placeholder="Hey {{first_name}}! Thanks for reaching out…" onChange={(e) => onChange({ body: e.target.value })} aria-label="Message" />;
     case "webhook":
       return <Input value={a.url} placeholder="https://hooks.zapier.com/…" onChange={(e) => onChange({ url: e.target.value })} aria-label="Webhook URL" />;
+    case "ask_my_ai":
+      return (
+        <>
+          <Textarea
+            value={a.instruction}
+            placeholder="Write a warm 2-line welcome DM for {{first_name}} that asks what made them join."
+            onChange={(e) => onChange({ instruction: e.target.value })}
+            aria-label="What should your AI do?"
+          />
+          <p className="text-xs text-muted-foreground">
+            Runs on your own AI, never your wallet: instantly with your API key, or next time you tell your connected Claude, ChatGPT or Gemini to &ldquo;do my AI tasks&rdquo;. The result lands on the contact. Set it up in Your AI.
+          </p>
+        </>
+      );
     case "only_if_temperature":
       return (
         <NativeSelect className="w-full sm:w-64" value={a.temperature} onChange={(e) => onChange({ temperature: e.target.value as typeof a.temperature })} aria-label="Temperature">

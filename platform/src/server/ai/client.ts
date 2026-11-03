@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { getDb } from "@/lib/db";
 import { workspaces } from "@/lib/db/schema";
 import { decrypt } from "@/lib/crypto";
+import { isPublicHttpsUrl } from "@/lib/html";
 
 let client: Anthropic | null = null;
 export function anthropic(creds?: AiCreds | null): Anthropic {
@@ -15,33 +16,106 @@ export function anthropic(creds?: AiCreds | null): Anthropic {
 }
 
 // ---------------------------------------------------------------------------
-// Bring your own AI: a workspace can add its own Claude or OpenAI key. Its AI features then run
-// on that key and are never charged to the wallet, so AI cost doesn't land on the platform.
+// Bring your own AI: a workspace can add its own AI key. Its AI features (and "Ask my AI"
+// automation steps) then run on that key and are never charged to the wallet, so AI cost
+// doesn't land on the platform. Free tiers work too: Google Gemini, Groq and OpenRouter's
+// ":free" models all speak the OpenAI-compatible Chat Completions API.
 // ---------------------------------------------------------------------------
 
-export type AiProvider = "anthropic" | "openai";
-export type AiCreds = { provider: AiProvider; apiKey: string; model?: string };
+export type AiProvider = "anthropic" | "openai" | "gemini" | "groq" | "openrouter" | "custom";
+export type AiCreds = { provider: AiProvider; apiKey: string; model?: string; baseUrl?: string };
 export const DEFAULT_OPENAI_MODEL = "gpt-5";
+
+export const AI_PROVIDERS: Record<AiProvider, { label: string; free: boolean; base: string; keyUrl: string; note: string }> = {
+  gemini: {
+    label: "Google Gemini",
+    free: true,
+    base: "https://generativelanguage.googleapis.com/v1beta/openai",
+    keyUrl: "https://aistudio.google.com/apikey",
+    note: "Free tier with daily limits. Google may use free-tier prompts to improve its products.",
+  },
+  groq: { label: "Groq", free: true, base: "https://api.groq.com/openai/v1", keyUrl: "https://console.groq.com/keys", note: "Free tier with rate limits. Very fast open models." },
+  openrouter: {
+    label: "OpenRouter",
+    free: true,
+    base: "https://openrouter.ai/api/v1",
+    keyUrl: "https://openrouter.ai/settings/keys",
+    note: "Models ending in :free cost nothing, with daily limits. We pick one for you.",
+  },
+  anthropic: { label: "Claude (Anthropic API)", free: false, base: "https://api.anthropic.com/v1", keyUrl: "https://console.anthropic.com/settings/keys", note: "Paid API. The best writing quality." },
+  openai: { label: "ChatGPT (OpenAI API)", free: false, base: "https://api.openai.com/v1", keyUrl: "https://platform.openai.com/api-keys", note: "Paid API." },
+  custom: { label: "Other (OpenAI-compatible)", free: false, base: "", keyUrl: "", note: "Any OpenAI-compatible API on a public https URL, e.g. Mistral, DeepSeek or Together." },
+};
+const PROVIDER_KEYS = Object.keys(AI_PROVIDERS) as AiProvider[];
+export const isAiProvider = (v: unknown): v is AiProvider => typeof v === "string" && (PROVIDER_KEYS as string[]).includes(v);
+
+const COMPAT_MAX_TOKENS = 8192;
 
 export async function aiCredsFor(workspaceId: string): Promise<AiCreds | null> {
   const db = await getDb();
   const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
   const s = ws?.settings;
-  if (!s?.aiKeyEnc || (s.aiProvider !== "anthropic" && s.aiProvider !== "openai")) return null;
+  if (!s?.aiKeyEnc || !isAiProvider(s.aiProvider)) return null;
+  if (s.aiProvider === "custom" && !(s.aiBaseUrl && isPublicHttpsUrl(s.aiBaseUrl))) return null;
   try {
-    return { provider: s.aiProvider, apiKey: decrypt(s.aiKeyEnc), model: s.aiModel || undefined };
+    return { provider: s.aiProvider, apiKey: decrypt(s.aiKeyEnc), model: s.aiModel || undefined, baseUrl: s.aiBaseUrl || undefined };
   } catch {
     return null;
   }
 }
 
-/** Check a key works without spending tokens (lists models). */
-export async function verifyAiKey(provider: AiProvider, apiKey: string): Promise<boolean> {
-  const res =
-    provider === "anthropic"
-      ? await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" } })
-      : await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${apiKey}` } });
-  return res.ok;
+function compatBase(creds: Pick<AiCreds, "provider" | "baseUrl">): string {
+  const base = creds.provider === "custom" ? creds.baseUrl ?? "" : AI_PROVIDERS[creds.provider].base;
+  return base.replace(/\/+$/, "");
+}
+
+/** Pick a sensible default chat model from a provider's model list. */
+export function pickModel(provider: AiProvider, ids: string[]): string | undefined {
+  const clean = ids.map((id) => id.replace(/^models\//, "")).filter((id) => !/embed|whisper|tts|audio|image|vision-only|guard|moderation|transcri|realtime|live|veo|imagen/i.test(id));
+  const prefer: RegExp[] =
+    provider === "gemini"
+      ? [/^gemini-[\d.]+-flash$/, /^gemini-[\d.]+-flash(?!-lite)/, /flash/, /gemini/]
+      : provider === "groq"
+        ? [/llama-3\.3-70b/, /70b/, /llama/, /qwen|mixtral|gemma/]
+        : provider === "openrouter"
+          ? [/:free$/]
+          : [/./];
+  for (const re of prefer) {
+    const hit = clean.filter((id) => re.test(id)).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0];
+    if (hit) return hit;
+  }
+  return clean[0];
+}
+
+/**
+ * Check a key works without spending tokens, and find a default model.
+ * Returns ok:false with a reason the owner can act on.
+ */
+export async function verifyAiKey(provider: AiProvider, apiKey: string, baseUrl?: string): Promise<{ ok: boolean; model?: string; error?: string }> {
+  const t = AbortSignal.timeout(15_000);
+  try {
+    if (provider === "anthropic") {
+      const res = await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }, signal: t });
+      return res.ok ? { ok: true } : { ok: false, error: "Anthropic didn't accept that key." };
+    }
+    if (provider === "openai") {
+      const res = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${apiKey}` }, signal: t });
+      return res.ok ? { ok: true } : { ok: false, error: "OpenAI didn't accept that key." };
+    }
+    if (provider === "custom" && !(baseUrl && isPublicHttpsUrl(baseUrl))) return { ok: false, error: "Use a public https:// base URL." };
+    const base = compatBase({ provider, baseUrl });
+    if (provider === "openrouter") {
+      const key = await fetch(`${base}/key`, { headers: { Authorization: `Bearer ${apiKey}` }, signal: t, redirect: "error" });
+      if (!key.ok) return { ok: false, error: "OpenRouter didn't accept that key." };
+    }
+    const res = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${apiKey}` }, signal: t, redirect: "error" });
+    if (!res.ok) return { ok: false, error: `${AI_PROVIDERS[provider].label} didn't accept that key (${res.status}).` };
+    const data = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] };
+    const ids = (data.data ?? []).map((m) => m.id ?? "").filter(Boolean);
+    return { ok: true, model: pickModel(provider, ids) };
+  } catch (err) {
+    return { ok: false, error: `Couldn't reach ${AI_PROVIDERS[provider].label}: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 async function openaiResponse(creds: AiCreds, opts: { system: string; prompt: string; maxTokens: number; jsonSchema?: unknown }) {
@@ -69,6 +143,59 @@ async function openaiResponse(creds: AiCreds, opts: { system: string; prompt: st
   if (data.incomplete_details?.reason === "max_output_tokens") throw new AiOutputError("The AI response was cut off. Please try again.");
   const text = parts.filter((p) => p.type === "output_text").map((p) => p.text ?? "").join("").trim();
   return { text, usage: { inputTokens: data.usage?.input_tokens ?? 0, outputTokens: data.usage?.output_tokens ?? 0, model: data.model ?? creds.model ?? DEFAULT_OPENAI_MODEL } };
+}
+
+/** OpenAI-compatible Chat Completions (Gemini, Groq, OpenRouter, custom). */
+async function chatCompletion(creds: AiCreds, opts: { system: string; prompt: string; maxTokens: number; json?: boolean; extra?: { role: "assistant" | "user"; content: string }[] }) {
+  const base = compatBase(creds);
+  if (creds.provider === "custom" && !isPublicHttpsUrl(base)) throw new AiOutputError("Your AI base URL must be a public https:// address.");
+  const call = (withFormat: boolean) =>
+    fetch(`${base}/chat/completions`, {
+      method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(180_000),
+      headers: {
+        Authorization: `Bearer ${creds.apiKey}`,
+        "Content-Type": "application/json",
+        ...(creds.provider === "openrouter" ? { "HTTP-Referer": env.appUrl, "X-Title": env.platformName } : {}),
+      },
+      body: JSON.stringify({
+        model: creds.model,
+        messages: [{ role: "system", content: opts.system }, { role: "user", content: opts.prompt }, ...(opts.extra ?? [])],
+        max_tokens: Math.min(opts.maxTokens, COMPAT_MAX_TOKENS),
+        ...(withFormat ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+  let res = await call(Boolean(opts.json));
+  // Some models reject response_format; ask again without it (the prompt still demands JSON).
+  if (!res.ok && opts.json && res.status === 400) res = await call(false);
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: { message?: string } | string;
+    model?: string;
+    choices?: { finish_reason?: string; message?: { content?: string | { type?: string; text?: string }[] | null; refusal?: string | null } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const label = AI_PROVIDERS[creds.provider].label;
+  if (!res.ok) {
+    const msg = typeof data.error === "string" ? data.error : data.error?.message;
+    if (res.status === 429) throw new AiOutputError(`${label} says you've hit its rate limit (free tiers have daily limits). Try again later.`);
+    throw new AiOutputError(`${label}: ${msg ?? res.statusText}`);
+  }
+  const choice = data.choices?.[0];
+  if (choice?.message?.refusal) throw new AiRefusalError("The AI declined this request. Try rewording your inputs.");
+  if (choice?.finish_reason === "length") throw new AiOutputError("The AI response was cut off. Please try again.");
+  const content = choice?.message?.content;
+  const text = (typeof content === "string" ? content : (content ?? []).map((c) => c.text ?? "").join("")).trim();
+  return { text, usage: { inputTokens: data.usage?.prompt_tokens ?? 0, outputTokens: data.usage?.completion_tokens ?? 0, model: data.model ?? creds.model ?? label } };
+}
+
+/** Pull the JSON object out of a model reply (tolerates code fences and stray prose). */
+export function extractJson(text: string): unknown {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const raw = (fenced ?? text).trim();
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  return JSON.parse(start >= 0 && end > start ? raw.slice(start, end + 1) : raw);
 }
 
 export class AiRefusalError extends Error {}
@@ -111,6 +238,35 @@ export async function generateStructured<T extends z.ZodType>(opts: {
       throw new AiOutputError("The AI returned an unexpected format. Please try again.");
     }
     return { data: parsed as z.infer<T>, usage: res.usage };
+  }
+  if (creds && creds.provider !== "anthropic") {
+    // Free and open models: ask for JSON matching the schema, validate, and give one retry with the error.
+    const system = `${opts.system}\n\nReply with ONLY one JSON object, no prose and no code fences, matching this JSON Schema:\n${JSON.stringify(z.toJSONSchema(opts.schema))}`;
+    const maxTokens = opts.maxTokens ?? 16000;
+    let res = await chatCompletion(creds, { system, prompt: opts.prompt, maxTokens, json: true });
+    const tryParse = (text: string) => {
+      try {
+        return { ok: true as const, data: opts.schema.parse(extractJson(text)) as z.infer<T> };
+      } catch (err) {
+        return { ok: false as const, error: err instanceof Error ? err.message.slice(0, 600) : "invalid JSON" };
+      }
+    };
+    let parsed = tryParse(res.text);
+    if (!parsed.ok) {
+      res = await chatCompletion(creds, {
+        system,
+        prompt: opts.prompt,
+        maxTokens,
+        json: true,
+        extra: [
+          { role: "assistant", content: res.text.slice(0, 4000) },
+          { role: "user", content: `That reply did not match the schema (${parsed.error}). Reply again with only the corrected JSON object.` },
+        ],
+      });
+      parsed = tryParse(res.text);
+    }
+    if (!parsed.ok) throw new AiOutputError("The AI returned an unexpected format. Please try again, or pick a stronger model.");
+    return { data: parsed.data, usage: res.usage };
   }
   const message = await anthropic(creds).beta.messages.parse({
     model: creds?.model || env.aiModel,
@@ -162,6 +318,11 @@ export async function generateText(opts: {
   const creds = opts.workspaceId ? await aiCredsFor(opts.workspaceId) : null;
   if (creds?.provider === "openai") {
     const res = await openaiResponse(creds, { system: opts.system, prompt: opts.prompt, maxTokens: opts.maxTokens ?? 4000 });
+    if (!res.text) throw new AiOutputError("The AI returned an empty reply.");
+    return res;
+  }
+  if (creds && creds.provider !== "anthropic") {
+    const res = await chatCompletion(creds, { system: opts.system, prompt: opts.prompt, maxTokens: opts.maxTokens ?? 4000 });
     if (!res.text) throw new AiOutputError("The AI returned an empty reply.");
     return res;
   }

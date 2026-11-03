@@ -14,7 +14,8 @@ export type JobType =
   | "inbox.webhook"
   | "domain.check"
   | "agency_domain.check"
-  | "member.skool_invite";
+  | "member.skool_invite"
+  | "unlock.webhook";
 
 export async function enqueue(
   type: JobType,

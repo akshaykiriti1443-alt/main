@@ -87,10 +87,18 @@ async function loadWorkspaceContext(workspaceId: string): Promise<WorkspaceConte
 
 export const getWorkspaceContext = cache(loadWorkspaceContext);
 
-export async function requireWorkspace(workspaceId: string, minRole: WorkspaceRole = "user", opts: { allowPaused?: boolean } = {}) {
+// One read per request of the platform's entry-ticket setting.
+const entryTicket = cache(async () => (await import("./unlocks")).getEntryTicket());
+
+export async function requireWorkspace(workspaceId: string, minRole: WorkspaceRole = "user", opts: { allowPaused?: boolean; allowEntry?: boolean } = {}) {
   const ctx = await getWorkspaceContext(workspaceId);
   if (ROLE_RANK[ctx.role] < ROLE_RANK[minRole]) throw new Error("You don't have permission for this action.");
   if (ctx.effectiveStatus === "paused" && !opts.allowPaused) redirect(`/app/w/${workspaceId}/paused`);
+  // The entry ticket: new members post their intro in the community before the app opens.
+  if (!opts.allowEntry && !ctx.user.isPlatformAdmin && ctx.workspace.accessSource === "member") {
+    const { needsEntryTicket } = await import("./unlocks");
+    if (needsEntryTicket(await entryTicket(), ctx.workspace)) redirect(`/app/w/${workspaceId}/hello`);
+  }
   return ctx;
 }
 

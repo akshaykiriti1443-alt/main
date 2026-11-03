@@ -17,7 +17,7 @@ import { errMsg, field, go } from "./helpers";
 
 /** "Check again": re-read the owner's membership now (after joining Skool or paying). */
 export async function checkAccessAction(wid: string, fd: FormData) {
-  await requireWorkspace(wid, "user", { allowPaused: true });
+  await requireWorkspace(wid, "user", { allowPaused: true, allowEntry: true });
   const back = field(fd, "back") || `/app/w/${wid}`;
   const db = await getDb();
   const [owner] = await db

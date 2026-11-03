@@ -101,10 +101,15 @@ export type WorkspaceSettings = {
   metaTestEventCode?: string;
   launchKitId?: string;
   // Bring your own AI: when set, AI features run on this key and are not billed to the wallet.
-  aiProvider?: "anthropic" | "openai";
+  aiProvider?: "anthropic" | "openai" | "gemini" | "groq" | "openrouter" | "custom";
   aiKeyEnc?: string;
   aiKeyHint?: string;
   aiModel?: string;
+  // Only for aiProvider "custom": an OpenAI-compatible base URL (https).
+  aiBaseUrl?: string;
+  // The entry ticket: the intro post that unlocked this account (when the platform asks for one).
+  entryPostUrl?: string;
+  entryClaimedAt?: string;
 };
 
 export type BrandSettings = {
@@ -145,6 +150,8 @@ export const automationActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("send_message"), body: z.string().min(1).max(2000) }),
   z.object({ type: z.literal("webhook"), url: z.string().url().max(1000).refine((u) => u.startsWith("https://"), "Use an https:// URL") }),
   z.object({ type: z.literal("only_if_temperature"), temperature: z.enum(["hot", "warm", "cold"]) }),
+  // Hands a task to the owner's own AI (their API key, or their connected Claude/ChatGPT via MCP).
+  z.object({ type: z.literal("ask_my_ai"), instruction: z.string().min(1).max(2000) }),
 ]);
 export type AutomationAction = z.infer<typeof automationActionSchema>;
 

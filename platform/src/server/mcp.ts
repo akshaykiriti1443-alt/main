@@ -12,10 +12,16 @@ import { skoolMemberCounts, syncSkoolMembers } from "./skool";
 import { computeLadder, latestCheckins, saveCheckin, skoolLinkFor, skoolVisits } from "./growth";
 import { hasFeature } from "./plans";
 import { adLibraryConfigured, adLibraryWebUrl, searchAdLibrary } from "./meta/adLibrary";
+import { PLAYBOOKS, playbookByName } from "./playbooks";
+import { completeAiTask, contactBrief, listAiTasks, saveAiDraft, skipAiTask } from "./aiTasks";
+import { claimUrlFor, createUnlock, engagementLeaders, listUnlocks, recentClaims, unlockPostText } from "./unlocks";
+import { AD_ANGLES } from "./ai/adFramework";
+import { aiGenerations } from "@/lib/db/schema";
 
 // A small MCP server (Model Context Protocol, streamable HTTP, stateless JSON responses) so an
-// owner's own Claude or ChatGPT can work inside their workspace: read leads, edit pages, switch on
-// automations, log the growth check-in. The AI runs on the owner's subscription, not our bill.
+// owner's own AI app (Claude, ChatGPT, Gemini CLI, VS Code, LM Studio…) can work inside their
+// workspace: read leads, edit pages, write ads, do queued "Ask my AI" tasks, run engagement drops
+// and the Monday review. The AI runs on the owner's plan (free plans included), not our bill.
 // Scope: one workspace per token. No deletes. Never touches anyone's Skool login.
 
 export const MCP_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -190,6 +196,160 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "list_playbooks",
+    description: "Ready-made jobs you can run for the owner (Monday review, Write my 3-Pack, Member messages, Do my AI tasks, Fix my page, Plan an engagement drop). Use get_playbook for the steps.",
+    inputSchema: obj(),
+    annotations: { readOnlyHint: true },
+    run: async () => PLAYBOOKS.map((p) => ({ name: p.name, title: p.title, description: p.description })),
+  },
+  {
+    name: "get_playbook",
+    description: "The step-by-step instructions for one playbook. Follow them in order.",
+    inputSchema: obj({ name: { type: "string", enum: PLAYBOOKS.map((p) => p.name) } }, ["name"]),
+    annotations: { readOnlyHint: true },
+    run: async (_ctx, a) => {
+      const { name } = z.object({ name: z.string() }).parse(a);
+      const p = playbookByName(name);
+      if (!p) throw new Error(`Unknown playbook. Use one of: ${PLAYBOOKS.map((x) => x.name).join(", ")}`);
+      return { title: p.title, steps: p.steps };
+    },
+  },
+  {
+    name: "list_ai_tasks",
+    description: "Tasks the owner's automations handed to you (\"Ask my AI\" steps), oldest first, each with a short brief of the member it is about. Do them and save each with complete_ai_task.",
+    inputSchema: obj({ limit: { type: "integer", minimum: 1, maximum: 25, default: 10 } }),
+    annotations: { readOnlyHint: true },
+    run: async ({ workspaceId }, a) => {
+      const { limit } = z.object({ limit: z.number().int().min(1).max(25).optional() }).parse(a);
+      const rows = await listAiTasks(workspaceId, { status: "pending", limit: limit ?? 10 });
+      return Promise.all(
+        rows.map(async (r) => ({
+          taskId: r.task.id,
+          instruction: r.task.instruction,
+          from: r.task.source,
+          created: r.task.createdAt,
+          member: r.task.contactId ? await contactBrief(workspaceId, r.task.contactId) : null,
+        })),
+      );
+    },
+  },
+  {
+    name: "complete_ai_task",
+    description: "Save your finished work for one AI task. It appears on the member's timeline for the owner to copy and send.",
+    inputSchema: obj({ taskId: str("Task id from list_ai_tasks"), result: str("The finished text") }, ["taskId", "result"]),
+    write: true,
+    run: async ({ workspaceId }, a) => {
+      const args = z.object({ taskId: z.string().uuid(), result: z.string().min(1).max(8000) }).parse(a);
+      const task = await completeAiTask(workspaceId, args.taskId, args.result, "connected AI app");
+      if (!task) throw new Error("That task is not pending (already done, skipped or not found).");
+      return { ok: true };
+    },
+  },
+  {
+    name: "skip_ai_task",
+    description: "Skip a task that is unclear or no longer makes sense.",
+    inputSchema: obj({ taskId: str("Task id from list_ai_tasks") }, ["taskId"]),
+    write: true,
+    run: async ({ workspaceId }, a) => {
+      const { taskId } = z.object({ taskId: z.string().uuid() }).parse(a);
+      return { ok: await skipAiTask(workspaceId, taskId) };
+    },
+  },
+  {
+    name: "save_ad_pack",
+    description: "Save a 3-Pack of ads (Pain, Dream, Lesson; Proof only with real results). Each ad is Hook, Turn and Door. They appear on the owner's Ad research page.",
+    inputSchema: obj(
+      {
+        notes: str("One or two sentences on the patterns you found"),
+        ads: {
+          type: "array",
+          minItems: 1,
+          maxItems: 4,
+          items: obj(
+            {
+              angle: { type: "string", enum: [...AD_ANGLES] },
+              hook: str("First line, stops the thumb"),
+              turn: str("The wait-what line"),
+              door: str("One way in: the Skool link to the About page"),
+              headline: str("Ad headline"),
+              creativeIdea: str("One-line idea for the image or video"),
+            },
+            ["angle", "hook", "turn", "door", "headline", "creativeIdea"],
+          ),
+        },
+      },
+      ["ads"],
+    ),
+    write: true,
+    run: async ({ workspaceId }, a) => {
+      const ad = z.object({ angle: z.enum(AD_ANGLES), hook: z.string().max(400), turn: z.string().max(800), door: z.string().max(400), headline: z.string().max(200), creativeIdea: z.string().max(400) });
+      const args = z.object({ notes: z.string().max(1000).optional(), ads: z.array(ad).min(1).max(4) }).parse(a);
+      const db = await getDb();
+      const output = { summary: args.notes ?? "Written by your AI.", winners: [], hooks: [], angles: [], offers: [], gaps: [], drafts: args.ads };
+      const [row] = await db.insert(aiGenerations).values({ workspaceId, kind: "ad_research", input: { query: "your AI" }, output, model: "connected AI app" }).returning({ id: aiGenerations.id });
+      return { ok: true, view: `${env.appUrl}/app/w/${workspaceId}/ads/research?analysis=${row.id}` };
+    },
+  },
+  {
+    name: "save_member_message",
+    description: "Save a DM draft on a member's contact (welcome, convert, save or win back). The owner copies it and sends it by hand inside Skool.",
+    inputSchema: obj(
+      { contactId: str("Contact id"), kind: { type: "string", enum: ["welcome", "convert", "save", "winback", "other"] }, text: str("The message, 1-3 short sentences") },
+      ["contactId", "kind", "text"],
+    ),
+    write: true,
+    run: async ({ workspaceId }, a) => {
+      const args = z.object({ contactId: z.string(), kind: z.enum(["welcome", "convert", "save", "winback", "other"]), text: z.string().min(1).max(2000) }).parse(a);
+      const c = await getContact(workspaceId, args.contactId);
+      if (!c) throw new Error("Contact not found.");
+      await saveAiDraft(workspaceId, c.id, `Member message (${args.kind})`, args.text, "connected AI app");
+      return { ok: true };
+    },
+  },
+  {
+    name: "list_unlocks",
+    description: "The owner's Unlocks (rewards members claim by posting or commenting in Skool), with claim counts, claim links and recent claims.",
+    inputSchema: obj(),
+    annotations: { readOnlyHint: true },
+    run: async ({ workspaceId }) => {
+      const [list, claims] = await Promise.all([listUnlocks(workspaceId), recentClaims(workspaceId, 10)]);
+      return {
+        unlocks: list.map((u) => ({ title: u.unlock.title, reward: u.unlock.reward, action: u.unlock.action, live: u.unlock.active, claims: u.claims, flagged: u.flagged, claimLink: claimUrlFor(u.unlock.slug) })),
+        recentClaims: claims.map((c) => ({ name: c.claim.name, unlock: c.title, flagged: c.claim.flagged, at: c.claim.createdAt })),
+      };
+    },
+  },
+  {
+    name: "create_unlock",
+    description: "Create an Unlock: a small reward members get by posting or commenting in the Skool community. Returns the claim link and a ready-to-paste Skool post.",
+    inputSchema: obj(
+      {
+        title: str("What they unlock, max 80 characters"),
+        reward: str("One line about it"),
+        rewardUrl: str("https link to the reward (doc, lesson, download)"),
+        action: { type: "string", enum: ["comment", "post"] },
+        instructions: str("What to write, answerable in under 2 minutes"),
+        skoolPostUrl: str("The Skool post to comment on, or the community link"),
+      },
+      ["title", "reward", "action", "instructions"],
+    ),
+    write: true,
+    run: async ({ workspaceId }, a) => {
+      const args = z
+        .object({ title: z.string().max(80), reward: z.string().min(1).max(300), rewardUrl: z.string().max(500).optional(), action: z.enum(["comment", "post"]), instructions: z.string().max(600), skoolPostUrl: z.string().max(500).optional() })
+        .parse(a);
+      const u = await createUnlock(workspaceId, { title: args.title, reward: args.reward, rewardUrl: args.rewardUrl ?? "", action: args.action, instructions: args.instructions, skoolPostUrl: args.skoolPostUrl ?? "", zapierWebhookUrl: "" });
+      return { ok: true, claimLink: claimUrlFor(u.slug), skoolPost: unlockPostText(u) };
+    },
+  },
+  {
+    name: "get_engagement",
+    description: "Who engages most (by Unlock claims in the last 30 days), so the owner can thank, feature or invite them.",
+    inputSchema: obj(),
+    annotations: { readOnlyHint: true },
+    run: async ({ workspaceId }) => (await engagementLeaders(workspaceId, 30, 15)).map((l) => ({ name: l.name || l.email, claims: l.claims, last: l.last, contactId: l.contactId })),
+  },
+  {
     name: "list_automations",
     description: "The workspace's automations, plus the ready-made recipes (welcome, convert a trial, save a cancelling member, win back) that add_automation_recipe can install.",
     inputSchema: obj(),
@@ -261,7 +421,8 @@ export const mcpTools = () =>
   }));
 
 const SERVER_INSTRUCTIONS = `You are working inside one ${env.platformName} workspace: the owner's funnel pages, CRM and Skool community growth.
-Call get_overview first. Pages are drafts until publish_site. Write in simple words and short sentences; never invent testimonials, results or income claims.
+Call get_overview first. For common jobs, call list_playbooks and follow get_playbook (Monday review, Write my 3-Pack, Member messages, Do my AI tasks, Fix my page, Plan an engagement drop). Pages are drafts until publish_site.
+Ads use the course framework: the 3-Pack (Pain, Dream, Lesson) and Hook · Turn · Door, pointing at the Skool link. Write in simple words and short sentences; never invent testimonials, results or income claims.
 The growth ladder follows Skool's Growth tab (rolling 30 days): L1 Discovery. L2 = 6 custom ads: 100 About-page visitors + 1 new customer + subscription or tiers. L3 = upload your own ads + up to $1,000/day Skool spend: 3,000 visitors + Skool link in bio + consistent organic promo + 10 Skool Network sign-ups. L4 = partnership ads + video uploads, ~$10,000/day: 10,000 visitors + link in bio + organic promo + 30 Skool Network sign-ups.
 Never ask for, store or use anyone's Skool login. The owner sends Skool messages by hand.`;
 
@@ -283,7 +444,7 @@ export async function handleMcpMessage(ctx: Ctx, msg: RpcRequest): Promise<RpcRe
       const asked = String(msg.params?.protocolVersion ?? "");
       return ok({
         protocolVersion: MCP_PROTOCOL_VERSIONS.includes(asked) ? asked : MCP_PROTOCOL_VERSIONS[0],
-        capabilities: { tools: { listChanged: false } },
+        capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
         serverInfo: { name: `${env.platformName.toLowerCase()}-workspace`, title: `${env.platformName} workspace`, version: "1.0.0" },
         instructions: SERVER_INSTRUCTIONS,
       });
@@ -292,6 +453,13 @@ export async function handleMcpMessage(ctx: Ctx, msg: RpcRequest): Promise<RpcRe
       return ok({});
     case "tools/list":
       return ok({ tools: mcpTools() });
+    case "prompts/list":
+      return ok({ prompts: PLAYBOOKS.map((p) => ({ name: p.name, title: p.title, description: p.description })) });
+    case "prompts/get": {
+      const p = playbookByName(String(msg.params?.name ?? ""));
+      if (!p) return fail(-32602, "Unknown prompt");
+      return ok({ description: p.description, messages: [{ role: "user", content: { type: "text", text: `${p.say}\n\nFollow these steps:\n${p.steps}` } }] });
+    }
     case "tools/call": {
       const name = String(msg.params?.name ?? "");
       const tool = TOOLS.find((t) => t.name === name);

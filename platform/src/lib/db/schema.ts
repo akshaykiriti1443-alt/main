@@ -300,6 +300,85 @@ export const activities = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Unlocks: rewards a community member claims by engaging (posting or commenting) in the
+// owner's Skool community. Engagement is what Skool's Discovery ranks on, so every claim
+// helps the community climb. We never read Skool: the member pastes the link to their post.
+// ---------------------------------------------------------------------------
+
+export type UnlockAction = "post" | "comment";
+export const unlocks = pgTable(
+  "unlocks",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull().unique(),
+    title: text("title").notNull(),
+    // What they get, in one line ("The Hook Vault: 100 hooks from long-running ads").
+    reward: text("reward").notNull().default(""),
+    // Where the reward lives (a doc, a download, a lesson). Shown after a claim and emailed.
+    rewardUrl: text("reward_url").notNull().default(""),
+    action: text("action").$type<UnlockAction>().notNull().default("comment"),
+    instructions: text("instructions").notNull().default(""),
+    // The Skool post to comment on, or the category to post in.
+    skoolPostUrl: text("skool_post_url").notNull().default(""),
+    // Optional: Zapier catch hook wired to Skool "Unlock Course for Member" (Skool Pro).
+    zapierWebhookUrl: text("zapier_webhook_url").notNull().default(""),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [index("unlocks_workspace_idx").on(t.workspaceId)],
+);
+
+export const unlockClaims = pgTable(
+  "unlock_claims",
+  {
+    id: id(),
+    unlockId: uuid("unlock_id").notNull().references(() => unlocks.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    name: text("name").notNull().default(""),
+    postUrl: text("post_url").notNull().default(""),
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    // Set when something looks off (the same post link used by someone else). The owner spot-checks these.
+    flagged: boolean("flagged").notNull().default(false),
+    flagReason: text("flag_reason").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("unlock_claims_unlock_email_uq").on(t.unlockId, t.email), index("unlock_claims_workspace_idx").on(t.workspaceId, t.createdAt)],
+);
+
+// ---------------------------------------------------------------------------
+// AI tasks: work an automation hands to the owner's OWN AI ("Ask my AI"). Done at once with the
+// owner's API key when they added one; otherwise it waits until their connected Claude/ChatGPT/
+// Gemini picks it up through the MCP connector. Either way the AI cost is theirs, not ours.
+// ---------------------------------------------------------------------------
+
+export type AiTaskStatus = "pending" | "done" | "skipped";
+export const aiTasks = pgTable(
+  "ai_tasks",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "cascade" }),
+    source: text("source").notNull().default(""),
+    instruction: text("instruction").notNull(),
+    status: text("status").$type<AiTaskStatus>().notNull().default("pending"),
+    result: text("result").notNull().default(""),
+    doneBy: text("done_by").notNull().default(""),
+    createdAt: createdAt(),
+    completedAt: ts("completed_at"),
+  },
+  (t) => [index("ai_tasks_workspace_status_idx").on(t.workspaceId, t.status, t.createdAt)],
+);
+
+// Small platform-wide settings the admin changes in the app (e.g. the entry ticket).
+export const platformSettings = pgTable("platform_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt: updatedAt(),
+});
+
+// ---------------------------------------------------------------------------
 // Email: sequences, campaigns, outbox
 // ---------------------------------------------------------------------------
 
@@ -508,7 +587,7 @@ export const aiGenerations = pgTable(
   {
     id: id(),
     workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message" | "ad_research">().notNull(),
+    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message" | "ad_research" | "ai_task">().notNull(),
     input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
     output: jsonb("output").$type<Record<string, unknown>>().notNull().default({}),
     model: text("model").notNull(),

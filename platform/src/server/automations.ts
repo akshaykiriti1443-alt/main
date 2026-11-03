@@ -102,7 +102,7 @@ export async function processAutomationStep(runId: string) {
     const action = automation.actions[index];
     let result: ActionResult;
     try {
-      result = await executeAction(run.workspaceId, run.contactId, run.context, action);
+      result = await executeAction(run.workspaceId, run.contactId, run.context, action, automation.name);
     } catch (err) {
       // Stop instead of retrying: a retry would repeat the emails/messages already sent.
       note(index, `Failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -133,6 +133,7 @@ async function executeAction(
   contactId: string | null,
   context: Record<string, unknown>,
   action: AutomationAction,
+  automationName = "Automation",
 ): Promise<ActionResult> {
   const db = await getDb();
   const contact = contactId ? (await db.select().from(contacts).where(eq(contacts.id, contactId)).limit(1))[0] : undefined;
@@ -220,6 +221,11 @@ async function executeAction(
       }).catch((e: Error) => ({ ok: false, status: 0, statusText: e.message }) as const);
       return { kind: "next", message: `Webhook ${res.ok ? "sent" : `failed (${res.status} ${res.statusText})`}` };
     }
+    case "ask_my_ai": {
+      const { createAiTask } = await import("./aiTasks");
+      const r = await createAiTask({ workspaceId, contactId: contact?.id ?? null, instruction: action.instruction, source: automationName });
+      return { kind: "next", message: r.ranNow ? "Your AI did it (saved on the contact)" : "Waiting for your AI: ask it to \"do my AI tasks\"" };
+    }
   }
 }
 
@@ -287,6 +293,7 @@ export const ACTION_LABELS: Record<AutomationAction["type"], string> = {
   send_message: "Send a DM / WhatsApp / SMS",
   webhook: "Send to a webhook (Zapier, Make)",
   only_if_temperature: "Continue only if lead is…",
+  ask_my_ai: "Ask my AI (runs on your own AI)",
 };
 
 export const TRIGGER_LABELS: Record<AutomationTrigger["type"], string> = {

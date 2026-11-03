@@ -1,3 +1,4 @@
+import { ANGLE_HINT, ANGLE_LABEL, adText } from "@/server/ai/adFramework";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
@@ -198,7 +199,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
   const { kit } = result;
   const [site] = await db.select().from(sites).where(eq(sites.workspaceId, wid)).orderBy(desc(sites.createdAt)).limit(1);
   const live = site ? siteBaseUrl(site) : null;
-  const adsText = kit.ads.map((a, i) => `AD ${i + 1}\nPrimary text:\n${a.primaryText}\n\nHeadline: ${a.headline}\nDescription: ${a.description}`).join("\n\n---\n\n");
+  const adsText = kit.ads.map((a, i) => `${a.angle ? ANGLE_LABEL[a.angle].toUpperCase() : `AD ${i + 1}`}\nPrimary text:\n${adText(a)}\n\nHeadline: ${a.headline}\nDescription: ${a.description}`).join("\n\n---\n\n");
   const emailsText = kit.emails.map((e, i) => `EMAIL ${i + 1}: ${e.subject}\n\n${e.body}`).join("\n\n---\n\n");
 
   return (
@@ -289,11 +290,11 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
         </Panel>
       </div>
 
-      <Panel title="Meta ad copy" action={<CopyButton text={adsText} label="Copy all ads" />}>
+      <Panel title="Your 3-Pack" sub="Pain, Dream and Lesson. Each one is Hook · Turn · Door, pointed at your Skool link. Launch all three, then fix one part at a time in Ad review." action={<CopyButton text={adsText} label="Copy all ads" />}>
         <div className="grid gap-6 md:grid-cols-3">
           {kit.ads.map((a, i) => (
             <div key={i} className="flex min-w-0 flex-col gap-2.5">
-              <Copy label={`Ad ${i + 1}`} text={a.primaryText} />
+              <Copy label={a.angle ? `${ANGLE_LABEL[a.angle]} · ${ANGLE_HINT[a.angle]}` : `Ad ${i + 1}`} text={adText(a)} />
               <p>
                 <span className="font-medium">Headline:</span> {a.headline}
               </p>

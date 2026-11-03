@@ -36,6 +36,13 @@
       "when": 1793647488889,
       "tag": "0004_carry_over_members",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793649301314,
+      "tag": "0005_unlocks_ai_tasks",
+      "breakpoints": true
     }
   ]
 }

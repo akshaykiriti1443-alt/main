@@ -7,6 +7,7 @@ import { isUuid, truncate } from "@/lib/util";
 import { requireWorkspace } from "@/server/tenancy";
 import { adLibraryConfigured, adLibraryWebUrl, searchAdLibrary, type LibraryAd } from "@/server/meta/adLibrary";
 import type { AdAnalysis } from "@/server/ai/adResearch";
+import { ANGLE_HINT, ANGLE_LABEL } from "@/server/ai/adFramework";
 import { adResearchAction } from "@/actions/adResearch";
 import { Callout, Empty, Flash, PageHead, Panel } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
@@ -191,15 +192,26 @@ export default async function AdResearchPage({ params, searchParams }: { params:
             </div>
             {analysis.offers.length ? <List icon={TargetIcon} title="What the click gets you" items={analysis.offers} /> : null}
           </Panel>
-          <Panel title="Your next 3 ads" sub="Point them at your Skool link (Growth ladder). Launch one, keep the others for your Day 6 swap.">
+          <Panel title="Your 3-Pack" sub="Pain, Dream and Lesson, each built as Hook · Turn · Door. Point them at your Skool link (Growth ladder) and launch all three at your budget tier.">
             <div className="grid gap-3 lg:grid-cols-3">
               {analysis.drafts.map((d, i) => {
-                const text = `${d.primaryText}\n\nHeadline: ${d.headline}`;
+                const legacy = d as unknown as { primaryText?: string };
+                const body = legacy.primaryText ?? [d.hook, d.turn, d.door].filter(Boolean).join("\n\n");
+                const text = `${body}\n\nHeadline: ${d.headline}`;
                 return (
                   <div key={i} className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
-                    <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Ad {i + 1}</span>
-                    <span className="font-semibold">{d.hook}</span>
-                    <p className="whitespace-pre-line">{d.primaryText}</p>
+                    <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      {d.angle ? `${ANGLE_LABEL[d.angle]} · ${ANGLE_HINT[d.angle]}` : `Ad ${i + 1}`}
+                    </span>
+                    {d.turn ? (
+                      <dl className="flex flex-col gap-1.5">
+                        <div><dt className="inline font-semibold">Hook: </dt><dd className="inline">{d.hook}</dd></div>
+                        <div><dt className="inline font-semibold">Turn: </dt><dd className="inline">{d.turn}</dd></div>
+                        <div><dt className="inline font-semibold">Door: </dt><dd className="inline">{d.door}</dd></div>
+                      </dl>
+                    ) : (
+                      <p className="whitespace-pre-line">{body}</p>
+                    )}
                     <span><b>Headline:</b> {d.headline}</span>
                     <span className="text-muted-foreground"><b>Creative:</b> {d.creativeIdea}</span>
                     <CopyButton text={text} label="Copy ad" className="mt-auto self-start" />

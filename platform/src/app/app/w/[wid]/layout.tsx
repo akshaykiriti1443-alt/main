@@ -38,6 +38,7 @@ export default async function WorkspaceLayout({ children, params }: { children: 
         { href: `${base}/leads`, label: "Leads", icon: "users" },
         { href: `${base}/skool`, label: "Skool members", icon: "skool" },
         { href: `${base}/growth`, label: "Growth ladder", icon: "ladder" },
+        { href: `${base}/unlocks`, label: "Unlocks", icon: "gift" },
         { href: `${base}/inbox`, label: "Inbox", icon: "inbox", badge: unread || undefined, locked: !growth },
         { href: `${base}/emails`, label: "Emails", icon: "mail" },
         { href: `${base}/automations`, label: "Automations", icon: "workflow", locked: !growth },
@@ -49,6 +50,7 @@ export default async function WorkspaceLayout({ children, params }: { children: 
     {
       title: "Account",
       items: [
+        { href: `${base}/ai`, label: "Your AI", icon: "bot" },
         { href: `${base}/billing`, label: "Plan & wallet", icon: "billing" },
         { href: `${base}/settings`, label: "Settings", icon: "settings" },
       ],

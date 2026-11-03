@@ -6,6 +6,7 @@ import type { PageContent } from "@/lib/db/types";
 import { env } from "@/lib/env";
 import { DEFAULT_SEQUENCE } from "../defaults";
 import { createSite, newSectionId } from "../sites";
+import { AD_ANGLES, AD_FRAMEWORK_RULES } from "./adFramework";
 import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 import { isUuid } from "@/lib/util";
 
@@ -47,7 +48,7 @@ export const launchKitSchema = z.object({
   thankYouBody: z.string(),
   thankYouButton: z.string(),
   emails: z.array(z.object({ subject: z.string(), body: z.string() })),
-  ads: z.array(z.object({ primaryText: z.string(), headline: z.string(), description: z.string() })),
+  ads: z.array(z.object({ angle: z.enum(AD_ANGLES), hook: z.string(), turn: z.string(), door: z.string(), headline: z.string(), description: z.string() })),
   hooks: z.array(z.string()),
   skoolAboutPage: z.string(),
   adPlan: z.object({
@@ -61,14 +62,17 @@ export type LaunchKit = z.infer<typeof launchKitSchema>;
 
 const SYSTEM = `You are a direct-response marketer who builds lead funnels for Skool community owners, coaches and personal trainers.
 You write a complete "launch kit" for one community: a free lead magnet, a landing page, a thank-you page that sends people to the Skool group, three follow-up emails, Meta ad copy, hooks, a Skool About page and a first-week ad plan.
+The owner grows with small paid ads, not social media. Ads send people to the Skool About page.
 
 ${VOICE_RULES}
+
+${AD_FRAMEWORK_RULES}
 
 Formatting rules:
 - Email bodies and the lead magnet use plain text with blank lines between paragraphs. Use "- " for list items and **bold** for emphasis. No HTML.
 - In emails, use {{first_name}} for the reader's name, {{lead_magnet_url}} for the lead magnet link and {{skool_url}} for the group link. Sign emails with the owner's first name.
 - The Skool About page uses plain text with emojis as bullets. Skool has no bold, so keep structure with line breaks.
-- Ad plan budgets are realistic for a beginner: $5 to $20 a day in total.`;
+- Ad plan: start at $5 to $10 a day if money is tight, $30 to $50 a day is the sweet spot. The main campaign is Traffic to the Skool About page (the owner\'s Skool link), optimised for landing page views. No follower campaigns.`;
 
 function buildPrompt(input: LaunchKitInput) {
   return `Write the launch kit for this community.
@@ -82,7 +86,7 @@ Lead magnet idea: ${input.leadMagnetIdea || "(pick the best quick-win lead magne
 Offer inside the Skool group: ${input.offer || "(a paid Skool membership with a 7-day free trial)"}
 Tone: ${input.tone}
 
-Counts: exactly 3 bullets, 3 benefits, 3 steps, 4 FAQ items, 3 emails (day 0, day 1, day 3), 3 ads, 10 hooks, 3 campaigns in the ad plan and 7 first-week actions (one per day).
+Counts: exactly 3 bullets, 3 benefits, 3 steps, 4 FAQ items, 3 emails (day 0, day 1, day 3), 3 ads (the 3-Pack: angle pain, dream and lesson, in that order), 10 hooks, 3 campaigns in the ad plan and 7 first-week actions (one per day).
 The lead magnet content must be the full, usable lead magnet itself (300 to 600 words), not a description of it.`;
 }
 
@@ -100,7 +104,7 @@ export function normalizeKit(kit: LaunchKit): LaunchKit {
     steps: take(kit.steps, 3, (i) => ({ title: `Step ${i + 1}`, body: "Follow the plan." })),
     faq: kit.faq.slice(0, 6),
     emails: take(kit.emails, 3, (i) => ({ subject: DEFAULT_SEQUENCE.steps[i].subject, body: DEFAULT_SEQUENCE.steps[i].body })),
-    ads: kit.ads.slice(0, 5),
+    ads: kit.ads.slice(0, 4),
     hooks: kit.hooks.slice(0, 15),
   };
 }
@@ -169,19 +173,28 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
     ],
     ads: [
       {
-        primaryText: `${capitalize(input.audience)}: here's a simple way to start. 👇\n\nGrab the free ${lm}.\n✅ One action a day\n✅ 10 minutes\n✅ Free\n\nTap "Learn more" to get it.`,
-        headline: `Free: ${lm}`,
-        description: "Start today. It's free.",
+        angle: "pain",
+        hook: `Still stuck on ${input.niche}?`,
+        turn: `It's rarely effort. It's doing ten things at once. ${input.businessName} gives you one small step a day.`,
+        door: "Tap Learn more to look inside the community.",
+        headline: `${capitalize(input.outcome)}, one step a day`,
+        description: "See what's inside",
       },
       {
-        primaryText: `I wrote down the 7 steps I give every new member of ${input.businessName}.\n\nThey're all in one free checklist. Tap "Learn more" to grab it.`,
-        headline: "The 7-day quick start",
-        description: "Free checklist",
-      },
-      {
-        primaryText: `Inside ${input.businessName} you get a clear plan, live help and a group that keeps you going.\n\nTry it free for 7 days.`,
+        angle: "dream",
+        hook: `Picture this: ${input.outcome}.`,
+        turn: `The people who get there aren't more talented. They follow a plan, with people who check in on them.`,
+        door: `That's ${input.businessName}. Tap Learn more to see the plan.`,
         headline: `Join ${input.businessName}`,
-        description: "7 days free",
+        description: "A plan and a group",
+      },
+      {
+        angle: "lesson",
+        hook: `One thing that helps with ${input.niche} today:`,
+        turn: `Pick one small action and do it at the same time every day. Tiny beats perfect.`,
+        door: `That's lesson 1 of ${input.businessName}. The rest is inside. Tap Learn more.`,
+        headline: "Free lesson inside",
+        description: "Lesson 1 of the plan",
       },
     ],
     hooks: [
@@ -201,18 +214,18 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
       dailyBudgetUsd: 15,
       audience: `People in your country, age 25 to 55, who are interested in ${input.niche}.`,
       campaigns: [
-        { name: "Followers", objective: "Traffic to Instagram profile", budgetUsd: 5, why: "Builds a warm audience fast." },
-        { name: "Leads", objective: "Leads to your landing page", budgetUsd: 8, why: "Collects emails with your free checklist." },
-        { name: "Retargeting", objective: "Traffic to your Skool page", budgetUsd: 2, why: "Brings warm people back to join." },
+        { name: "About-page visitors", objective: "Traffic to your Skool link, optimised for landing page views", budgetUsd: 10, why: "Feeds Skool's 100-visitor bar for Level 2 and finds your first members." },
+        { name: "Leads", objective: "Leads to your landing page", budgetUsd: 3, why: "Collects emails with your free guide, so nobody is lost." },
+        { name: "Retargeting", objective: "Traffic to your Skool link", budgetUsd: 2, why: "Brings warm visitors back to the About page to join." },
       ],
       firstWeek: [
-        "Day 1: Launch the follower campaign.",
-        "Day 2: Add your Skool keywords and post a welcome thread.",
-        "Day 3: Publish this landing page and test a lead.",
-        "Day 4: Launch the lead campaign.",
-        "Day 5: Launch retargeting to your Skool page.",
-        "Day 6: Swap in 3 new hooks from this kit.",
-        "Day 7: Raise the best ad set's budget by 20%.",
+        "Day 1: Publish your landing page and polish your Skool About page and cover.",
+        "Day 2: Run Ad research and pick the long-running ads to learn from.",
+        "Day 3: Launch the 3-Pack to your Skool link at your budget tier.",
+        "Day 4: Hands off. The 72-hour rule.",
+        "Day 5: Message your hot leads and invite the ones who reply.",
+        "Day 6: Ad review. Fix one part only: Hook, Turn or Door.",
+        "Day 7: Monday check-in on the Growth ladder. Raise the winner by 20%.",
       ],
     },
   };
