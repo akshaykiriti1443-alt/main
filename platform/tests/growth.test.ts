@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
-import { workspaceMembers, workspaces } from "@/lib/db/schema";
+import { jobs, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { LEVELS, aboutUrl, computeLadder, saveCheckin, skoolVisits, visitSource } from "@/server/growth";
 import { GET as goRoute } from "@/app/go/[slug]/route";
@@ -32,14 +32,14 @@ describe("growth ladder", () => {
     expect(free.qualifies).toBe(1);
     expect(free.next?.level).toBe(2);
     expect(free.moves.some((m) => m.startsWith("Turn on subscription or tiers"))).toBe(true);
-    // Skool's help center lists no link-in-bio requirement: it's only a tip.
+    // Skool's Growth tab requires the link in bio from Level 3: without it you stay at Level 2.
     const noBio = computeLadder({ ...base, aboutVisitors: 3200, newPaid: 4, networkSignups: 12, postsPerWeek: 7 });
-    expect(noBio.qualifies).toBe(3);
-    expect(noBio.gaps.find((g) => g.label.startsWith("Skool link in bio"))).toBeUndefined();
-    expect(noBio.moves.some((m) => m.startsWith("Tip: put your plain skool.com link"))).toBe(true);
-    // No promised dollar amounts anywhere on the ladder.
-    expect(JSON.stringify(LEVELS)).not.toMatch(/\$\d|upload/i);
-    expect([...l2.moves, ...noBio.moves].join(" ")).not.toMatch(/1,000|10,000|upload/i);
+    expect(noBio.qualifies).toBe(2);
+    expect(noBio.gaps.find((g) => g.label.startsWith("Skool link in bio"))).toMatchObject({ done: false, toggle: true });
+    expect(noBio.moves.some((m) => m.startsWith("Put your plain skool.com link"))).toBe(true);
+    // Skool's spend is only ever "up to": every dollar amount on the ladder says so.
+    for (const l of LEVELS) if (/\$\d/.test(l.reward)) expect(l.reward).toMatch(/up to/i);
+    expect(LEVELS.map((l) => l.name)).toEqual(["Discovery", "6 custom ads", "Upload your own ads", "Partnership ads"]);
   });
 
   it("normalises group links to the About page and reads visit sources", () => {
@@ -76,6 +76,30 @@ describe("growth ladder", () => {
     }
     expect((await skoolVisits(ws.id)).total).toBe(4);
   });
+
+  it("a paused workspace keeps sending its ad traffic to its own Skool group, without counting or Meta events", async () => {
+    const { ws } = await makeWorkspace();
+    const db = await getDb();
+    await db.update(workspaces).set({ settings: { ...ws.settings, metaPixelId: "1234567890", metaCapiTokenEnc: encrypt("capi-test") } }).where(eq(workspaces.id, ws.id));
+    const click = (ip: string) =>
+      goRoute(new NextRequest(`http://localhost/go/${ws.slug}?fbclid=abc&utm_campaign=l2`, { headers: { "user-agent": "Mozilla/5.0 (iPhone)", "x-real-ip": ip } }), { params: Promise.resolve({ slug: ws.slug }) });
+    const capiJobs = async () => (await db.select({ id: jobs.id }).from(jobs).where(and(eq(jobs.type, "meta.capi"), sql`${jobs.payload}->>'workspaceId' = ${ws.id}`))).length;
+
+    // Live: counted, and Meta gets a ViewContent.
+    expect((await click("10.21.0.1")).status).toBe(302);
+    expect((await skoolVisits(ws.id)).total).toBe(1);
+    expect(await capiJobs()).toBe(1);
+
+    // Paused (membership ended): still the member's own Skool About page, never our homepage.
+    await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "access" }).where(eq(workspaces.id, ws.id));
+    const res = await click("10.21.0.2");
+    expect(res.status).toBe(302);
+    const loc = new URL(res.headers.get("location")!);
+    expect(loc.origin + loc.pathname).toBe("https://www.skool.com/fit-dads/about");
+    expect(loc.searchParams.get("utm_campaign")).toBe("l2");
+    expect((await skoolVisits(ws.id)).total).toBe(1);
+    expect(await capiJobs()).toBe(1);
+  });
 });
 
 async function rpc(token: string, body: unknown) {
@@ -96,12 +120,17 @@ describe("Claude / ChatGPT connector (MCP)", () => {
     const list = await rpc(token, { jsonrpc: "2.0", id: 2, method: "tools/list" });
     const names = list.body.result.tools.map((t: { name: string }) => t.name);
     expect(names).toEqual(expect.arrayContaining(["get_overview", "update_page", "save_growth_checkin", "add_automation_recipe"]));
+    // The Skool member CRM was removed, and its tools with it.
+    expect(names).not.toContain("sync_skool_members");
+    expect(names).not.toContain("save_member_message");
 
     const checkin = await rpc(token, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "save_growth_checkin", arguments: { aboutVisitors: 150, newPaid: 1, networkSignups: 0 } } });
     expect(JSON.parse(checkin.body.result.content[0].text).qualifiesForLevel).toBe(2);
 
     const overview = await rpc(token, { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "get_overview", arguments: {} } });
-    expect(JSON.parse(overview.body.result.content[0].text).business.name).toBe(ws.name);
+    const glance = JSON.parse(overview.body.result.content[0].text);
+    expect(glance.business.name).toBe(ws.name);
+    expect(glance).not.toHaveProperty("skoolMembers");
 
     // Automations are a Growth plan feature: a tool error, not a crash.
     const locked = await rpc(token, { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "add_automation_recipe", arguments: { key: "hot" } } });

@@ -12,8 +12,8 @@ import { getAutomationDraft, whoBuilds } from "@/server/ai/automationDraft";
 import { AutomationAiBox } from "@/components/automation-ai";
 import type { AutomationAction, AutomationTrigger } from "@/lib/db/types";
 import { relativeTime } from "@/lib/util";
-import { cn } from "@/lib/utils";
-import { Callout, Flash, IconTile, Locked, MoreOptions, PageHead, Panel } from "@/components/ui";
+import { Callout, Flash, Locked, MoreOptions, PageHead, Panel } from "@/components/ui";
+import { EdgeTable, QuietEmpty } from "@/components/crm-ui";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -37,8 +37,8 @@ export default async function AutomationPage({ params, searchParams }: { params:
     <>
       <PageHead
         eyebrow={
-          <Link href={`/app/w/${wid}/automations`} className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
-            <ArrowLeftIcon className="size-3.5" /> Automations
+          <Link href={`/app/w/${wid}/automations`} className="inline-flex items-center gap-1.5 text-muted-foreground no-underline hover:text-foreground hover:no-underline">
+            <ArrowLeftIcon className="size-3.5" aria-hidden /> Automations
           </Link>
         }
         title={existing?.name ?? preset!.name}
@@ -47,6 +47,13 @@ export default async function AutomationPage({ params, searchParams }: { params:
             ? "Change what starts it or what it does, then save. Switch it off any time."
             : "Pick what starts it, then the steps in order. Read every email out loud. Nothing runs until you save."
         }
+        actions={
+          existing ? (
+            <Badge variant={existing.active ? "success" : "secondary"} className="h-7 px-3 text-xs">
+              {existing.active ? "On" : "Off"} · {existing.runsCount} run{existing.runsCount === 1 ? "" : "s"}
+            </Badge>
+          ) : undefined
+        }
       />
       <Flash searchParams={sp} />
       {ai ? (
@@ -54,7 +61,7 @@ export default async function AutomationPage({ params, searchParams }: { params:
           tone="info"
           title={
             <span className="flex items-center gap-2">
-              <SparklesIcon className="size-4" /> {ai.model === "recipe" ? "The closest recipe to what you asked" : existing ? "Your AI's changes" : "Your AI built this"}
+              {ai.model === "recipe" ? "The closest recipe to what you asked" : existing ? "Your AI's changes" : "Your AI built this"}
             </span>
           }
           action={
@@ -63,8 +70,8 @@ export default async function AutomationPage({ params, searchParams }: { params:
             </Button>
           }
         >
-          <div className="flex flex-col gap-2">
-            <p className="text-muted-foreground">You asked: &ldquo;{ai.request}&rdquo;</p>
+          <div className="flex flex-col gap-2.5">
+            <p className="border-l-2 border-violet-300 pl-3 text-muted-foreground italic dark:border-violet-400/50">&ldquo;{ai.request}&rdquo;</p>
             {ai.draft.summary ? <p>{ai.draft.summary}</p> : null}
             {ai.draft.why ? <p className="font-medium">{ai.draft.why}</p> : null}
             {ai.draft.notes.length ? (
@@ -84,7 +91,7 @@ export default async function AutomationPage({ params, searchParams }: { params:
           <AutomationAiBox
             compact
             action={draftAutomationAction.bind(null, wid, existing.id)}
-            placeholder={`e.g. "Wait 2 days instead of 1, make the email shorter, and tag them win-back."`}
+            placeholder={`e.g. "Wait 2 days instead of 1, make the email shorter, and tag them followed-up."`}
             cta="Change it"
             pendingText="Your AI is changing it…"
             aiNote={whoBuilds(workspace)}
@@ -104,24 +111,23 @@ export default async function AutomationPage({ params, searchParams }: { params:
         }
         sequences={sequences}
         save={saveAutomationAction.bind(null, wid)}
+        emphasis={!existing || Boolean(ai)}
       />
       {existing ? (
         <>
           <Panel icon={HistoryIcon} title="Recent runs" sub="Every time it fires, you see what it did here.">
             {runs.length === 0 ? (
-              <div className="flex items-start gap-3 rounded-xl border border-dashed border-foreground/15 bg-muted/35 px-4 py-3.5">
-                <IconTile icon={HistoryIcon} tone={existing.active ? "success" : "muted"} className="size-8 rounded-lg" />
-                <div className="grid gap-0.5 text-sm">
-                  <span className="font-semibold">No runs yet</span>
-                  <span className="text-muted-foreground">
-                    {existing.active ? "It's on and waiting. The first time its trigger happens, the run shows up here." : "It's switched off. Turn it on above and save, and runs show up here."}
-                  </span>
-                </div>
-              </div>
+              <QuietEmpty
+                icon={HistoryIcon}
+                tone={existing.active ? "success" : "muted"}
+                title="No runs yet"
+                body={existing.active ? "It's on and waiting. The first time its trigger happens, the run shows up here." : "It's switched off. Turn it on above and save, and runs show up here."}
+              />
             ) : (
+              <EdgeTable>
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="hover:bg-transparent">
                     <TableHead>Started</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Log</TableHead>
@@ -130,15 +136,9 @@ export default async function AutomationPage({ params, searchParams }: { params:
                 <TableBody>
                   {runs.map((r) => (
                     <TableRow key={r.id}>
-                      <TableCell className="text-muted-foreground">{relativeTime(r.createdAt)}</TableCell>
+                      <TableCell className="text-[13px] text-subtle-foreground">{relativeTime(r.createdAt)}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={cn(
-                            "capitalize",
-                            r.status === "completed" ? "bg-success-soft text-success" : r.status === "failed" ? "bg-destructive/10 text-destructive" : "bg-warning-soft text-warning",
-                          )}
-                        >
+                        <Badge variant={r.status === "completed" ? "success" : r.status === "failed" ? "destructive" : "warning"} className="capitalize">
                           {r.status}
                         </Badge>
                       </TableCell>
@@ -147,6 +147,7 @@ export default async function AutomationPage({ params, searchParams }: { params:
                   ))}
                 </TableBody>
               </Table>
+              </EdgeTable>
             )}
           </Panel>
           <MoreOptions icon={Trash2Icon} title="Delete this automation" sub="Running steps stop. Switching it off is usually enough.">

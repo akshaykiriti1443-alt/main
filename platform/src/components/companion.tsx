@@ -10,7 +10,6 @@ import {
   ChevronDownIcon,
   CrosshairIcon,
   LifeBuoyIcon,
-  LockIcon,
   PowerIcon,
   RouteIcon,
   SkipForwardIcon,
@@ -19,6 +18,7 @@ import {
 import { companionSnapshotAction } from "@/actions/companion";
 import type { CompanionSnapshot, CompanionStep } from "@/server/companion";
 import {
+  canBeUpNext,
   GUIDE_COOKIE,
   GUIDE_HELLO_COOKIE,
   GUIDE_SKIP_COOKIE,
@@ -167,8 +167,11 @@ export function Companion({
     };
   }, [mode, snap.total, wid]);
 
+  // Same rule as Up next (src/server/path.ts): optional steps, outcomes and steps locked to
+  // another plan never hold you up.
   const next =
-    snap.steps.find((s) => !s.done && !skipped.includes(s.key)) ?? null;
+    snap.steps.find((s) => canBeUpNext(s) && !skipped.includes(s.key)) ??
+    null;
   const onStep = next ? isOnStepPage(pathname, next) : false;
   const how = next ? STEP_HOWTO[next.key] : undefined;
   const guide = pageGuideFor(pathname, wid);
@@ -372,12 +375,6 @@ export function Companion({
               </span>
               <h3>{next.title}</h3>
               <p className="guide-why">{next.why}</p>
-              {next.locked ? (
-                <p className="guide-locked">
-                  <LockIcon aria-hidden="true" /> {next.locked}. Upgrade in Plan
-                  &amp; wallet, or skip it for now.
-                </p>
-              ) : null}
               {onStep ? (
                 <>
                   <p className="guide-here">
@@ -423,10 +420,15 @@ export function Companion({
           ) : (
             <section className="guide-step">
               <span className="guide-kicker">All done</span>
-              <h3>Every step ticked. Look at you.</h3>
+              <h3>
+                {snap.done >= snap.total
+                  ? "Every step ticked. Look at you."
+                  : "Your to-dos are done. Look at you."}
+              </h3>
               <p className="guide-why">
-                Keep the weekly rhythm: Monday check-in, one new ad, one Unlock,
-                member sync.
+                {snap.done >= snap.total
+                  ? "Keep the weekly rhythm: Monday check-in, one new ad, one Unlock."
+                  : "The rest tick themselves as your Skool numbers grow. Keep the weekly rhythm: Monday check-in, one new ad, one Unlock."}
               </p>
             </section>
           )}

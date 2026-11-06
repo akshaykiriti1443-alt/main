@@ -1,20 +1,22 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { agencies, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { recordPageView } from "@/server/leads";
-import { findPublicPage, siteVars, type Site } from "@/server/sites";
+import { findPublicPage, findPublicSite, siteVars, type Site } from "@/server/sites";
 import { LandingSections } from "./LandingSections";
+import { pageBackground } from "./palette";
 
 function Notice({ title, body }: { title: string; body: string }) {
   return (
     <div className="lp-notice">
       <div>
-        <h1 style={{ fontSize: 28, marginBottom: 8 }}>{title}</h1>
-        <p style={{ color: "#556079" }}>{body}</p>
+        <h1>{title}</h1>
+        <p>{body}</p>
       </div>
     </div>
   );
@@ -28,19 +30,42 @@ function PixelScripts({ pixelId, leadEventId }: { pixelId: string; leadEventId: 
   return <script dangerouslySetInnerHTML={{ __html: base + lead }} />;
 }
 
+// Metadata, viewport and the page itself all need the same rows: look each up once per request.
+const siteBySlug = cache((slug: string) => findPublicSite({ slug }));
+const siteByDomain = cache((domain: string) => findPublicSite({ domain }));
+const pageBySlug = cache((siteId: string, slug: string) => findPublicPage(siteId, slug));
+
+export function publicSite(by: { slug: string } | { domain: string }) {
+  return "slug" in by ? siteBySlug(by.slug) : siteByDomain(by.domain);
+}
+
 export async function loadPublicPage(site: Site | null, path: string[]) {
   if (!site) return null;
-  const page = await findPublicPage(site.id, path.map(decodeURIComponent).join("/"));
+  const page = await pageBySlug(site.id, path.map(decodeURIComponent).join("/"));
   return page;
+}
+
+/** The browser's toolbar colour follows the page's own background. */
+export function publicViewport(site: Site | null): Viewport {
+  return site ? { themeColor: pageBackground(site.theme.style, site.theme.brandColor) } : {};
 }
 
 export async function publicMetadata(site: Site | null, path: string[]): Promise<Metadata> {
   const page = await loadPublicPage(site, path);
   if (!site || !page?.publishedContent) return { title: "Not found" };
-  const hero = page.publishedContent.sections.find((s) => s.type === "hero");
-  const title = hero && hero.type === "hero" ? hero.headline : page.title;
-  const description = hero && hero.type === "hero" ? hero.subheadline : site.name;
-  return { title, description, openGraph: { title, description }, robots: { index: true, follow: true } };
+  const sections = page.publishedContent.sections;
+  const hero = sections.find((s) => s.type === "hero");
+  const cta = sections.find((s) => s.type === "cta");
+  // The browser tab shows the member's own headline, never the platform's name.
+  const title = (hero?.type === "hero" && hero.headline) || (cta?.type === "cta" && cta.headline) || page.title;
+  const description = (hero?.type === "hero" && hero.subheadline) || (cta?.type === "cta" && cta.body) || site.name;
+  return {
+    title: { absolute: title },
+    description,
+    openGraph: { title, description, type: "website" },
+    twitter: { card: "summary", title, description },
+    robots: { index: true, follow: true },
+  };
 }
 
 export async function PublicPage({ site, path, searchParams }: { site: Site | null; path: string[]; searchParams: Record<string, string | string[] | undefined> }) {
@@ -76,10 +101,18 @@ export async function PublicPage({ site, path, searchParams }: { site: Site | nu
   const businessName = row.workspace.settings.businessName || row.workspace.name;
   const poweredBy = row.agency.isPlatform ? `Built with ${env.platformName}` : row.agency.brand.name ? `Built with ${row.agency.brand.name}` : "";
 
+  // The document behind the page matches it, so overscroll and short pages never flash the app's colours.
+  const pageBg = pageBackground(site.theme.style, site.theme.brandColor);
+  // The app shell may have put <html> in dark mode for this visitor; the page decides its own scheme.
+  const scheme = site.theme.style === "dark" || site.theme.style === "luxe" ? "dark" : "light";
+
   return (
     <>
       {pixelId ? <PixelScripts pixelId={pixelId} leadEventId={page.kind === "thankyou" && eid ? eid : null} /> : null}
+      <style>{`html,body{background:${pageBg}}html{color-scheme:${scheme}!important}`}</style>
       <LandingSections
+        standalone
+        kind={page.kind}
         sections={page.publishedContent.sections}
         theme={site.theme}
         vars={siteVars(site)}

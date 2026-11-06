@@ -10,13 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 
 // Shows the new connector URL exactly once. It works like a password.
-export function NewConnector({ wid }: { wid: string }) {
+// `cta`: this is the screen's one most important button (pink), e.g. before any AI is connected.
+export function NewConnector({ wid, cta }: { wid: string; cta?: boolean }) {
   const [state, action, pending] = useActionState<ConnectorState, FormData>(createConnectorAction.bind(null, wid), {});
   return (
     <div className="flex flex-col gap-3">
-      <form action={action} data-guide="ai-connect" className="flex flex-col gap-2 sm:flex-row">
+      <form action={action} data-guide="ai-connect" className="flex flex-col gap-2.5 sm:flex-row">
         <Input name="name" placeholder="Name it, e.g. My Claude" className="h-10 sm:max-w-60" aria-label="Connector name" />
-        <Button type="submit" disabled={pending} className="h-10">
+        <Button type="submit" variant={cta ? "cta" : "default"} disabled={pending} className="h-10">
           {pending ? <Spinner data-icon="inline-start" /> : <LinkIcon data-icon="inline-start" />}
           {pending ? "Creating…" : "Create connector URL"}
         </Button>

@@ -2,7 +2,7 @@ import { ANGLE_HINT, ANGLE_LABEL, adText } from "@/server/ai/adFramework";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
-import { CalendarDaysIcon, CheckIcon, GiftIcon, GraduationCapIcon, MailIcon, MegaphoneIcon, PaletteIcon, PencilIcon, RocketIcon, RotateCcwIcon, SparklesIcon, ZapIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, GiftIcon, GraduationCapIcon, ImageIcon, MailIcon, MegaphoneIcon, PaletteIcon, PencilIcon, RocketIcon, RotateCcwIcon, SearchIcon, SparklesIcon, ZapIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { aiGenerations, sites } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -10,7 +10,7 @@ import { requireWorkspace } from "@/server/tenancy";
 import { getLaunchKit } from "@/server/ai/launchKit";
 import { siteBaseUrl } from "@/server/sites";
 import { launchKitAction } from "@/actions/sites";
-import { Callout, Flash, MoreOptions, NextStep, PageHead, Panel, StepDot } from "@/components/ui";
+import { Callout, Flash, IconTile, MoreOptions, NextStep, PageHead, Panel, StepDot } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,19 +18,18 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const maxDuration = 300;
 
 /** A block of generated text with its own copy button. */
 function Copy({ text, label }: { text: string; label?: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2.5">
       <div className="flex items-center justify-between gap-2">
-        {label ? <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</span> : <span />}
+        {label ? <span className="text-[11.5px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">{label}</span> : <span />}
         <CopyButton text={text} />
       </div>
-      <div className="max-h-96 overflow-y-auto rounded-lg border bg-muted/50 px-3.5 py-3 text-sm leading-relaxed break-words whitespace-pre-wrap">{text}</div>
+      <div className="max-h-96 overflow-y-auto rounded-xl bg-background/70 px-4 py-3.5 text-sm leading-relaxed break-words whitespace-pre-wrap ring-1 ring-ink/[0.06] ring-inset dark:bg-white/[0.02] dark:ring-white/[0.07]">{text}</div>
     </div>
   );
 }
@@ -40,8 +39,8 @@ function Step({ n, title, hint, children }: { n: number; title: string; hint?: s
     <section className="flex flex-col gap-4">
       <div className="flex items-start gap-3">
         <StepDot n={n} active />
-        <div className="grid gap-0.5 pt-0.5">
-          <h2 className="text-base">{title}</h2>
+        <div className="grid gap-0.5 pt-[3px]">
+          <h2 className="text-[16px] font-semibold tracking-[-0.011em]">{title}</h2>
           {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
         </div>
       </div>
@@ -50,7 +49,7 @@ function Step({ n, title, hint, children }: { n: number; title: string; hint?: s
   );
 }
 
-const YOU_GET = ["A live landing page", "A free guide", "3 follow-up emails", "Ad copy", "10 hooks", "A Skool About page", "A 7-day ad plan"];
+const YOU_GET = ["A live landing page", "A free guide", "3 follow-up emails", "A Skool About page", "10 hooks"];
 
 export default async function LaunchPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
@@ -77,9 +76,9 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
       <>
         <PageHead
           lesson="1.2"
-          stage="Stage 1"
+          stage="Day 1"
           title="AI launch kit"
-          sub="Answer a few questions and AI writes your whole starter funnel in about a minute: landing page, free guide, emails, ads and your Skool About page."
+          sub="Answer a few questions and AI writes your whole starter funnel in about a minute: landing page, free guide, emails and your Skool About page."
           first="Fill in the three short steps below, then press Build my launch kit."
         />
         <Flash searchParams={sp} />
@@ -88,19 +87,21 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
         ) : null}
 
         {/* What you get, as a strip on narrow pages (the side card shows on wide ones). */}
-        <ul className="flex flex-wrap gap-2 @4xl/main:hidden" aria-label="What you get">
+        <ul className="-mt-2 flex flex-wrap gap-2 @4xl/main:hidden" aria-label="What you get">
           {YOU_GET.map((item) => (
-            <li key={item} className="flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-xs font-medium shadow-card ring-1 ring-foreground/[0.06]">
-              <CheckIcon className="size-3.5 text-success" strokeWidth={3} aria-hidden />
+            <li key={item} className="flex items-center gap-1.5 rounded-full bg-card py-1.5 pr-3 pl-2 text-[12.5px] font-medium shadow-xs ring-1 ring-ink/[0.06] dark:ring-white/[0.08]">
+              <span className="grid size-4 place-items-center rounded-full bg-success-soft text-success">
+                <CheckIcon className="size-2.5" strokeWidth={3.5} aria-hidden />
+              </span>
               {item}
             </li>
           ))}
         </ul>
 
-        <div className="grid items-start gap-5 @4xl/main:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1fr)_280px]">
           <form action={launchKitAction.bind(null, wid)}>
-            <Card>
-              <CardContent className="flex flex-col gap-8">
+            <Card className="gap-0 py-0">
+              <CardContent className="flex flex-col gap-9 py-7 md:px-8 md:py-8">
                 <Step n={1} title="About you">
                   <div className="grid gap-5 @2xl/main:grid-cols-2">
                     <Field>
@@ -114,7 +115,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                   </div>
                 </Step>
 
-                <Step n={2} title="Who you help" hint="Your one sentence from lesson 1.1 covers most of this.">
+                <Step n={2} title="Who you help" hint="Unsure? Guess. Make another kit redoes it any time.">
                   <div className="grid gap-5 @2xl/main:grid-cols-2">
                     <Field className="@2xl/main:col-span-2">
                       <FieldLabel htmlFor="niche">What do you help with?</FieldLabel>
@@ -169,30 +170,29 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                   </div>
                 </MoreOptions>
               </CardContent>
-              <CardFooter className="flex-wrap gap-x-4 gap-y-3">
-                <SubmitButton size="lg" guide="kit-build" pendingText="Writing your kit… (up to a minute)">
+              <CardFooter className="flex-wrap gap-x-5 gap-y-3 border-border/80 bg-background/60 py-5 md:px-8 dark:bg-white/[0.02]">
+                <SubmitButton variant="cta" size="lg" guide="kit-build" pendingText="Writing your kit… (up to a minute)">
                   <SparklesIcon data-icon="inline-start" />
                   Build my launch kit
                 </SubmitButton>
-                <span className="text-xs text-muted-foreground">Takes about a minute. Uses 1 AI generation; your plan includes some each month.</span>
+                <span className="max-w-[46ch] text-xs leading-relaxed text-muted-foreground">Takes about a minute. Uses 1 AI generation; your plan includes some each month.</span>
               </CardFooter>
             </Card>
           </form>
 
-          <Card size="sm" className="hidden @4xl/main:sticky @4xl/main:top-20 @4xl/main:flex">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <SparklesIcon className="size-4 text-primary" aria-hidden />
-                What you get
-              </CardTitle>
-              <CardDescription>In about a minute.</CardDescription>
+          <Card size="sm" className="relative hidden @4xl/main:sticky @4xl/main:top-20 @4xl/main:flex">
+            <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(80%_100%_at_50%_0%,var(--accent),transparent_75%)] dark:bg-[radial-gradient(80%_100%_at_50%_0%,rgb(118_85_245/0.12),transparent_75%)]" />
+            <CardHeader className="relative gap-2">
+              <IconTile icon={SparklesIcon} className="size-10 rounded-[14px]" />
+              <CardTitle className="mt-1">What you get</CardTitle>
+              <CardDescription>All of it, written for you in about a minute.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <ul className="flex flex-col gap-2.5">
+            <CardContent className="relative">
+              <ul className="flex flex-col gap-3">
                 {YOU_GET.map((item) => (
-                  <li key={item} className="flex items-center gap-2.5">
+                  <li key={item} className="flex items-center gap-2.5 text-[13.5px]">
                     <span className="grid size-5 shrink-0 place-items-center rounded-full bg-success-soft text-success">
-                      <CheckIcon className="size-3" strokeWidth={3} />
+                      <CheckIcon className="size-3" strokeWidth={3} aria-hidden />
                     </span>
                     {item}
                   </li>
@@ -215,10 +215,10 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
     <>
       <PageHead
         lesson="1.2"
-        stage="Stage 1"
+        stage="Day 1"
         eyebrow={`Made ${result.createdAt.toDateString()} · ${result.model === "template" ? "template" : "AI"}`}
         title="Your launch kit"
-        sub="Your funnel is built from this kit. Everything below is yours to copy into Meta Ads Manager, Instagram or Skool."
+        sub="Your funnel is built from this kit. Everything below is yours to copy into Skool, your emails or your posts."
         actions={
           <Button variant="outline" asChild>
             <Link href={`/app/w/${wid}/launch?new=1`}>
@@ -232,7 +232,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
 
       {site ? (
         <NextStep
-          eyebrow="Up next · Lesson 1.3"
+          eyebrow="Up next · Lesson 1.2"
           title="Review and publish your funnel"
           body="Your pages are written. Change three lines (headline, free guide name, button), then press Publish."
           href={`/app/w/${wid}/sites/${site.id}`}
@@ -241,13 +241,15 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
         />
       ) : null}
 
-      <div className="grid gap-5 @3xl/main:grid-cols-2">
+      <div className="grid gap-6 @3xl/main:grid-cols-2">
         <Panel icon={GiftIcon} tone="gold" title="Your free lead magnet">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{kit.leadMagnetName}</span>
-            <Badge variant="secondary">{kit.leadMagnetType}</Badge>
+            <span className="text-[15px] font-semibold">{kit.leadMagnetName}</span>
+            <Badge variant="gold" className="capitalize">
+              {kit.leadMagnetType}
+            </Badge>
           </div>
-          <p className="text-muted-foreground">
+          <p className="leading-relaxed text-muted-foreground">
             It&apos;s hosted for you on your funnel
             {live ? (
               <>
@@ -264,68 +266,77 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
         </Panel>
 
         <Panel
-          icon={CalendarDaysIcon}
+          icon={ImageIcon}
           tone="success"
-          title="Your 7-day ad plan"
-          sub={
-            <>
-              Start at <span className="font-medium text-foreground hover:text-primary">${kit.adPlan.dailyBudgetUsd}/day</span>. Audience: {kit.adPlan.audience}
-            </>
-          }
+          title="Your ads come from Ad studio"
+          sub="Not from this kit. Tonight's five ads are made in lessons 1.3 and 1.4."
         >
-          <div className="rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Campaign</TableHead>
-                  <TableHead>Objective</TableHead>
-                  <TableHead className="text-right">$/day</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {kit.adPlan.campaigns.map((c) => (
-                  <TableRow key={c.name}>
-                    <TableCell className="whitespace-normal">
-                      <div className="font-medium">{c.name}</div>
-                      <div className="text-xs text-muted-foreground">{c.why}</div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{c.objective}</TableCell>
-                    <TableCell className="text-right tabular-nums">${c.budgetUsd}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-muted-foreground marker:text-foreground">
-            {kit.adPlan.firstWeek.map((d, i) => (
-              <li key={i}>{d}</li>
+          <ol className="flex flex-col gap-2.5">
+            {[
+              <>
+                <b className="font-semibold text-foreground">Ad research:</b> search your niche, then Analyse with AI.
+              </>,
+              <>
+                <b className="font-semibold text-foreground">Ad studio:</b> press Make my 5 statics, once. Your numbers, five different statics and the exact clicks for Ads Manager.
+              </>,
+            ].map((line, i) => (
+              <li key={i} className="flex gap-3 text-muted-foreground">
+                <span className="mt-px grid size-5 shrink-0 place-items-center rounded-full bg-success-soft text-[11px] font-semibold text-success tabular-nums">{i + 1}</span>
+                <span className="min-w-0 leading-relaxed">{line}</span>
+              </li>
             ))}
           </ol>
+          <div className="mt-auto flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href={`/app/w/${wid}/ads/studio`}>
+                Open Ad studio
+                <ArrowRightIcon data-icon="inline-end" />
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href={`/app/w/${wid}/ads/research`}>
+                <SearchIcon data-icon="inline-start" />
+                Ad research
+              </Link>
+            </Button>
+          </div>
         </Panel>
       </div>
 
-      <Panel icon={MegaphoneIcon} title="Your 3-Pack" sub="Pain, Dream and Lesson. Each one is Hook · Turn · Door, pointed at your Skool link. Launch all three, then fix one part at a time in Ad review." action={<CopyButton text={adsText} label="Copy all ads" />}>
+      {/* The kit's own ad lines stay as ideas to borrow; Ad studio makes the ads you launch. */}
+      <MoreOptions
+        icon={MegaphoneIcon}
+        title="Spare ad lines from your kit"
+        sub="Pain, Dream and Lesson ideas, each as Hook · Turn · Door. Borrow a line if you like it. Your ads come from Ad studio."
+      >
+        <div className="flex justify-end">
+          <CopyButton text={adsText} label="Copy all" />
+        </div>
         <div className="grid gap-6 @4xl/main:grid-cols-3">
           {kit.ads.map((a, i) => (
-            <div key={i} className="flex min-w-0 flex-col gap-2.5">
+            <div key={i} className="flex min-w-0 flex-col gap-3">
               <Copy label={a.angle ? `${ANGLE_LABEL[a.angle]} · ${ANGLE_HINT[a.angle]}` : `Ad ${i + 1}`} text={adText(a)} />
-              <p>
-                <span className="font-medium">Headline:</span> {a.headline}
-              </p>
-              <p className="text-muted-foreground">
-                <span className="font-medium">Description:</span> {a.description}
-              </p>
+              <dl className="grid gap-1.5 text-sm">
+                <div>
+                  <dt className="inline font-semibold">Headline: </dt>
+                  <dd className="inline">{a.headline}</dd>
+                </div>
+                <div className="text-muted-foreground">
+                  <dt className="inline font-semibold text-foreground">Description: </dt>
+                  <dd className="inline">{a.description}</dd>
+                </div>
+              </dl>
             </div>
           ))}
         </div>
-      </Panel>
+      </MoreOptions>
 
-      <div className="grid gap-5 @3xl/main:grid-cols-2">
+      <div className="grid gap-6 @3xl/main:grid-cols-2">
         <Panel icon={ZapIcon} tone="hot" title="10 hooks for Reels and ads" action={<CopyButton text={kit.hooks.map((h, i) => `${i + 1}. ${h}`).join("\n")} label="Copy hooks" />}>
-          <ol className="flex flex-col divide-y">
+          <ol className="flex flex-col divide-y divide-border/80">
             {kit.hooks.map((h, i) => (
-              <li key={i} className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
-                <span className="grid size-5 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground tabular-nums">{i + 1}</span>
+              <li key={i} className="flex gap-3 py-3 leading-relaxed first:pt-0 last:pb-0">
+                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-hot-soft text-[11px] font-semibold text-hot tabular-nums">{i + 1}</span>
                 <span>{h}</span>
               </li>
             ))}
@@ -355,9 +366,12 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
       >
         <div className="grid gap-6 @4xl/main:grid-cols-3">
           {kit.emails.map((e, i) => (
-            <div key={i} className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Email {i + 1}</span>
-              <p className="font-medium">{e.subject}</p>
+            <div key={i} className="flex min-w-0 flex-col gap-1.5">
+              <span className="flex items-center gap-2 text-[11.5px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+                Email {i + 1}
+                <span className="font-medium tracking-normal normal-case text-subtle-foreground">· day {[0, 1, 3][i] ?? i}</span>
+              </span>
+              <p className="font-semibold">{e.subject}</p>
               <Copy text={e.body} />
             </div>
           ))}

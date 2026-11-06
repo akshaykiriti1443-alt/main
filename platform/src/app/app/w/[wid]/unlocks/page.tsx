@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { FlagIcon, GiftIcon, HeartHandshakeIcon, LightbulbIcon, LockOpenIcon, MessageCircleIcon, PencilIcon, PlusIcon, TrophyIcon } from "lucide-react";
+import { ExternalLinkIcon, FlagIcon, GiftIcon, HeartHandshakeIcon, LightbulbIcon, LinkIcon, LockOpenIcon, MessageCircleIcon, PencilIcon, PlusIcon, TrophyIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { claimCountSince, claimUrlFor, engagedContactCount, engagementLeaders, listUnlocks, recentClaims, unlockPostText, type Unlock } from "@/server/unlocks";
 import { createUnlockAction, toggleUnlockAction, updateUnlockAction } from "@/actions/unlocks";
 import { relativeTime } from "@/lib/util";
 import { cn } from "@/lib/utils";
 import { Callout, Empty, Flash, IconTile, MoreOptions, PageHead, Panel, Stat, StepDot } from "@/components/ui";
+import { Avatar, EdgeTable, QuietEmpty } from "@/components/crm-ui";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -50,7 +51,7 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
     <form data-guide="unlock-create" action={createUnlockAction.bind(null, wid)} className="flex flex-col gap-5">
       <UnlockFields />
       <div className="flex flex-wrap items-center gap-3">
-        <SubmitButton size={first ? "lg" : "default"} pendingText="Creating…">
+        <SubmitButton variant={first ? "cta" : "default"} size={first ? "lg" : "default"} pendingText="Creating…">
           <GiftIcon data-icon="inline-start" />
           Create unlock
         </SubmitButton>
@@ -62,8 +63,8 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
   return (
     <>
       <PageHead
-        lesson="6.4"
-        stage="Stage 6"
+        lesson="7.2"
+        stage="Leads"
         eyebrow="Engagement"
         title="Unlocks"
         sub="Give members a small reward for posting or commenting in your Skool group. Skool ranks groups on engagement, and members who talk stay longer."
@@ -78,9 +79,9 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
       ) : null}
 
       {first ? (
-        <div className="grid items-start gap-5 @4xl/main:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <div className="grid items-start gap-6 @4xl/main:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           {createForm ? (
-            <Panel step={1} title="Create your first unlock" sub="Something small and genuinely useful, in return for one post or comment." className="ring-2 ring-primary/20">
+            <Panel step={1} title="Create your first unlock" sub="Something small and genuinely useful, in return for one post or comment." className="ring-violet-200/90 dark:ring-violet-400/20">
               {createForm}
             </Panel>
           ) : (
@@ -90,7 +91,7 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 md:gap-4 @2xl/main:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 @2xl/main:grid-cols-4">
             <Stat icon={LockOpenIcon} tone="gold" label="Live unlocks" value={live} />
             <Stat icon={MessageCircleIcon} label="Claims, 30 days" value={month} hint="Each one is a post or comment" />
             <Stat icon={HeartHandshakeIcon} tone="success" label="Engaged members" value={engaged} hint="Tagged “engaged”" />
@@ -98,46 +99,49 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
           </div>
 
           <Panel icon={GiftIcon} tone="gold" title="Your unlocks" sub="Copy the Skool post, publish it in your group and pin it. Members do the rest.">
-            <ul className="flex flex-col gap-3">
+            <ul className="-mx-6 -mb-6 flex flex-col divide-y divide-border/80 border-t border-border/80">
               {list.map(({ unlock: u, claims: n, flagged: f }) => {
                 const url = claimUrlFor(u.slug);
                 return (
-                  <li key={u.id} className={cn("flex flex-col gap-3 rounded-xl border p-3.5", !u.active && "bg-muted/40")}>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <IconTile icon={GiftIcon} tone={u.active ? "gold" : "muted"} />
-                        <div className="grid min-w-0 gap-0.5">
+                  <li key={u.id} className={cn("flex flex-col gap-4 px-6 py-5", !u.active && "bg-muted/30")}>
+                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+                      <div className="flex min-w-0 flex-1 basis-64 items-start gap-3.5">
+                        <IconTile icon={GiftIcon} tone={u.active ? "gold" : "muted"} className="size-10 rounded-xl" />
+                        <div className="grid min-w-0 gap-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-heading font-semibold">{u.title}</span>
-                            <Badge variant="secondary" className={u.active ? "bg-success-soft text-success" : undefined}>
-                              {u.active ? "Live" : "Paused"}
-                            </Badge>
+                            <span className="text-[15px] font-semibold tracking-[-0.01em]">{u.title}</span>
+                            <Badge variant={u.active ? "success" : "secondary"}>{u.active ? "Live" : "Paused"}</Badge>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            {n} claim{n === 1 ? "" : "s"}
-                            {f ? ` · ${f} flagged` : ""} · for a {u.action === "comment" ? "comment" : "post"}
+                          <span className="text-[13px] text-muted-foreground">
+                            <span className="font-medium text-foreground tabular-nums">{n}</span> claim{n === 1 ? "" : "s"}
+                            {f ? <span className="text-warning"> · {f} flagged</span> : ""} · for a {u.action === "comment" ? "comment" : "post"}
                           </span>
-                          <span className="truncate font-mono text-xs text-muted-foreground">{url}</span>
                         </div>
                       </div>
+                      {canEdit ? (
+                        <form action={toggleUnlockAction.bind(null, wid, u.id, !u.active)}>
+                          <SubmitButton variant="ghost" size="sm">
+                            {u.active ? "Pause" : "Resume"}
+                          </SubmitButton>
+                        </form>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/50 p-2 pl-3.5 ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
+                      <LinkIcon className="size-3.5 shrink-0 text-subtle-foreground" aria-hidden />
+                      <a href={url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 basis-40 truncate font-mono text-xs text-muted-foreground hover:text-primary">
+                        {url}
+                      </a>
                       <div className="flex flex-wrap gap-2">
-                        <CopyButton text={unlockPostText(u)} label="Copy Skool post" />
-                        <CopyButton text={url} label="Copy link" />
-                        {canEdit ? (
-                          <form action={toggleUnlockAction.bind(null, wid, u.id, !u.active)}>
-                            <SubmitButton variant="ghost" size="sm">
-                              {u.active ? "Pause" : "Resume"}
-                            </SubmitButton>
-                          </form>
-                        ) : null}
+                        <CopyButton text={url} label="Copy link" className="bg-card" />
+                        <CopyButton text={unlockPostText(u)} label="Copy Skool post" className="bg-card" />
                       </div>
                     </div>
                     {canEdit ? (
                       <details className="group/edit">
-                        <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-primary [&::-webkit-details-marker]:hidden">
+                        <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-primary dark:text-violet-300 [&::-webkit-details-marker]:hidden">
                           <PencilIcon className="size-3.5" aria-hidden /> Edit
                         </summary>
-                        <form action={updateUnlockAction.bind(null, wid, u.id)} className="mt-4 flex flex-col gap-4 border-t pt-4">
+                        <form action={updateUnlockAction.bind(null, wid, u.id)} className="mt-4 flex flex-col gap-4 border-t border-border/80 pt-4">
                           <UnlockFields u={u} />
                           <p className="text-xs text-muted-foreground">The claim link stays the same, so your pinned Skool post keeps working.</p>
                           <SubmitButton size="sm" className="self-start">
@@ -154,72 +158,93 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
             </ul>
           </Panel>
 
-          <div className="grid items-start gap-5 @3xl/main:grid-cols-[1.4fr_1fr]">
+          <div className="grid items-start gap-6 @4xl/main:grid-cols-[1.4fr_1fr]">
             <Panel icon={MessageCircleIcon} title="Recent claims" sub="Spot-check the flagged ones: open the link and make sure the post is real.">
               {claims.length === 0 ? (
-                <Empty icon={MessageCircleIcon} title="No claims yet" body="Pin your Skool post. Claims show up here the moment someone unlocks something." className="py-8" />
+                <QuietEmpty icon={MessageCircleIcon} tone="primary" title="No claims yet" body="Pin your Skool post. Claims show up here the moment someone unlocks something." />
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Member</TableHead>
-                      <TableHead>Unlock</TableHead>
-                      <TableHead>Post</TableHead>
-                      <TableHead className="text-right">When</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {claims.map(({ claim: c, title }) => (
-                      <TableRow key={c.id}>
-                        <TableCell>
-                          {c.contactId ? (
-                            <Link href={`${base}/leads/${c.contactId}`} className="block font-medium">
-                              {c.name || c.email}
-                            </Link>
-                          ) : (
-                            <span className="block font-medium">{c.name || c.email}</span>
-                          )}
-                          {c.flagged ? (
-                            <Badge variant="outline" className="mt-1 border-warning/40 text-warning">
-                              <FlagIcon data-icon="inline-start" /> {c.flagReason}
-                            </Badge>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="max-w-40 truncate">{title}</TableCell>
-                        <TableCell>
-                          <a href={c.postUrl} target="_blank" rel="noreferrer" className="text-sm">
-                            Open
-                          </a>
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">{relativeTime(c.createdAt)}</TableCell>
+                <EdgeTable>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>Member</TableHead>
+                        <TableHead className="hidden @xl/main:table-cell">Unlock</TableHead>
+                        <TableHead>Post</TableHead>
+                        <TableHead className="text-right">When</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {claims.map(({ claim: c, title }) => {
+                        const who = c.name || c.email;
+                        return (
+                          <TableRow key={c.id}>
+                            <TableCell className="py-2.5">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <Avatar name={who} size="sm" />
+                                <div className="grid min-w-0 gap-1 leading-tight">
+                                  {c.contactId ? (
+                                    <Link href={`${base}/leads/${c.contactId}`} className="truncate font-medium text-foreground no-underline hover:text-primary hover:no-underline">
+                                      {who}
+                                    </Link>
+                                  ) : (
+                                    <span className="truncate font-medium">{who}</span>
+                                  )}
+                                  {c.flagged ? (
+                                    <Badge variant="warning" className="w-fit">
+                                      <FlagIcon data-icon="inline-start" /> {c.flagReason}
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="hidden max-w-40 truncate text-muted-foreground @xl/main:table-cell">{title}</TableCell>
+                            <TableCell>
+                              <a href={c.postUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[13px] font-medium">
+                                Open <ExternalLinkIcon className="size-3" aria-hidden />
+                              </a>
+                            </TableCell>
+                            <TableCell className="text-right text-[13px] text-subtle-foreground">{relativeTime(c.createdAt)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </EdgeTable>
               )}
             </Panel>
             <Panel icon={TrophyIcon} tone="gold" title="Most engaged, 30 days" sub="Say thanks, feature them, ask them for a win story.">
               {leaders.length === 0 ? (
-                <Empty icon={TrophyIcon} tone="gold" title="Nobody yet" body="Your first engaged members show up here." className="py-8" />
+                <QuietEmpty icon={TrophyIcon} tone="gold" title="Nobody yet" body="Your first engaged members show up here." />
               ) : (
-                <ol className="-my-1 flex flex-col divide-y">
-                  {leaders.map((l, i) => (
-                    <li key={l.email} className="flex items-center justify-between gap-3 py-2.5">
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <span className={cn("grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold tabular-nums", i === 0 ? "bg-gold text-[oklch(0.35_0.08_70)]" : "bg-muted text-muted-foreground")}>{i + 1}</span>
-                        {l.contactId ? (
-                          <Link href={`${base}/leads/${l.contactId}`} className="truncate">
-                            {l.name || l.email}
-                          </Link>
-                        ) : (
-                          <span className="truncate">{l.name || l.email}</span>
-                        )}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {l.claims} unlock{l.claims === 1 ? "" : "s"}
-                      </span>
-                    </li>
-                  ))}
+                <ol className="-mx-6 -mb-6 flex flex-col divide-y divide-border/80 border-t border-border/80">
+                  {leaders.map((l, i) => {
+                    const who = l.name || l.email;
+                    return (
+                      <li key={l.email} className="flex items-center justify-between gap-3 px-6 py-3">
+                        <span className="flex min-w-0 items-center gap-3">
+                          <span
+                            className={cn(
+                              "grid size-6 shrink-0 place-items-center rounded-full text-[11.5px] font-semibold tabular-nums",
+                              i === 0 ? "bg-gold-soft text-gold-foreground ring-1 ring-gold/50" : "text-subtle-foreground",
+                            )}
+                          >
+                            {i + 1}
+                          </span>
+                          <Avatar name={who} size="sm" />
+                          {l.contactId ? (
+                            <Link href={`${base}/leads/${l.contactId}`} className="truncate text-sm font-medium text-foreground no-underline hover:text-primary hover:no-underline">
+                              {who}
+                            </Link>
+                          ) : (
+                            <span className="truncate text-sm font-medium">{who}</span>
+                          )}
+                        </span>
+                        <span className="shrink-0 text-xs text-subtle-foreground tabular-nums">
+                          {l.claims} unlock{l.claims === 1 ? "" : "s"}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </Panel>
@@ -241,22 +266,22 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
 function HowItWorks({ compact }: { compact?: boolean }) {
   const body = (
     <>
-      <ol className="flex flex-col gap-3">
+      <ol className="flex flex-col gap-3.5">
         {HOW.map((step, i) => (
-          <li key={step} className="flex items-start gap-3 text-sm">
+          <li key={step} className="flex items-start gap-3 text-sm leading-relaxed">
             <StepDot n={i + 1} className="size-6 text-xs" />
             <span className="pt-0.5">{step}</span>
           </li>
         ))}
       </ol>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2.5">
         <span className="flex items-center gap-1.5 text-sm font-semibold">
           <LightbulbIcon className="size-4 text-gold-foreground" aria-hidden /> Ideas that get comments
         </span>
         <ul className="flex flex-col gap-2">
           {IDEAS.map((i) => (
-            <li key={i.title} className="rounded-xl bg-muted/60 px-3 py-2 text-sm">
-              <b>{i.title}</b>
+            <li key={i.title} className="rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
+              <span className="font-medium">{i.title}</span>
               <span className="block text-muted-foreground">
                 {i.action === "comment" ? "For a comment: " : "For a post: "}
                 {i.instructions}
@@ -305,7 +330,7 @@ function UnlockFields({ u }: { u?: Unlock }) {
         </Field>
         <Field>
           <FieldLabel htmlFor={id("action")}>They have to…</FieldLabel>
-          <NativeSelect id={id("action")} name="action" defaultValue={u?.action ?? "comment"}>
+          <NativeSelect id={id("action")} name="action" defaultValue={u?.action ?? "comment"} className="w-full">
             <NativeSelectOption value="comment">Comment on a post</NativeSelectOption>
             <NativeSelectOption value="post">Make their own post</NativeSelectOption>
           </NativeSelect>

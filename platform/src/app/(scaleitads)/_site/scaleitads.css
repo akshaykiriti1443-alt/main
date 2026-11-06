@@ -1,0 +1,135 @@
+/* ScaleitAds agency site: the original GoHighLevel page styles, scoped to .sia.
+   Unlayered on purpose: these rules win over the app's @layer base (serif h1, violet links)
+   without !important. Fonts come from next/font (same families the old site loaded from Google). */
+
+html:has(.sia-root) { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html:has(.sia-root) { scroll-behavior: auto; } }
+
+.sia-root { min-height: 100svh; background: #ffffff; color-scheme: light; overflow-x: clip; }
+
+.sia, .sia *, .sia *::before, .sia *::after { box-sizing: border-box; }
+.sia { font-family: var(--font-sans), 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; line-height: normal; color: #09090b; -webkit-font-smoothing: antialiased; text-align: left; font-size: 16px; font-feature-settings: 'tnum' 1; background: #ffffff; }
+.sia h1, .sia h2, .sia h3, .sia h4, .sia p, .sia ul, .sia ol, .sia figure, .sia blockquote { margin: 0; padding: 0; font-family: inherit; font-weight: inherit; font-size: inherit; line-height: inherit; color: inherit; letter-spacing: inherit; text-transform: none; text-wrap: wrap; font-synthesis: weight style; }
+.sia ul, .sia ol { list-style: none; }
+.sia img, .sia video { display: block; max-width: 100%; border: 0; }
+.sia button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-transform: none; box-shadow: none; }
+.sia a { color: #047857; text-decoration: none; }
+.sia a:focus-visible, .sia button:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
+.sia ::selection { background: rgba(16, 185, 129, .22); }
+
+.sia .w { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+.sia .mono { font-family: var(--font-mono), 'Geist Mono', ui-monospace, monospace; }
+.sia .serif { font-family: var(--font-serif), 'Instrument Serif', Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+.sia .grad { background: linear-gradient(100deg, #6ee7b7 0%, #34d399 45%, #a7f3d0 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sia .gradd { background: linear-gradient(100deg, #065f46 0%, #10b981 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sia .badge { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+.sia .badge-d { border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .04); color: #d4d4d8; }
+.sia .dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 4px rgba(52, 211, 153, .18); }
+.sia .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 24px; border-radius: 12px; font-family: inherit; font-size: 15px; font-weight: 600; line-height: normal; cursor: pointer; text-decoration: none; border: 1px solid transparent; transition: transform .15s ease, background-color .15s ease, box-shadow .2s ease; }
+.sia .btn:active { transform: translateY(1px); }
+.sia .btn-w { background: #ffffff; color: #09090b; box-shadow: 0 0 0 1px rgba(255, 255, 255, .2), 0 10px 34px -8px rgba(52, 211, 153, .6); }
+.sia .btn-w:hover { background: #ecfdf5; color: #09090b; box-shadow: 0 0 0 1px rgba(255, 255, 255, .3), 0 14px 44px -8px rgba(52, 211, 153, .8); }
+.sia .btn-gd { background: transparent; color: #e4e4e7; border-color: rgba(255, 255, 255, .14); }
+.sia .btn-gd:hover { background: rgba(255, 255, 255, .06); color: #ffffff; }
+.sia .btn-k { background: #09090b; color: #ffffff; box-shadow: 0 10px 30px -10px rgba(9, 9, 11, .45); }
+.sia .btn-k:hover { background: #18181b; color: #ffffff; }
+.sia .h2 { margin: 0; font-weight: 600; font-size: clamp(34px, 4.4vw, 60px); line-height: 1.02; letter-spacing: -0.04em; }
+.sia .eb { margin: 0 0 14px; font-size: 14px; font-weight: 500; color: #047857; }
+.sia .lead { margin: 18px 0 0; font-size: 18px; line-height: 1.6; color: #52525b; }
+.sia .card { background: #ffffff; border: 1px solid #e4e4e7; border-radius: 20px; box-shadow: 0 1px 2px rgba(9, 9, 11, .04), 0 12px 32px -16px rgba(9, 9, 11, .12); }
+.sia .nav { position: sticky; top: 0; z-index: 30; background: rgba(9, 9, 11, .72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.sia .nl { color: #a1a1aa; text-decoration: none; font-size: 14px; }
+.sia .nl:hover { color: #ffffff; }
+.sia .fl { color: #a1a1aa; text-decoration: none; font-size: 13px; background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; }
+.sia .fl:hover { color: #ffffff; }
+.sia .fl-l { color: #71717a; }
+.sia .fl-l:hover { color: #09090b; }
+.sia .chip { position: absolute; display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 500; color: #e4e4e7; background: rgba(24, 24, 27, .55); border: 1px solid rgba(255, 255, 255, .12); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .6); white-space: nowrap; animation: sia-float 6s ease-in-out infinite; }
+@keyframes sia-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.sia .mq { display: flex; width: max-content; animation: sia-mq 38s linear infinite; }
+@keyframes sia-mq { to { transform: translateX(-50%); } }
+.sia .mq-i { display: inline-flex; align-items: center; gap: 14px; padding: 0 22px; font-size: 15px; color: #52525b; white-space: nowrap; }
+.sia .mq-i::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
+.sia .wd { color: #d4d4d8; }
+.sia .stk { position: sticky; }
+.sia .prog { position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 60; background: linear-gradient(90deg, #10b981, #6ee7b7); transform-origin: 0 50%; transform: scaleX(0); }
+.sia .sia-tab { height: 40px; padding: 0 16px; border-radius: 10px; border: 0; font-family: inherit; font-size: 14px; font-weight: 600; line-height: normal; cursor: pointer; background: transparent; color: #71717a; box-shadow: none; transition: background-color .2s ease; }
+.sia .sia-tab[aria-selected="true"] { background: #ffffff; color: #09090b; box-shadow: 0 1px 3px rgba(9, 9, 11, .12); }
+.sia [data-sia-panel] { display: flex; }
+.sia [data-sia-panel][hidden] { display: none; }
+
+/* Comparison lists (Why us) */
+.sia .cmp-row { display: flex; gap: 14px; align-items: flex-start; padding: 15px 0; border-top: 1px solid #ececee; }
+.sia .cmp-row > span:last-child { font-size: 16px; line-height: 1.5; color: #71717a; }
+.sia .cmp-ic { flex: 0 0 22px; width: 22px; height: 22px; margin-top: 1px; border-radius: 50%; background: #f4f4f5; border: 1px solid #e4e4e7; display: flex; align-items: center; justify-content: center; }
+.sia .cmp-dark .cmp-row { border-top-color: rgba(255, 255, 255, .08); }
+.sia .cmp-dark .cmp-row > span:last-child { color: #f4f4f5; }
+.sia .cmp-dark .cmp-ic { background: rgba(52, 211, 153, .15); border-color: rgba(52, 211, 153, .4); }
+
+/* Stacked "Before us / With us / And then" cards */
+.sia .st-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--st-line); }
+.sia .st-num { font-size: 26px; font-weight: 500; letter-spacing: -0.03em; }
+
+@supports (animation-timeline: view()) {
+  .sia .prog { animation: sia-grow linear both; animation-timeline: scroll(root); }
+  @keyframes sia-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .sia .hero-out { animation: sia-heroOut linear both; animation-timeline: scroll(root); animation-range: 0px 560px; }
+  @keyframes sia-heroOut { to { opacity: 0; transform: translateY(-70px) scale(.95); filter: blur(6px); } }
+  .sia .tilt { animation: sia-tilt linear both; animation-timeline: view(); animation-range: entry 0% cover 42%; }
+  @keyframes sia-tilt { from { transform: perspective(1400px) rotateX(28deg) scale(.88) translateY(30px); } to { transform: perspective(1400px) rotateX(0deg) scale(1) translateY(0); } }
+  .sia .rv { animation: sia-rv linear both; animation-timeline: view(); animation-range: entry 0% cover 28%; }
+  @keyframes sia-rv { from { opacity: 0; transform: translateY(70px) rotateX(10deg) scale(.96); } to { opacity: 1; transform: none; } }
+  .sia .rl { animation: sia-rl linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
+  @keyframes sia-rl { from { opacity: 0; transform: translateX(-60px); } to { opacity: 1; transform: none; } }
+  .sia .rr { animation: sia-rr linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
+  @keyframes sia-rr { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: none; } }
+  .sia .wd { animation: sia-wd linear both; animation-timeline: view(); animation-range: cover 30% cover 48%; }
+  @keyframes sia-wd { to { color: #09090b; } }
+  .sia .wd.em { animation-name: sia-wde; }
+  @keyframes sia-wde { to { color: #059669; } }
+  .sia .zoom { animation: sia-zoom linear both; animation-timeline: view(); animation-range: entry 0% cover 45%; }
+  @keyframes sia-zoom { from { transform: scale(.82); opacity: .2; } to { transform: scale(1); opacity: 1; } }
+  .sia .stk-in { animation: sia-stkin linear both; animation-timeline: view(); animation-range: entry 0% entry 100%; }
+  @keyframes sia-stkin { from { transform: translateY(80px) scale(.94); opacity: .3; } to { transform: none; opacity: 1; } }
+  .sia .spin-slow { animation: sia-spinr linear both; animation-timeline: scroll(root); }
+  @keyframes sia-spinr { to { transform: rotate(240deg); } }
+}
+@media (max-width: 860px) {
+  .sia .hide-sm { display: none !important; }
+  .sia .stk { position: relative; top: auto !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sia .mq, .sia .tilt, .sia .rv, .sia .rl, .sia .rr, .sia .hero-out, .sia .zoom, .sia .stk-in, .sia .spin-slow, .sia .chip, .sia .fade-up { animation: none !important; }
+  .sia .wd { animation: none !important; color: #09090b; }
+}
+.sia #top { margin-top: -69px; padding-top: 69px; }
+
+/* Legal pages (/privacy, /terms): their own base line-height, no tabular figures. */
+.sia.sia-legal { line-height: 1.5; font-feature-settings: normal; }
+.sia-legal .w { max-width: 1120px; }
+.sia-legal a:hover { color: #065f46; }
+.sia-legal a:focus-visible { outline: 2px solid #047857; outline-offset: 2px; border-radius: 4px; }
+.sia .toc a { display: block; padding: 7px 12px; border-radius: 8px; font-size: 14px; color: #52525b; text-decoration: none; }
+.sia .toc a:hover { background: #f4f4f5; color: #09090b; }
+.sia .sec { scroll-margin-top: 90px; }
+.sia .sec p { margin: 12px 0 0; font-size: 16px; line-height: 1.75; color: #3f3f46; }
+.sia .sec ul, .sia .sec li { list-style: disc; }
+.sia .sec li { margin: 8px 0 0; font-size: 16px; line-height: 1.65; color: #3f3f46; }
+.sia table { border-collapse: collapse; border-spacing: 0; }
+@media (max-width: 860px) { .sia .toc-wrap { display: none !important; } }
+
+/* /watch: the dark hero and video box from the old /not-yet page */
+.sia .c-hero { position: relative; overflow: hidden; background: #09090b; color: #fafafa; }
+.sia .c-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255, 255, 255, .04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .04) 1px, transparent 1px); background-size: 56px 56px; -webkit-mask-image: radial-gradient(ellipse 70% 60% at 40% 30%, #000 30%, transparent 75%); mask-image: radial-gradient(ellipse 70% 60% at 40% 30%, #000 30%, transparent 75%); }
+.sia .c-glow { position: absolute; left: 50%; top: -240px; width: 900px; height: 560px; transform: translateX(-50%); background: radial-gradient(closest-side, rgba(16, 185, 129, .32), transparent 70%); filter: blur(20px); }
+.sia .n-hi { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 8px 14px; border-radius: 999px; background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .35); font-size: 14px; color: #ecfdf5; }
+.sia .n-h1 { margin: 0; max-width: 900px; font-weight: 600; font-size: clamp(36px, 5vw, 66px); line-height: 1.02; letter-spacing: -.045em; color: #fafafa; }
+.sia .n-h1 .serif { font-size: 1.08em; }
+.sia .n-sub { margin: 18px 0 0; max-width: 640px; font-size: 18px; line-height: 1.55; color: #d4d4d8; }
+.sia .s-vbox { margin-top: 36px; position: relative; aspect-ratio: 16 / 9; border-radius: 18px; overflow: hidden; background: #000; box-shadow: 0 40px 100px -40px rgba(16, 185, 129, .45), 0 0 0 1px rgba(255, 255, 255, .1); }
+.sia .s-vbox video, .sia .s-vbox iframe { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; max-width: none; background: #000; border: 0; }
+.sia .s-vplay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border: 0; background: linear-gradient(180deg, rgba(9, 9, 11, .05), rgba(9, 9, 11, .45)); cursor: pointer; padding: 0; width: 100%; }
+.sia .s-vplay span { display: inline-flex; align-items: center; gap: 10px; height: 54px; padding: 0 22px; border-radius: 999px; background: #fff; color: #09090b; font-weight: 600; font-size: 16px; box-shadow: 0 12px 40px -8px rgba(0, 0, 0, .6); }
+.sia .fade-up { animation: sia-fu .8s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes sia-fu { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@media (max-width: 600px) { .sia .s-vplay span { height: 46px; font-size: 15px; padding: 0 18px; } }

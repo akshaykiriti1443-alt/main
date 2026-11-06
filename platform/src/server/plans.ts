@@ -13,7 +13,9 @@ export type Feature =
   | "ai_scoring"
   | "whatsapp"
   | "sms"
-  | "custom_domains";
+  | "custom_domains"
+  | "pipelines"
+  | "calendar";
 
 export const PLANS: Record<
   WorkspacePlan,
@@ -42,6 +44,8 @@ export const PLANS: Record<
       "whatsapp",
       "sms",
       "custom_domains",
+      "pipelines",
+      "calendar",
     ],
     maxSites: 25,
     included: { ai_generation: 30, email: 10000, ai_assist: 2000 },
@@ -50,7 +54,7 @@ export const PLANS: Record<
   owner: {
     label: "Owner",
     priceNote: "Everything, no limits. It's your platform.",
-    features: ["sites", "leads", "sequences", "launch_kit", "inbox", "automations", "campaigns", "social", "ai_scoring", "whatsapp", "sms", "custom_domains"],
+    features: ["sites", "leads", "sequences", "launch_kit", "inbox", "automations", "campaigns", "social", "ai_scoring", "whatsapp", "sms", "custom_domains", "pipelines", "calendar"],
     maxSites: 1000,
     included: { ai_generation: 1e9, email: 1e9, ai_assist: 1e9, sms_segment: 1e9, whatsapp_template: 1e9, phone_number_month: 1e9 },
   },

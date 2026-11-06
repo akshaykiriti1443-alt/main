@@ -6,9 +6,20 @@ import { CheckIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
+/**
+ * A page can pin a theme for its whole visit by setting <html data-force-theme="light"> from an
+ * inline script before hydration (the booking page embedded in the light ScaleitAds site does:
+ * see EmbedShell). Nothing is saved, so the visitor's own choice is untouched elsewhere.
+ */
+function pinnedTheme() {
+  if (typeof document === "undefined") return undefined;
+  const t = document.documentElement.dataset.forceTheme;
+  return t === "light" || t === "dark" ? t : undefined;
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
-    <NextThemes attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <NextThemes attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange forcedTheme={pinnedTheme()}>
       {children}
     </NextThemes>
   );

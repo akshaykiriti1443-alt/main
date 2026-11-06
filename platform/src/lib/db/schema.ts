@@ -253,7 +253,7 @@ export const pages = pgTable(
 // CRM
 // ---------------------------------------------------------------------------
 
-export type ContactSource = "landing_page" | "facebook" | "instagram" | "whatsapp" | "sms" | "email" | "import" | "manual" | "skool";
+export type ContactSource = "landing_page" | "facebook" | "instagram" | "whatsapp" | "sms" | "email" | "import" | "manual" | "skool" | "calendar";
 export type Temperature = "hot" | "warm" | "cold";
 export type Stage = "new" | "engaged" | "trial" | "member" | "lost";
 
@@ -301,6 +301,80 @@ export const activities = pgTable(
   (t) => [
     index("activities_workspace_type_idx").on(t.workspaceId, t.type, t.createdAt),
     index("activities_contact_idx").on(t.contactId, t.createdAt),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Pipelines: deal boards (like GHL opportunities). A workspace can have several pipelines; each
+// has ordered stages, and a stage is open, won or lost. Every workspace gets a default "Sales"
+// pipeline the first time it's needed. Values are stored in cents.
+// ---------------------------------------------------------------------------
+
+export type StageKind = "open" | "won" | "lost";
+export type OpportunityStatus = "open" | "won" | "lost" | "abandoned";
+
+export const pipelines = pgTable(
+  "pipelines",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    isDefault: boolean("is_default").notNull().default(false),
+    currency: text("currency").notNull().default("USD"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("pipelines_workspace_idx").on(t.workspaceId, t.position),
+    // One default pipeline per workspace, so two first visits at once can't create two.
+    uniqueIndex("pipelines_default_uq").on(t.workspaceId).where(sql`${t.isDefault}`),
+  ],
+);
+
+export const pipelineStages = pgTable(
+  "pipeline_stages",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    pipelineId: uuid("pipeline_id").notNull().references(() => pipelines.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    kind: text("kind").$type<StageKind>().notNull().default("open"),
+    // Stable key for the default pipeline's stages ("call_booked"), so renames don't break bookings.
+    key: text("key"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("pipeline_stages_pipeline_idx").on(t.pipelineId, t.position)],
+);
+
+export const opportunities = pgTable(
+  "opportunities",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    pipelineId: uuid("pipeline_id").notNull().references(() => pipelines.id, { onDelete: "cascade" }),
+    stageId: uuid("stage_id").notNull().references(() => pipelineStages.id),
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    valueCents: bigint("value_cents", { mode: "number" }).notNull().default(0),
+    currency: text("currency").notNull().default("USD"),
+    status: text("status").$type<OpportunityStatus>().notNull().default("open"),
+    source: text("source").notNull().default(""),
+    notes: text("notes").notNull().default(""),
+    // Order inside a column (lower first).
+    position: integer("position").notNull().default(0),
+    // The id in the system it was imported from (GHL "Opportunity ID"), so re-imports update.
+    externalId: text("external_id"),
+    stageChangedAt: ts("stage_changed_at").notNull().defaultNow(),
+    closedAt: ts("closed_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("opportunities_board_idx").on(t.pipelineId, t.stageId, t.position),
+    index("opportunities_contact_idx").on(t.contactId),
+    index("opportunities_workspace_idx").on(t.workspaceId, t.createdAt),
+    uniqueIndex("opportunities_external_uq").on(t.workspaceId, t.externalId).where(sql`${t.externalId} is not null`),
   ],
 );
 
@@ -444,6 +518,7 @@ export const emailCampaigns = pgTable("email_campaigns", {
 });
 
 export type EmailStatus = "queued" | "sent" | "failed" | "skipped";
+export type EmailAttachment = { name: string; contentType: string; content: string };
 export const emailMessages = pgTable(
   "email_messages",
   {
@@ -462,6 +537,8 @@ export const emailMessages = pgTable(
     error: text("error"),
     campaignId: uuid("campaign_id"),
     sequenceStepId: uuid("sequence_step_id"),
+    // Files sent with the email (a calendar invite), base64. null for almost every email.
+    attachments: jsonb("attachments").$type<EmailAttachment[]>(),
     sentAt: ts("sent_at"),
     createdAt: createdAt(),
   },
@@ -535,6 +612,86 @@ export const messages = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Booking calendars (like GHL calendars / Calendly). A public page at /b/<workspace>/<calendar>
+// shows open times; a booking blocks [start, end + buffer). Two active bookings on one calendar can
+// never overlap: an exclusion constraint (0010 migration) and a unique start index enforce it.
+// ---------------------------------------------------------------------------
+
+export type CalendarLocation = "zoom" | "google_meet" | "phone" | "in_person" | "custom";
+/** day: 0 = Sunday ... 6 = Saturday. Times are "HH:MM" in the calendar's time zone; end may be "24:00". */
+export type AvailabilityRule = { day: number; start: string; end: string };
+export type BookingQuestion = { id: string; label: string; type: "short" | "long"; required: boolean };
+export type BookingStatus = "confirmed" | "cancelled" | "rescheduled" | "no_show";
+export type PhoneMode = "off" | "optional" | "required";
+
+export const calendars = pgTable(
+  "calendars",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    durationMinutes: integer("duration_minutes").notNull().default(30),
+    // Kept free after every booking (and so before the next one).
+    bufferMinutes: integer("buffer_minutes").notNull().default(0),
+    // Start times every N minutes; 0 = every duration.
+    slotIntervalMinutes: integer("slot_interval_minutes").notNull().default(0),
+    minNoticeMinutes: integer("min_notice_minutes").notNull().default(240),
+    maxDaysAhead: integer("max_days_ahead").notNull().default(30),
+    timezone: text("timezone").notNull().default("UTC"),
+    availability: jsonb("availability").$type<AvailabilityRule[]>().notNull().default([]),
+    locationType: text("location_type").$type<CalendarLocation>().notNull().default("zoom"),
+    // The meeting link, phone number or address. Only shown to people who booked.
+    locationValue: text("location_value").notNull().default(""),
+    phoneMode: text("phone_mode").$type<PhoneMode>().notNull().default("optional"),
+    questions: jsonb("questions").$type<BookingQuestion[]>().notNull().default([]),
+    confirmationMessage: text("confirmation_message").notNull().default(""),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("calendars_workspace_slug_uq").on(t.workspaceId, t.slug)],
+);
+
+export const bookings = pgTable(
+  "bookings",
+  {
+    id: id(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    calendarId: uuid("calendar_id").notNull().references(() => calendars.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    startAt: ts("start_at").notNull(),
+    endAt: ts("end_at").notNull(),
+    // endAt + the calendar's buffer when booked: the time nobody else can book.
+    blockedUntil: ts("blocked_until").notNull(),
+    // The booker's time zone, for their emails.
+    timezone: text("timezone").notNull().default("UTC"),
+    status: text("status").$type<BookingStatus>().notNull().default("confirmed"),
+    name: text("name").notNull().default(""),
+    email: text("email").notNull(),
+    phone: text("phone").notNull().default(""),
+    answers: jsonb("answers").$type<{ label: string; value: string }[]>().notNull().default([]),
+    // The reschedule/cancel link's token: sha256 to look it up, encrypted to put it in reminders.
+    manageTokenHash: text("manage_token_hash").notNull().unique(),
+    manageTokenEnc: text("manage_token_enc").notNull(),
+    // Bumped on every change, so calendar apps update the event instead of adding a second one.
+    icsSequence: integer("ics_sequence").notNull().default(0),
+    cancelReason: text("cancel_reason").notNull().default(""),
+    cancelledAt: ts("cancelled_at"),
+    rescheduledAt: ts("rescheduled_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("bookings_calendar_start_idx").on(t.calendarId, t.startAt),
+    index("bookings_workspace_start_idx").on(t.workspaceId, t.startAt),
+    index("bookings_contact_idx").on(t.contactId),
+    uniqueIndex("bookings_active_start_uq").on(t.calendarId, t.startAt).where(sql`${t.status} in ('confirmed', 'rescheduled')`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Automations
 // ---------------------------------------------------------------------------
 
@@ -592,7 +749,7 @@ export const aiGenerations = pgTable(
   {
     id: id(),
     workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message" | "ad_research" | "ai_task" | "automation_draft">().notNull(),
+    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message" | "ad_research" | "ad_studio" | "ai_task" | "automation_draft">().notNull(),
     input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
     output: jsonb("output").$type<Record<string, unknown>>().notNull().default({}),
     model: text("model").notNull(),

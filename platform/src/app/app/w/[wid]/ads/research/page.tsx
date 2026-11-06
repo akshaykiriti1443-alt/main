@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
-import { ClipboardPasteIcon, ExternalLinkIcon, FlameIcon, LightbulbIcon, SearchIcon, SparklesIcon, TargetIcon, type LucideIcon } from "lucide-react";
+import { ArrowRightIcon, ClipboardPasteIcon, ExternalLinkIcon, FlameIcon, LightbulbIcon, SearchIcon, SparklesIcon, TargetIcon, type LucideIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { aiGenerations } from "@/lib/db/schema";
 import { isUuid, relativeTime, truncate } from "@/lib/util";
@@ -36,13 +36,14 @@ const COUNTRIES: [string, string][] = [
   ["IE", "Ireland"],
 ];
 
-/** Each angle of the 3-Pack gets its own colour, so the three ads read as a set. */
+/** Each angle to borrow gets its own colour, so the three read as a set (Ad studio uses the same). */
 const ANGLE_TONE: Record<AdAngle, { bar: string; chip: string }> = {
   pain: { bar: "bg-hot", chip: "bg-hot-soft text-hot" },
   dream: { bar: "bg-gold", chip: "bg-gold-soft text-gold-foreground" },
   lesson: { bar: "bg-primary", chip: "bg-accent text-accent-foreground" },
   proof: { bar: "bg-success", chip: "bg-success-soft text-success" },
 };
+const CARD = "rounded-2xl bg-card ring-1 ring-ink/[0.06] shadow-xs dark:ring-white/[0.07]";
 
 export default async function AdResearchPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
@@ -100,6 +101,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
           id="paste"
           name="paste"
           rows={7}
+          className="min-h-40 rounded-xl font-mono text-[13px] leading-relaxed"
           placeholder={"[62 days] Tired of guessing what to eat? Inside our group…\n\n[14 days] Dads: 20 minutes, 3 times a week…"}
           aria-label="Competitor ads"
         />
@@ -111,8 +113,8 @@ export default async function AdResearchPage({ params, searchParams }: { params:
             Analyse pasted ads
           </SubmitButton>
         ) : (
-          <span data-guide="research-analyse" className="inline-flex rounded-xl">
-            <SubmitButton size="lg" pendingText="Reading the ads… (up to a minute)">
+          <span data-guide="research-analyse" className="inline-flex rounded-full">
+            <SubmitButton variant="cta" size="lg" pendingText="Reading the ads… (up to a minute)">
               <SparklesIcon data-icon="inline-start" />
               Analyse with AI
             </SubmitButton>
@@ -126,10 +128,11 @@ export default async function AdResearchPage({ params, searchParams }: { params:
   return (
     <>
       <PageHead
-        lesson="2.3"
-        stage="Stage 2"
+        lesson="1.3"
+        stage="Day 1"
+        eyebrow="Get members"
         title="Ad research"
-        sub="Find the ads your competitors keep paying for, then let AI turn them into your 3-Pack: a Pain, a Dream and a Lesson ad."
+        sub="Find the ads your competitors keep paying for, then let AI show you what's working in your niche and the gaps nobody uses yet."
         first={configured ? "Search a keyword from your niche, then press Analyse with AI." : "Search the Meta Ad Library, copy a few long-running ads, paste them below and press Analyse with AI."}
       />
       <Flash searchParams={sp} />
@@ -147,7 +150,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
         ) : null}
         {/* Without live search the form opens the same search on Meta's website in a new tab. */}
         <form
-          className={cn("grid gap-3 @2xl/main:items-end", configured ? "@2xl/main:grid-cols-[2fr_1fr_1fr_auto]" : "@2xl/main:grid-cols-[2fr_1fr_auto]")}
+          className={cn("grid gap-3 @2xl/main:items-end", configured ? "@2xl/main:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(10rem,auto)_auto]" : "@2xl/main:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)_auto]")}
           {...(configured ? {} : { action: "https://www.facebook.com/ads/library/", method: "get", target: "_blank", rel: "noreferrer" })}
         >
           {configured ? null : (
@@ -170,7 +173,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
           ) : null}
           <Field>
             <FieldLabel htmlFor="country">Country</FieldLabel>
-            <NativeSelect id="country" name="country" defaultValue={country}>
+            <NativeSelect id="country" name="country" defaultValue={country} className="w-full">
               {COUNTRIES.map(([c, label]) => (
                 <NativeSelectOption key={c} value={c}>
                   {label}
@@ -215,7 +218,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
               <form action={adResearchAction.bind(null, wid)} data-guide="research-analyse">
                 {hidden}
                 <input type="hidden" name="source" value="library" />
-                <SubmitButton pendingText="Reading the ads…">
+                <SubmitButton variant="cta" pendingText="Reading the ads…">
                   <SparklesIcon data-icon="inline-start" />
                   Analyse with AI
                 </SubmitButton>
@@ -239,7 +242,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
           ) : (
             <ul className="grid gap-3 @2xl/main:grid-cols-2">
               {ads.slice(0, 30).map((a) => (
-                <li key={a.id} className="flex flex-col gap-2 rounded-xl border bg-background/60 p-3.5 text-sm">
+                <li key={a.id} className={cn(CARD, "flex flex-col gap-2.5 p-4 text-sm")}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate font-semibold">{a.pageName || "Unknown page"}</span>
                     <Badge variant="secondary" className={a.daysRunning >= 30 ? "bg-hot-soft text-hot" : undefined}>
@@ -248,8 +251,8 @@ export default async function AdResearchPage({ params, searchParams }: { params:
                     </Badge>
                   </div>
                   {a.titles[0] ? <span className="font-medium">{truncate(a.titles[0], 120)}</span> : null}
-                  <p className="whitespace-pre-line text-muted-foreground">{truncate(a.bodies[0] ?? "", 320)}</p>
-                  <div className="mt-auto flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <p className="leading-relaxed whitespace-pre-line text-muted-foreground">{truncate(a.bodies[0] ?? "", 320)}</p>
+                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/80 pt-2.5 text-xs text-subtle-foreground">
                     <span>{a.platforms.join(", ").toLowerCase()}</span>
                     <a href={a.snapshotUrl} target="_blank" rel="noreferrer">
                       View ad
@@ -285,7 +288,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
             title="What's working in your niche"
             sub={`Based on ${analysisQuery || "pasted ads"} · ${relativeTime(row.createdAt)}. ${analysis.summary}`}
           >
-            <div className="grid gap-3 @2xl/main:grid-cols-2">
+            <div className="grid gap-4 @2xl/main:grid-cols-2">
               <List icon={FlameIcon} title="Likely winners" items={analysis.winners.map((w) => `${w.page} (${w.daysRunning} days): ${w.why}`)} />
               <List icon={TargetIcon} title="Hooks they open with" items={analysis.hooks} />
               <List icon={LightbulbIcon} title="Angles" items={analysis.angles} />
@@ -295,19 +298,26 @@ export default async function AdResearchPage({ params, searchParams }: { params:
           </Panel>
           <Panel
             icon={SparklesIcon}
-            title="Your 3-Pack"
-            sub="Pain, Dream and Lesson, each built as Hook · Turn · Door. Point them at your Skool link (Growth ladder) and launch all three at your budget tier."
+            title="Angles to borrow"
+            sub="Three angles these long-runners suggest: Pain, Dream and Lesson, each as Hook · Turn · Door. Ideas to borrow, not ads to launch. Ad studio writes those."
+            action={
+              <Button asChild size="sm">
+                <Link href={`/app/w/${wid}/ads/studio`}>
+                  Open Ad studio <ArrowRightIcon data-icon="inline-end" />
+                </Link>
+              </Button>
+            }
           >
-            <div className="grid gap-3 @3xl/main:grid-cols-3">
+            <div className="grid gap-4 @4xl/main:grid-cols-3">
               {analysis.drafts.map((d, i) => {
                 const legacy = d as unknown as { primaryText?: string };
                 const body = legacy.primaryText ?? [d.hook, d.turn, d.door].filter(Boolean).join("\n\n");
                 const text = `${body}\n\nHeadline: ${d.headline}`;
                 const tone = d.angle ? ANGLE_TONE[d.angle] : ANGLE_TONE.lesson;
                 return (
-                  <div key={i} className="relative flex flex-col gap-3 overflow-hidden rounded-xl border bg-background/60 p-4 pt-5 text-sm">
+                  <div key={i} className={cn(CARD, "relative flex flex-col gap-3.5 overflow-hidden p-5 pt-6 text-sm")}>
                     <span className={cn("absolute inset-x-0 top-0 h-1", tone.bar)} aria-hidden />
-                    <span className={cn("w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold", tone.chip)}>{d.angle ? ANGLE_LABEL[d.angle] : `Ad ${i + 1}`}</span>
+                    <span className={cn("inline-flex h-[22px] w-fit items-center rounded-full px-2.5 text-[11.5px] font-semibold", tone.chip)}>{d.angle ? ANGLE_LABEL[d.angle] : `Ad ${i + 1}`}</span>
                     {d.angle ? <span className="-mt-1.5 text-xs text-muted-foreground">{ANGLE_HINT[d.angle]}</span> : null}
                     {d.turn ? (
                       <dl className="flex flex-col gap-2">
@@ -319,29 +329,29 @@ export default async function AdResearchPage({ params, searchParams }: { params:
                           ] as const
                         ).map(([k, v]) => (
                           <div key={k} className="grid gap-0.5">
-                            <dt className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">{k}</dt>
-                            <dd>{v}</dd>
+                            <dt className="text-[11px] font-semibold tracking-[0.08em] text-subtle-foreground uppercase">{k}</dt>
+                            <dd className="leading-relaxed">{v}</dd>
                           </div>
                         ))}
                       </dl>
                     ) : (
                       <p className="whitespace-pre-line">{body}</p>
                     )}
-                    <div className="grid gap-1 border-t pt-2.5">
+                    <div className="grid gap-1.5 border-t border-border/80 pt-3 leading-relaxed">
                       <span>
-                        <b>Headline:</b> {d.headline}
+                        <b className="font-semibold">Headline:</b> {d.headline}
                       </span>
                       <span className="text-muted-foreground">
-                        <b className="text-foreground">Creative:</b> {d.creativeIdea}
+                        <b className="font-semibold text-foreground">Creative:</b> {d.creativeIdea}
                       </span>
                     </div>
-                    <CopyButton text={text} label="Copy ad" className="mt-auto self-start" />
+                    <CopyButton text={text} label="Copy" className="mt-auto self-start" />
                   </div>
                 );
               })}
             </div>
             <Callout tone="tip">
-              Launch all three, then come back after 72 hours and check them in <Link href={`/app/w/${wid}/ads`}>Ad review</Link>.
+              Next, lesson 1.4: open <Link href={`/app/w/${wid}/ads/studio`}>Ad studio</Link>. Your 🔥 finds are ticked under Borrow from long-running ads, so Make my 5 statics turns them into five different statics, with image prompts and a launch plan.
             </Callout>
           </Panel>
         </>
@@ -355,19 +365,19 @@ export default async function AdResearchPage({ params, searchParams }: { params:
 /** Before the first analysis: a ghost of what you'll get, so the payoff is visible. */
 function ThreePackPreview() {
   return (
-    <section aria-label="What you'll get" className="flex flex-col gap-3 rounded-2xl border border-dashed border-foreground/15 bg-muted/35 p-5">
+    <section aria-label="What you'll get" className="flex flex-col gap-5 rounded-2xl border border-dashed border-border-strong bg-card/40 p-6">
       <div className="flex items-start gap-3">
         <StepDot n={3} />
         <div className="grid gap-0.5">
-          <h2 className="text-[17px]">Your 3-Pack lands here</h2>
-          <p className="text-sm text-muted-foreground">Three ready-to-run ads, each built as Hook · Turn · Door, plus what&apos;s working in your niche.</p>
+          <h2 className="text-base">Your analysis lands here</h2>
+          <p className="text-sm text-muted-foreground">What&apos;s working in your niche, the gaps nobody uses yet, and three angles to borrow in Ad studio.</p>
         </div>
       </div>
       <div aria-hidden className="grid gap-3 @2xl/main:grid-cols-3">
         {(["pain", "dream", "lesson"] as const).map((k) => (
-          <div key={k} className="relative flex flex-col gap-2.5 overflow-hidden rounded-xl bg-card p-4 pt-5 shadow-card ring-1 ring-foreground/[0.06]">
+          <div key={k} className="relative flex flex-col gap-2.5 overflow-hidden rounded-2xl bg-card p-4 pt-5 shadow-card ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
             <span className={cn("absolute inset-x-0 top-0 h-1", ANGLE_TONE[k].bar)} />
-            <span className={cn("w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold", ANGLE_TONE[k].chip)}>{ANGLE_LABEL[k]}</span>
+            <span className={cn("inline-flex h-[22px] w-fit items-center rounded-full px-2.5 text-[11.5px] font-semibold", ANGLE_TONE[k].chip)}>{ANGLE_LABEL[k]}</span>
             <span className="h-2 w-11/12 rounded-full bg-foreground/10" />
             <span className="h-2 w-3/4 rounded-full bg-foreground/10" />
             <span className="h-2 w-5/6 rounded-full bg-foreground/[0.07]" />
@@ -381,15 +391,15 @@ function ThreePackPreview() {
 function List({ icon: Icon, title, items }: { icon: LucideIcon; title: string; items: string[] }) {
   if (!items.length) return null;
   return (
-    <div className="flex flex-col gap-2.5 rounded-xl bg-muted/50 p-3.5">
+    <div className="flex flex-col gap-3 rounded-xl bg-muted/50 p-4 ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
       <span className="flex items-center gap-2 text-sm font-semibold">
-        <Icon className="size-4 text-primary" aria-hidden />
+        <Icon className="size-4 text-primary dark:text-violet-300" aria-hidden />
         {title}
       </span>
-      <ul className="flex flex-col gap-1.5 text-sm">
+      <ul className="flex flex-col gap-2 text-sm leading-relaxed">
         {items.map((it) => (
-          <li key={it} className="flex gap-2">
-            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary/50" aria-hidden />
+          <li key={it} className="flex gap-2.5">
+            <span className="mt-[9px] size-1.5 shrink-0 rounded-full bg-primary/50" aria-hidden />
             <span>{it}</span>
           </li>
         ))}

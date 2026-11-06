@@ -121,8 +121,8 @@ export function PageEditor({ initialTitle, initialSections, theme, vars, busines
       <div className="grid grid-cols-1 items-start gap-4 @4xl/main:grid-cols-[400px_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-2.5 @4xl/main:max-h-[calc(100vh-140px)] @4xl/main:overflow-y-auto @4xl/main:pr-1">
           {sections.map((s, i) => (
-            <details key={s.id} className="group rounded-xl bg-card ring-1 ring-foreground/10" open={i === 0}>
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2.5 hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
+            <details key={s.id} className="group rounded-xl bg-card shadow-xs ring-1 ring-ink/[0.07] transition-shadow duration-200 open:shadow-card dark:ring-white/[0.08]" open={i === 0}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 py-2.5 transition-colors hover:bg-accent/50 [&::-webkit-details-marker]:hidden">
                 <span className="flex min-w-0 items-center gap-2">
                   <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" aria-hidden />
                   <span className="min-w-0 truncate text-sm">
@@ -142,12 +142,12 @@ export function PageEditor({ initialTitle, initialSections, theme, vars, busines
                   </Button>
                 </span>
               </summary>
-              <div className="flex flex-col gap-3 border-t px-3 pt-3 pb-3.5">
+              <div className="flex flex-col gap-3.5 border-t border-border/80 px-3.5 pt-3.5 pb-4">
                 <SectionFields s={s} onChange={(patch) => update(i, patch)} />
               </div>
             </details>
           ))}
-          <div className="flex items-center gap-2 rounded-xl border border-dashed p-2.5">
+          <div className="flex items-center gap-2 rounded-xl border border-dashed border-border-strong bg-card/40 p-2.5">
             <NativeSelect value={addType} onChange={(e) => setAddType(e.target.value as SectionType)} aria-label="Section type" className="min-w-0 flex-1">
               {(Object.keys(TYPE_LABEL) as SectionType[]).map((t) => (
                 <NativeSelectOption key={t} value={t}>
@@ -172,13 +172,20 @@ export function PageEditor({ initialTitle, initialSections, theme, vars, busines
             <code className="rounded bg-muted px-1 py-0.5 font-mono">{"{{lead_magnet_url}}"}</code> for your free guide.
           </p>
         </div>
-        <div className="flex min-w-0 flex-col gap-2 @4xl/main:sticky @4xl/main:top-4">
-          <div className="flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
-            <EyeIcon className="size-3.5" aria-hidden />
-            Live preview
+        <div className="flex min-w-0 flex-col @4xl/main:sticky @4xl/main:top-4">
+          {/* A quiet browser bar, so the preview reads as "your page, on the web". */}
+          <div className="flex h-10 items-center gap-1.5 rounded-t-2xl border border-b-0 border-border bg-card px-3.5">
+            <span className="size-2.5 rounded-full bg-border-strong" aria-hidden />
+            <span className="size-2.5 rounded-full bg-border-strong" aria-hidden />
+            <span className="size-2.5 rounded-full bg-border-strong" aria-hidden />
+            <span className="mx-auto flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[11.5px] font-medium text-muted-foreground">
+              <EyeIcon className="size-3.5" aria-hidden />
+              Live preview
+            </span>
+            <span className="w-[42px]" aria-hidden />
           </div>
           {/* Funnels carry their own theme, so the preview always sits on white. */}
-          <div className="editor-preview overflow-hidden overflow-y-auto rounded-xl border bg-white shadow-sm @4xl/main:max-h-[calc(100vh-170px)]" aria-label="Live preview">
+          <div className="editor-preview max-h-[78vh] rounded-t-none rounded-b-2xl border-border @4xl/main:max-h-[calc(100vh-180px)]" aria-label="Live preview">
             <LandingSections sections={sections} theme={theme} vars={vars} businessName={businessName} form={{ action: "#", pageId: "preview", eventId: "preview", preview: true }} />
           </div>
         </div>
@@ -219,7 +226,7 @@ function Items<T extends Record<string, string>>({ items, keys, labels, onChange
   return (
     <div className="flex flex-col gap-2">
       {items.map((it, i) => (
-        <div key={i} className="flex flex-col gap-2.5 rounded-lg border bg-muted/40 p-2.5">
+        <div key={i} className="flex flex-col gap-2.5 rounded-xl bg-background/70 p-3 ring-1 ring-ink/[0.06] ring-inset dark:bg-white/[0.02] dark:ring-white/[0.07]">
           {keys.map((k, ki) => (
             <Text
               key={String(k)}

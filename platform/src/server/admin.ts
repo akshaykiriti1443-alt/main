@@ -1,9 +1,19 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { agencies, jobs, subscriptions, users, walletTransactions, webhookEvents, workspaces } from "@/lib/db/schema";
+import { activities, agencies, jobs, subscriptions, users, walletTransactions, webhookEvents, workspaces } from "@/lib/db/schema";
 import { addDays } from "@/lib/util";
 import { creditWallet, getOrCreateWallet } from "./wallet";
 import { GRACE_DAYS } from "./access";
+
+/** Members who clicked "Get a domain" (your affiliate link) in the last N days. */
+export async function domainClicks(days: number) {
+  const db = await getDb();
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(activities)
+    .where(sql`${activities.type} = 'domain_affiliate_click' and ${activities.createdAt} > now() - make_interval(days => ${days})`);
+  return row?.n ?? 0;
+}
 
 export async function platformStats() {
   const db = await getDb();

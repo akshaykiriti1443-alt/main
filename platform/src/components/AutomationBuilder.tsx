@@ -20,7 +20,7 @@ type ActionType = AutomationAction["type"];
 const ACTION_LABELS: Record<ActionType, string> = {
   add_tag: "Add a tag",
   remove_tag: "Remove a tag",
-  set_stage: "Move to a pipeline stage",
+  set_stage: "Set the lead's stage",
   wait: "Wait",
   send_email: "Send an email",
   enroll_sequence: "Start an email sequence",
@@ -31,15 +31,23 @@ const ACTION_LABELS: Record<ActionType, string> = {
   webhook: "Send to a webhook (Zapier, Make)",
   only_if_temperature: "Continue only if the lead is…",
   ask_my_ai: "Ask my AI (your Claude, ChatGPT or Gemini)",
-  skool_invite: "Invite to my Skool group",
+  move_opportunity: "Move opportunity to stage",
+  create_opportunity: "Create opportunity",
+  // Only shows on automations saved before Skool invites were removed. Never offered as a new step.
+  skool_invite: "Skool invite (removed)",
 };
+
+/** The steps you can add. */
+const OFFERED = (Object.keys(ACTION_LABELS) as ActionType[]).filter((t) => t !== "skool_invite");
 
 const TRIGGERS: { value: AutomationTrigger["type"]; label: string; hint: string }[] = [
   { value: "lead_created", label: "New lead from a landing page", hint: "Optional: a site ID to limit it to one funnel." },
   { value: "message_received", label: "New message (DM, WhatsApp, SMS)", hint: "Optional: facebook, instagram, whatsapp or sms." },
   { value: "tag_added", label: "Tag added", hint: "The tag to watch for." },
   { value: "temperature_changed", label: "Lead temperature changes", hint: "Optional: hot, warm or cold." },
-  { value: "stage_changed", label: "Pipeline stage changes", hint: "Optional: new, engaged, trial, member or lost." },
+  { value: "stage_changed", label: "Lead stage changes", hint: "Optional: new, engaged, trial, member or lost." },
+  { value: "opportunity_stage_changed", label: "Opportunity moves to stage", hint: "Optional: a stage name from your Pipeline, like Call booked or Won." },
+  { value: "appointment_booked", label: "Appointment booked", hint: "Optional: a booking calendar's link name (its slug), like intro-call." },
 ];
 
 function blankAction(type: ActionType): AutomationAction {
@@ -65,6 +73,10 @@ function blankAction(type: ActionType): AutomationAction {
       return { type, temperature: "hot" };
     case "ask_my_ai":
       return { type, instruction: "" };
+    case "move_opportunity":
+      return { type, stage: "Contacted" };
+    case "create_opportunity":
+      return { type, title: "", value: 0, stage: "New lead" };
     default:
       return { type } as AutomationAction;
   }
@@ -76,12 +88,15 @@ export function AutomationBuilder({
   initial,
   sequences,
   save,
+  emphasis,
 }: {
   workspaceId: string;
   id: string | null;
   initial: { name: string; trigger: AutomationTrigger; actions: AutomationAction[]; active: boolean };
   sequences: { id: string; name: string }[];
   save: (id: string | null, input: { name: string; trigger: unknown; actions: unknown; active: boolean }) => Promise<{ ok: boolean; id?: string; error?: string }>;
+  /** Saving is the one thing to do on this screen (a new automation or an AI draft): the pink button. */
+  emphasis?: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initial.name);
@@ -116,23 +131,29 @@ export function AutomationBuilder({
   const hint = TRIGGERS.find((t) => t.value === trigger.type)?.hint;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Panel>
-        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+        <div className="grid gap-4 @xl/main:grid-cols-[1fr_auto] @xl/main:items-end">
           <Field>
             <FieldLabel htmlFor="aname">Name</FieldLabel>
             <Input id="aname" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Label htmlFor="aactive" className="h-8 font-normal">
+          <Label
+            htmlFor="aactive"
+            className={cn(
+              "h-10 cursor-pointer gap-2.5 rounded-full px-3.5 font-medium transition-colors duration-150",
+              active ? "bg-success-soft text-success" : "bg-muted text-muted-foreground",
+            )}
+          >
             <Switch id="aactive" checked={active} onCheckedChange={setActive} />
-            Automation is on
+            {active ? "Automation is on" : "Automation is off"}
           </Label>
         </div>
       </Panel>
 
       <div className="flex flex-col">
-      <Panel title={<StepTitle icon={ZapIcon} label="When this happens" />} className="ring-1 ring-gold/40">
-        <div className="grid gap-4 sm:grid-cols-2">
+      <Panel title={<StepTitle icon={ZapIcon} label="When this happens" />} className="ring-gold/45 dark:ring-gold/30">
+        <div className="grid gap-4 @xl/main:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="ttype">Trigger</FieldLabel>
             <NativeSelect id="ttype" className="w-full" value={trigger.type} onChange={(e) => setTrigger({ type: e.target.value as AutomationTrigger["type"], value: "" })}>
@@ -168,7 +189,7 @@ export function AutomationBuilder({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                className="text-muted-foreground hover:bg-destructive-soft hover:text-destructive"
                 onClick={() => setActions((p) => p.filter((_, j) => j !== i))}
                 aria-label="Remove step"
               >
@@ -183,10 +204,15 @@ export function AutomationBuilder({
       ))}
       <Connector />
 
-      <div className="flex flex-col gap-2 rounded-2xl border-2 border-dashed border-foreground/15 bg-muted/30 p-3.5 sm:flex-row sm:items-center">
-        <span className="text-sm font-semibold sm:mr-1">{actions.length ? "Then…" : "First step:"}</span>
-        <NativeSelect className="w-full sm:w-72" value={addType} onChange={(e) => setAddType(e.target.value as ActionType)} aria-label="Step type">
-          {(Object.keys(ACTION_LABELS) as ActionType[]).map((t) => (
+      <div className="flex flex-col gap-2.5 rounded-2xl border border-dashed border-border-strong bg-card/40 p-4 @xl/main:flex-row @xl/main:items-center">
+        <span className="flex items-center gap-2.5 text-sm font-semibold @xl/main:mr-1">
+          <span className="grid size-7 place-items-center rounded-full border border-dashed border-border-strong text-muted-foreground">
+            <PlusIcon className="size-3.5" aria-hidden />
+          </span>
+          {actions.length ? "Then…" : "First step:"}
+        </span>
+        <NativeSelect className="w-full @xl/main:w-72" value={addType} onChange={(e) => setAddType(e.target.value as ActionType)} aria-label="Step type">
+          {OFFERED.map((t) => (
             <NativeSelectOption key={t} value={t}>
               {ACTION_LABELS[t]}
             </NativeSelectOption>
@@ -199,8 +225,8 @@ export function AutomationBuilder({
       </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" size="lg" onClick={onSave} disabled={pending}>
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-card py-3 pr-5 pl-3 shadow-card ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
+        <Button type="button" variant={emphasis ? "cta" : "default"} onClick={onSave} disabled={pending}>
           {pending ? <Spinner data-icon="inline-start" /> : null}
           {pending ? "Saving…" : "Save automation"}
         </Button>
@@ -209,7 +235,9 @@ export function AutomationBuilder({
             {msg.ok ? <CircleCheckIcon className="size-4" /> : <CircleAlertIcon className="size-4" />}
             {msg.text}
           </span>
-        ) : null}
+        ) : (
+          <span className="text-sm text-muted-foreground">Nothing runs until you save.</span>
+        )}
       </div>
     </div>
   );
@@ -220,8 +248,8 @@ function StepTitle({ label, step, icon: Icon }: { label: string; step?: number; 
     <span className="flex items-center gap-2.5">
       <span
         className={cn(
-          "grid size-7 shrink-0 place-items-center rounded-full font-heading text-[13px] font-bold tabular-nums",
-          Icon ? "bg-gold-soft text-gold-foreground ring-1 ring-gold/50" : "bg-primary text-primary-foreground",
+          "grid size-7 shrink-0 place-items-center rounded-full text-[12.5px] font-semibold tabular-nums",
+          Icon ? "bg-gold-soft text-gold-foreground ring-1 ring-gold/50" : "bg-primary text-primary-foreground shadow-press",
         )}
       >
         {Icon ? <Icon className="size-3.5" /> : step}
@@ -233,7 +261,7 @@ function StepTitle({ label, step, icon: Icon }: { label: string; step?: number; 
 
 /** The little line between steps, so the flow reads top to bottom. */
 function Connector() {
-  return <div aria-hidden className="ml-[33px] h-4 w-0.5 rounded-full bg-foreground/15" />;
+  return <div aria-hidden className="ml-[37px] h-5 w-px bg-border-strong" />;
 }
 
 function ActionFields({ a, sequences, onChange }: { a: AutomationAction; sequences: { id: string; name: string }[]; onChange: (p: Partial<AutomationAction>) => void }) {
@@ -253,9 +281,9 @@ function ActionFields({ a, sequences, onChange }: { a: AutomationAction; sequenc
       );
     case "wait":
       return (
-        <label className="flex flex-wrap items-center gap-2 text-sm">
+        <label className="flex flex-wrap items-center gap-2.5 text-sm">
           Wait
-          <Input type="number" min={1} value={a.minutes} onChange={(e) => onChange({ minutes: Math.max(1, Number(e.target.value) || 1) })} className="w-28" />
+          <Input type="number" min={1} value={a.minutes} onChange={(e) => onChange({ minutes: Math.max(1, Number(e.target.value) || 1) })} className="w-28 tabular-nums" />
           <span className="text-muted-foreground">minutes ({(a.minutes / 60).toFixed(1)} hours)</span>
         </label>
       );
@@ -305,13 +333,32 @@ function ActionFields({ a, sequences, onChange }: { a: AutomationAction; sequenc
           <NativeSelectOption value="cold">Cold</NativeSelectOption>
         </NativeSelect>
       );
-    case "skool_invite":
+    case "move_opportunity":
       return (
-        <p className="text-sm text-muted-foreground">
-          Skool emails this person an invite to your group, through the Skool webhook you connect in <b>Skool members</b>. Each person is only invited once. On a paid
-          group, only invite people who&apos;ve already paid you.
-        </p>
+        <>
+          <Input value={a.stage} placeholder="Stage name, e.g. Proposal sent" onChange={(e) => onChange({ stage: e.target.value })} aria-label="Stage name" />
+          <p className="text-xs text-muted-foreground">Moves the opportunity this automation is about (or their newest open one). No opportunity yet? One is created in your default pipeline.</p>
+        </>
       );
+    case "create_opportunity":
+      return (
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_minmax(0,12rem)]">
+          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+            Name
+            <Input value={a.title} placeholder="Blank = their name" onChange={(e) => onChange({ title: e.target.value })} />
+          </label>
+          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+            Value
+            <Input type="number" min={0} value={a.value} onChange={(e) => onChange({ value: Math.max(0, Number(e.target.value) || 0) })} />
+          </label>
+          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+            Stage
+            <Input value={a.stage} placeholder="Blank = first stage" onChange={(e) => onChange({ stage: e.target.value })} />
+          </label>
+        </div>
+      );
+    case "skool_invite":
+      return <p className="text-sm text-muted-foreground">Skool invites were removed, so this step is skipped and does nothing. Delete it with the bin icon.</p>;
     default:
       return <p className="text-sm text-muted-foreground">No settings needed.</p>;
   }

@@ -33,7 +33,9 @@ async function connect(): Promise<DB> {
     const { mkdirSync } = await import("node:fs");
     mkdirSync(dataDir, { recursive: true });
   }
-  const client = dataDir ? new PGlite(dataDir) : new PGlite();
+  // btree_gist powers the bookings no-overlap constraint (drizzle/0010).
+  const { btree_gist } = await import("@electric-sql/pglite/contrib/btree_gist");
+  const client = dataDir ? new PGlite(dataDir, { extensions: { btree_gist } }) : new PGlite({ extensions: { btree_gist } });
   const db = drizzle(client, { schema });
   await migrate(db, { migrationsFolder: migrationsFolder() });
   holder.close = async () => client.close();

@@ -9,6 +9,15 @@ export type GuideMode = "open" | "min" | "off";
 export const isGuideMode = (v: unknown): v is GuideMode =>
   v === "open" || v === "min" || v === "off";
 
+/**
+ * Can this step be "Up next"? Only a to-do the member can do right now. Optional steps, outcomes
+ * (they wait on Skool's numbers) and steps locked to another plan never hold Up next; they still
+ * show on Your path, with their lock, and tick themselves off. Your path, the dashboard and Penny
+ * all use this one rule.
+ */
+export const canBeUpNext = (s: { done: boolean; kind?: string; locked?: string }) =>
+  !s.done && !s.kind && !s.locked;
+
 export type StepHowTo = {
   /** Numbered "how to do it" lines, shown when you're on the right page. */
   how: string[];
@@ -33,9 +42,9 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   kit: {
     target: "kit-build",
     how: [
-      "Answer the questions. Your one sentence from lesson 1.1 covers most of them.",
+      "Answer the questions. Unsure? Guess: Make another kit redoes it.",
       "Paste your Skool group link (skool.com/your-group).",
-      "Press Build my launch kit. It takes about a minute.",
+      "Press Build my launch kit, once. It takes about a minute.",
     ],
   },
   skool: {
@@ -52,11 +61,11 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "Press Publish, then open the live link on your phone and sign up yourself.",
     ],
   },
-  price: {
-    target: "member-price",
+  lead1: {
     how: [
-      "In Skool: Settings › Pricing. Pick a monthly subscription or tiers.",
-      "Here: type the same price into Price / member / month and press Save member price.",
+      "Open your live funnel on your phone (its link is in Funnels & pages).",
+      "Sign up with your own email, like a stranger would.",
+      "Come back here to Leads: there you are. Email 1 lands within minutes (check spam once).",
     ],
   },
   research: {
@@ -64,21 +73,29 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
     how: [
       'Search a keyword from your niche, like "fat loss for dads".',
       "🔥 means the ad has run 30+ days. Those are the ones that make money.",
-      "Press Analyse with AI. It writes your 3-Pack: a Pain, a Dream and a Lesson ad.",
+      "Press Analyse with AI, once. Read What's working in your niche and Gaps nobody uses yet.",
     ],
   },
   pixel: {
     target: "pixel",
     how: [
+      "Optional: your Day 1 ads don't need a Pixel (lesson 1.4).",
       "In Meta Events Manager, copy your Dataset ID and generate a Conversions API token.",
       "Paste both into Meta Pixel & Conversions API here and save.",
-      "Lesson 2.5 shows every click, with pictures.",
+    ],
+  },
+  statics: {
+    target: "ad-studio-make",
+    how: [
+      "Check your answers: daily budget, country, who it's for and the result you promise.",
+      "Press Make my 5 statics.",
+      "Paste each image prompt into ChatGPT or Gemini, then follow Your launch plan in Ads Manager.",
     ],
   },
   clicks: {
     how: [
       "Copy your Skool link from this page.",
-      "In Meta Ads Manager, launch your 3-Pack at your budget tier with that link.",
+      "In Meta Ads Manager, launch your 5 statics (Ad studio's launch plan) with that link.",
       "This ticks off at the first click from an ad, a bio or a post.",
     ],
   },
@@ -87,14 +104,14 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
     how: [
       "Wait 72 hours after launch. Hands off.",
       "Copy each ad's spend, impressions and link clicks from Ads Manager.",
-      "Paste them here. You get keep, fix or kill, and which part to fix.",
+      "Paste them here, one ad at a time. You get keep, fix or kill, and the one room to fix.",
     ],
   },
   customer: {
     how: [
-      "Message 20 people who already know you (lesson 3.2). One question, no pitch.",
-      "Open your hottest leads and send a personal note: AI writes, you send.",
-      "Ticks off when a paying member shows up, or your check-in says 1 new customer.",
+      "Text 20 people who already know you (lesson 2.2). One question, no pitch.",
+      "Send the Ask to everyone who replies, and to Leads › Hot (lesson 2.5).",
+      "Ticks off when your Monday check-in says 1 new customer.",
     ],
   },
   checkin: {
@@ -120,7 +137,7 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   bio: {
     target: "checkin",
     how: [
-      "Put your skool.com link in your Instagram, TikTok and YouTube bios.",
+      "Put your plain skool.com link in your bio (Instagram, TikTok or YouTube).",
       "Then tick the bio box in your Monday check-in.",
     ],
   },
@@ -143,18 +160,10 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "10,000 visitors and 30 Network sign-ups. Keep your best ads running and your members happy.",
     ],
   },
-  sync: {
-    target: "skool-sync",
-    how: [
-      "In Skool: Members › Export. You get a spreadsheet.",
-      "Upload it here (or paste it) and press sync.",
-      "Do it every week. Your automations read these piles.",
-    ],
-  },
   automations: {
     target: "automation-ai",
     how: [
-      "Tell your AI what to automate in plain words, or pick a recipe like Welcome.",
+      "Tell your AI what to automate in plain words, or pick a recipe like Warm-up new leads.",
       "Read every email out loud. Change anything that doesn't sound like you.",
       "Switch it on and press Save.",
     ],
@@ -170,7 +179,7 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   agency: {
     target: "agency-new",
     how: [
-      "Only if you want to resell this stack as your own.",
+      "Optional. Only if someone asks to buy this as an agency or software of your own.",
       "Add your brand name, logo and domain, then set your markup.",
     ],
   },
@@ -212,33 +221,43 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   },
   launch: {
     title: "AI launch kit",
-    what: "Answer a few questions and the AI writes your landing page, free guide, emails, ads and Skool About page.",
+    what: "Answer a few questions and the AI writes your landing page, free guide, emails and Skool About page.",
     tips: [
       "Every block has its own Copy button.",
-      "Ads go in the fridge until Stage 2.",
+      "Your ads come from Ad studio: Make my 5 statics.",
     ],
   },
   sites: {
     title: "Funnels & pages",
     what: "Your landing pages. A stranger gives their email here and gets sent on to Skool.",
-    tips: ["Change three lines, then Publish.", "Sign up yourself to test it."],
+    tips: ["Change three lines, then Publish.",
+      "Want yourname.com? Get a domain from the Custom domain section of your funnel.", "Sign up yourself to test it."],
   },
   leads: {
     title: "Leads",
     what: "Everyone who signed up or messaged you, hottest first.",
     tips: [
+      "Sign up on your own page first: you're lead #1.",
       "Open a lead to see their whole story.",
       "AI writes the follow-up, you send it.",
     ],
   },
-  skool: {
-    title: "Skool members",
-    what: "Your Skool members in four piles: trial, paying, cancelling and churned.",
+  pipeline: {
+    title: "Pipeline",
+    what: "Every person who might buy, as a card on a board. Drag a card to the right as they get closer to yes.",
     tips: [
-      "Upload your Skool export every week.",
-      "Save your member price so Meta knows what a member is worth.",
-      "On Skool Pro? Connect its Webhook plugin and new people get a Skool invite by themselves.",
-      "On Hobby? Scroll to \"Skool Pro plugins, the Hobby way\" for a stand-in for every Pro plugin.",
+      "Booked calls land in Call booked by themselves.",
+      "Coming from GoHighLevel? Import your opportunities CSV from Leads › Import contacts.",
+      "No mouse? Open a card and use Move to.",
+    ],
+  },
+  calendar: {
+    title: "Calendar",
+    what: "Your booking page, like Calendly: people pick a time, and it lands here and in your CRM.",
+    tips: [
+      "Add your Zoom or Meet link first, then copy your link.",
+      "Confirmations and reminders (24 h and 1 h before) send themselves.",
+      "Put the link in your Skool About page and your emails.",
     ],
   },
   growth: {
@@ -257,25 +276,35 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
       "One new Unlock a week is plenty.",
     ],
   },
+  "ads/studio": {
+    title: "Ad studio",
+    what: "Your first ads, same day: your numbers, 5 statics ready to make, and the exact clicks to launch them.",
+    tips: [
+      "Statics first. Record the video on Day 5, add it on Day 8.",
+      "Five different looks, so Meta tests five real ideas.",
+      "Hands off for 72 hours after you publish.",
+    ],
+  },
   "ads/research": {
     title: "Ad research",
     what: "Spy on ads your competitors have run for weeks (the ones that make money).",
     tips: [
       "🔥 = 30+ days running.",
-      "Analyse with AI turns them into your 3-Pack.",
+      "Analyse with AI shows what's working and the gaps nobody uses yet.",
+      "Its three angles are ideas to borrow. Ad studio writes your ads.",
     ],
   },
   ads: {
     title: "Ad review",
     what: "Paste your ad numbers after 72 hours and get keep, fix or kill.",
     tips: [
-      "Change one thing at a time: Hook, Turn or Door.",
+      "Fix one room at a time: Hook, Door or About page.",
       "Hands off for the first 72 hours.",
     ],
   },
   automations: {
     title: "Automations",
-    what: "When something happens, do something: welcome, nudge, save and win back, on autopilot.",
+    what: "When something happens, do something: follow up new leads and flag hot ones, on autopilot.",
     tips: [
       "Tell your AI what you want in plain words.",
       "Nothing runs until you press Save.",

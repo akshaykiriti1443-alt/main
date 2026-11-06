@@ -9,10 +9,11 @@ import {
   BoxesIcon,
   Building2Icon,
   CalendarDaysIcon,
+  CalendarClockIcon,
+  SquareKanbanIcon,
   ChevronsUpDownIcon,
   CreditCardIcon,
   GlobeIcon,
-  GraduationCapIcon,
   InboxIcon,
   KeyRoundIcon,
   TrendingUpIcon,
@@ -83,7 +84,6 @@ const ICONS = {
   sparkles: SparklesIcon,
   globe: GlobeIcon,
   users: UsersIcon,
-  skool: GraduationCapIcon,
   inbox: InboxIcon,
   mail: MailIcon,
   workflow: WorkflowIcon,
@@ -105,6 +105,8 @@ const ICONS = {
   search: SearchIcon,
   plug: PlugIcon,
   members: IdCardIcon,
+  pipeline: SquareKanbanIcon,
+  booking: CalendarClockIcon,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;
@@ -134,7 +136,29 @@ function initials(text: string) {
 export function BrandMark({ brand, className }: { brand: ShellBrand; className?: string }) {
   return (
     <span className={cn("brand-mark", className)} style={brand.color ? { background: brand.color } : undefined}>
-      {brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : brand.name.slice(0, 2).toUpperCase()}
+      {brand.logoUrl ? <img src={brand.logoUrl} alt="" /> : initials(brand.name)}
+    </span>
+  );
+}
+
+/** The platform's own mark (not a workspace's): a galactic-violet tile with a four-point star. */
+export function LogoMark({ className }: { className?: string }) {
+  return (
+    <span className={cn("brand-mark", className)} aria-hidden>
+      <svg viewBox="0 0 32 32" className="size-[62%]" fill="none">
+        <path d="M16 4.5c.95 6.5 5 10.55 11.5 11.5-6.5.95-10.55 5-11.5 11.5-.95-6.5-5-10.55-11.5-11.5 6.5-.95 10.55-5 11.5-11.5Z" fill="#fff" />
+        <circle cx="25.5" cy="6.5" r="2.4" fill="var(--pink-300)" />
+      </svg>
+    </span>
+  );
+}
+
+/** Mark + name in the display serif, for marketing and auth pages. */
+export function Wordmark({ name, className }: { name: string; className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-2.5", className)}>
+      <LogoMark />
+      <span className="font-display text-[25px] leading-none tracking-[-0.01em] text-foreground">{name}</span>
     </span>
   );
 }
@@ -152,9 +176,9 @@ function Switcher({ brand, places }: { brand: ShellBrand; places: Place[] }) {
   const head = (
     <>
       <BrandMark brand={brand} />
-      <span className="grid flex-1 text-left leading-tight">
-        <span className="truncate font-semibold text-sidebar-accent-foreground">{brand.name}</span>
-        {brand.sub ? <span className="truncate text-xs text-sidebar-foreground/70">{brand.sub}</span> : null}
+      <span className="grid flex-1 gap-0.5 text-left leading-tight">
+        <span className="truncate text-[14.5px] font-semibold tracking-[-0.01em] text-sidebar-accent-foreground">{brand.name}</span>
+        {brand.sub ? <span className="truncate text-xs text-sidebar-foreground/65">{brand.sub}</span> : null}
       </span>
     </>
   );
@@ -168,9 +192,9 @@ function Switcher({ brand, places }: { brand: ShellBrand; places: Place[] }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent">
+        <SidebarMenuButton size="lg" className="rounded-xl data-[state=open]:bg-sidebar-accent">
           {head}
-          <ChevronsUpDownIcon className="ml-auto text-sidebar-foreground/60" />
+          <ChevronsUpDownIcon className="ml-auto text-sidebar-foreground/50" />
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width) min-w-60" side={isMobile ? "bottom" : "right"} align="start" sideOffset={4}>
@@ -200,15 +224,17 @@ function UserMenu({ user }: { user: ShellUser }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent">
-          <Avatar className="size-8 rounded-lg">
-            <AvatarFallback className="rounded-lg bg-sidebar-accent text-xs font-medium">{initials(label)}</AvatarFallback>
+        <SidebarMenuButton size="lg" className="rounded-xl data-[state=open]:bg-sidebar-accent">
+          <Avatar className="size-8">
+            <AvatarFallback className="bg-[linear-gradient(135deg,var(--violet-100),var(--pink-100))] text-[11px] font-semibold text-violet-700 dark:bg-[linear-gradient(135deg,#2b2259,#3a1d3a)] dark:text-violet-200">
+              {initials(label)}
+            </AvatarFallback>
           </Avatar>
-          <span className="grid flex-1 text-left leading-tight">
+          <span className="grid flex-1 gap-0.5 text-left leading-tight">
             <span className="truncate font-medium text-sidebar-accent-foreground">{label}</span>
-            {user.name ? <span className="truncate text-xs text-sidebar-foreground/70">{user.email}</span> : null}
+            {user.name ? <span className="truncate text-xs text-sidebar-foreground/65">{user.email}</span> : null}
           </span>
-          <ChevronsUpDownIcon className="ml-auto text-sidebar-foreground/60" />
+          <ChevronsUpDownIcon className="ml-auto text-sidebar-foreground/50" />
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width) min-w-56" side={isMobile ? "bottom" : "right"} align="end" sideOffset={4}>
@@ -223,23 +249,23 @@ function UserMenu({ user }: { user: ShellUser }) {
   );
 }
 
-export function AppSidebar({ brand, groups, places, user }: { brand: ShellBrand; groups: NavGroup[]; places: Place[]; user: ShellUser }) {
+export function AppSidebar({ brand, groups, places, user, attribution }: { brand: ShellBrand; groups: NavGroup[]; places: Place[]; user: ShellUser; attribution?: { label: string; href: string } | null }) {
   const active = useActiveItem(groups);
   const { isMobile, setOpenMobile } = useSidebar();
   return (
     <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader className="pt-3">
+      <SidebarHeader className="px-2.5 pt-3.5 pb-1">
         <SidebarMenu>
           <SidebarMenuItem>
             <Switcher brand={brand} places={places} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="gap-1 px-0.5 pb-2">
         {groups.map((g, i) => (
-          <SidebarGroup key={g.title ?? i} className="py-1">
+          <SidebarGroup key={g.title ?? i} className="py-1.5">
             {g.title ? <SidebarGroupLabel className="h-7">{g.title}</SidebarGroupLabel> : null}
-            <SidebarMenu>
+            <SidebarMenu className="gap-px">
               {g.items.map((item) => {
                 const Icon = ICONS[item.icon];
                 return (
@@ -248,7 +274,7 @@ export function AppSidebar({ brand, groups, places, user }: { brand: ShellBrand;
                       asChild
                       isActive={item === active}
                       tooltip={item.locked ? `${item.label} · Growth plan` : item.label}
-                      className="h-8 gap-2.5 rounded-lg px-2.5 font-medium text-sidebar-foreground transition-[background-color,box-shadow,color] [&>svg]:text-sidebar-foreground/60 data-active:bg-card data-active:font-semibold data-active:text-sidebar-accent-foreground data-active:shadow-card data-active:ring-1 data-active:ring-foreground/[0.06] data-active:[&>svg]:text-primary"
+                      className="h-9 gap-2.5 rounded-[10px] px-2.5 text-[13.5px] font-medium text-sidebar-foreground [&>svg]:size-[17px] [&>svg]:text-sidebar-foreground/55 [&>svg]:transition-colors hover:[&>svg]:text-sidebar-accent-foreground data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground data-active:shadow-[0_1px_2px_rgb(28_21_56/0.06),0_0_0_1px_rgb(28_21_56/0.05)] data-active:[&>svg]:text-primary dark:data-active:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)] dark:data-active:[&>svg]:text-violet-300"
                     >
                       <Link href={item.href} data-nav={item.href} onClick={() => isMobile && setOpenMobile(false)}>
                         <Icon />
@@ -257,10 +283,10 @@ export function AppSidebar({ brand, groups, places, user }: { brand: ShellBrand;
                     </SidebarMenuButton>
                     {item.locked ? (
                       <SidebarMenuBadge aria-label="Growth plan">
-                        <LockIcon className="size-3 text-sidebar-foreground/50" />
+                        <LockIcon className="size-3 text-sidebar-foreground/40" />
                       </SidebarMenuBadge>
                     ) : item.badge ? (
-                      <SidebarMenuBadge className="bg-primary text-primary-foreground peer-data-active/menu-button:text-primary-foreground">{item.badge}</SidebarMenuBadge>
+                      <SidebarMenuBadge className="bg-accent text-accent-foreground peer-data-active/menu-button:bg-primary peer-data-active/menu-button:text-primary-foreground">{item.badge}</SidebarMenuBadge>
                     ) : null}
                   </SidebarMenuItem>
                 );
@@ -269,12 +295,17 @@ export function AppSidebar({ brand, groups, places, user }: { brand: ShellBrand;
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border/70 px-2.5 py-2.5 group-data-[collapsible=icon]:border-t-0">
         <SidebarMenu>
           <SidebarMenuItem>
             <UserMenu user={user} />
           </SidebarMenuItem>
         </SidebarMenu>
+        {attribution ? (
+          <a href={attribution.href} target="_blank" rel="noopener" className="px-2.5 pt-0.5 text-[11px] text-sidebar-foreground/50 hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+            {attribution.label}
+          </a>
+        ) : null}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
@@ -302,20 +333,25 @@ export function AppHeader({ brand, groups, places, extra }: { brand: ShellBrand;
   }, []);
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-foreground/[0.06] bg-background/80 px-3 backdrop-blur-md backdrop-saturate-150 md:rounded-t-2xl md:px-5">
-      <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-4" />
-      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
+    <header className="sticky top-0 z-10 flex h-[60px] shrink-0 items-center gap-2 border-b border-border/70 bg-background/80 px-3 backdrop-blur-xl backdrop-saturate-150 md:rounded-t-[20px] md:px-6">
+      <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
+      <Separator orientation="vertical" className="mx-1.5 data-vertical:self-center data-[orientation=vertical]:h-4" />
+      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-[13.5px]">
         <span className="hidden truncate text-muted-foreground sm:inline">{brand.name}</span>
         {active ? (
           <>
-            <span className="hidden text-muted-foreground/50 sm:inline">/</span>
-            <span className="truncate font-medium">{active.label}</span>
+            <span aria-hidden className="hidden text-border-strong sm:inline">/</span>
+            <span className="truncate font-medium text-foreground">{active.label}</span>
           </>
         ) : null}
       </nav>
-      <div className="ml-auto flex items-center gap-1">
-        <Button variant="outline" size="sm" className="h-9 w-9 justify-center rounded-xl px-0 font-normal text-muted-foreground sm:w-60 sm:justify-start sm:px-3" onClick={() => setOpen(true)}>
+      <div className="ml-auto flex items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 w-9 justify-center border-transparent bg-muted/70 px-0 font-normal text-muted-foreground shadow-none hover:border-border hover:bg-card hover:text-foreground sm:w-64 sm:justify-start sm:px-3.5 dark:bg-white/[0.05]"
+          onClick={() => setOpen(true)}
+        >
           <SearchIcon />
           <span className="hidden sm:inline">Search or jump to…</span>
           <Kbd className="ml-auto hidden sm:inline-flex">{mod} K</Kbd>

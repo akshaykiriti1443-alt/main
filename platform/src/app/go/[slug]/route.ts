@@ -6,6 +6,7 @@ import { isBot, skoolTargetFor, visitSource, workspaceBySlug } from "@/server/gr
 import { randomToken } from "@/lib/crypto";
 import { clientIp } from "@/lib/ip";
 import { takeRateLimit } from "@/server/rateLimit";
+import { isWorkspaceLive } from "@/server/liveness";
 
 // The Skool link: an instant redirect to the owner's Skool About page.
 //   - counts the click by source (ads, bio, YouTube...) for the Growth ladder
@@ -13,18 +14,21 @@ import { takeRateLimit } from "@/server/rateLimit";
 //     even when the Skool group has no pixel of its own
 // It's a plain 302, so the browser keeps the original referrer (Instagram, Facebook...) and
 // Skool still sees where the visitor came from. Query params (utm_*, ref) pass through.
+// A paused workspace (or agency) keeps redirecting to the member's own Skool group: their ads may
+// still be running, and those visitors are theirs. It just stops counting and stops sending Meta events.
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const ws = await workspaceBySlug(slug);
-  const target = ws && ws.status !== "paused" ? await skoolTargetFor(ws.id, ws.settings.skoolUrl) : "";
+  const target = ws ? await skoolTargetFor(ws.id, ws.settings.skoolUrl) : "";
   if (!ws || !target) return NextResponse.redirect(env.appUrl, 302);
 
   const url = new URL(target);
   req.nextUrl.searchParams.forEach((v, k) => {
     if (k !== "src") url.searchParams.set(k, v);
   });
+  if (!(await isWorkspaceLive(ws.id))) return NextResponse.redirect(url.toString(), 302);
 
   const ua = req.headers.get("user-agent") ?? "";
   const ip = clientIp(req.headers);

@@ -47,7 +47,7 @@ export function RosterUpload() {
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={6}
-        className="font-mono text-xs"
+        className="rounded-xl font-mono text-xs"
         aria-label="Member export"
         placeholder={"First Name,Last Name,Email,Answer 1\nJane,Doe,jane@example.com,jane.app@example.com"}
       />
@@ -55,12 +55,13 @@ export function RosterUpload() {
       {state.error ? <Callout tone="error">{state.error}</Callout> : null}
       {state.ok ? <Callout tone="ok">{state.ok}</Callout> : null}
       {p ? (
-        <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+        <div className="flex flex-col gap-2.5 rounded-xl bg-muted/40 p-4 text-sm ring-1 ring-ink/[0.04] ring-inset dark:ring-white/[0.05]">
           <span>
-            <b>{p.emails}</b> member emails in {p.rows} rows{p.skipped ? ` (${p.skipped} rows had no email)` : ""}.
+            <b className="font-semibold tabular-nums">{p.emails}</b> member emails in {p.rows} rows{p.skipped ? ` (${p.skipped} rows had no email)` : ""}.
           </span>
           <span>
-            <b className="text-success">{p.added.length}</b> new · <b>{p.stillActive}</b> already members · <b className="text-destructive">{p.removed.length}</b> no longer in Skool
+            <b className="font-semibold text-success tabular-nums">{p.added.length}</b> new · <b className="font-semibold tabular-nums">{p.stillActive}</b> already members ·{" "}
+            <b className="font-semibold text-destructive tabular-nums">{p.removed.length}</b> no longer in Skool
           </span>
           {p.removed.length ? (
             <details>

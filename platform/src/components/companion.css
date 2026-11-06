@@ -1,4 +1,7 @@
-/* Penny, the step-by-step guide. Uses the app's theme tokens so it fits light and dark. */
+/* Penny, the step-by-step guide. Reads the app's theme tokens so it fits light and dark.
+   Penny herself stays gold (her coin art); the guide's chrome is marshmallow + violet, and the
+   "click here" markers are bubblegum pink, the colour the design system reserves for the one
+   most important action. */
 
 .guide-card {
   position: fixed;
@@ -9,36 +12,41 @@
   max-height: min(72vh, 640px);
   display: flex;
   flex-direction: column;
-  border-radius: 22px;
+  border-radius: 24px;
   background: var(--card);
   color: var(--card-foreground);
-  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-  box-shadow:
-    0 1px 2px rgb(22 25 58 / 0.06),
-    0 18px 48px -12px rgb(22 25 58 / 0.28);
+  border: 1px solid var(--border);
+  box-shadow: var(--float-shadow);
   overflow: hidden;
-  animation: guide-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  animation: guide-in 0.32s var(--ease-soft);
 }
 
 .guide-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 10px 10px 14px;
-  background: linear-gradient(135deg, color-mix(in oklab, #f5b83d 22%, var(--card)), var(--card) 70%);
+  padding: 14px 10px 12px 14px;
+  background:
+    radial-gradient(120% 160% at 0% 0%, color-mix(in oklab, var(--gold) 20%, transparent), transparent 55%),
+    radial-gradient(100% 140% at 100% 0%, color-mix(in oklab, var(--violet-400) 12%, transparent), transparent 60%),
+    var(--card);
+  border-bottom: 1px solid var(--border);
 }
 .guide-head-face {
   flex: none;
-  filter: drop-shadow(0 3px 6px rgb(201 138 18 / 0.35));
+  filter: drop-shadow(0 3px 6px rgb(201 138 18 / 0.3));
 }
 .guide-head-text {
   display: grid;
   flex: 1;
   min-width: 0;
+  gap: 1px;
   line-height: 1.2;
 }
 .guide-head-text b {
   font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .guide-head-text span {
   font-size: 12px;
@@ -49,9 +57,11 @@
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 999px;
   color: var(--muted-foreground);
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background var(--dur-fast) var(--ease-swift),
+    color var(--dur-fast) var(--ease-swift);
 }
 .guide-icon:hover {
   background: var(--muted);
@@ -63,22 +73,22 @@
 }
 
 .guide-progress {
-  height: 4px;
+  height: 3px;
   background: var(--muted);
 }
 .guide-progress span {
   display: block;
   height: 100%;
-  border-radius: 0 4px 4px 0;
-  background: linear-gradient(90deg, #12b76a, #36d48a);
-  transition: width 0.6s ease;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(90deg, var(--violet-500), var(--pink-400));
+  transition: width 0.6s var(--ease-soft);
 }
 
 .guide-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px 16px;
+  gap: 14px;
+  padding: 16px 18px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -87,12 +97,12 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
   font-size: 13.5px;
-  line-height: 1.45;
-  background: color-mix(in oklab, #f5b83d 16%, var(--card));
-  border: 1px solid color-mix(in oklab, #f5b83d 40%, transparent);
+  line-height: 1.5;
+  background: var(--gold-soft);
+  border: 1px solid color-mix(in oklab, var(--gold) 35%, transparent);
 }
 .guide-hello-art {
   float: right;
@@ -105,27 +115,28 @@
 .guide-step {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 .guide-kicker {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--primary);
+  color: var(--accent-foreground);
 }
 .guide-step h3 {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 24px;
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1.12;
+  letter-spacing: -0.005em;
 }
 .guide-why {
   font-size: 13.5px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--muted-foreground);
 }
-.guide-locked,
 .guide-here {
   display: flex;
   align-items: center;
@@ -133,17 +144,9 @@
   font-size: 13px;
   font-weight: 600;
 }
-.guide-locked {
-  color: var(--muted-foreground);
-}
 .guide-here {
-  color: #067647;
+  color: var(--success);
 }
-:root.dark .guide-here,
-.dark .guide-here {
-  color: #4ade80;
-}
-.guide-locked svg,
 .guide-here svg {
   width: 15px;
   height: 15px;
@@ -154,7 +157,7 @@
   counter-reset: g;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
   padding: 0;
   margin: 0;
   list-style: none;
@@ -162,24 +165,25 @@
 .guide-how li {
   counter-increment: g;
   position: relative;
-  padding-left: 30px;
+  padding-left: 32px;
   font-size: 13.5px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 .guide-how li::before {
   content: counter(g);
   position: absolute;
   left: 0;
   top: 0;
-  width: 21px;
-  height: 21px;
-  border-radius: 7px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
   display: grid;
   place-items: center;
   font-size: 11.5px;
-  font-weight: 700;
-  color: var(--primary-foreground);
-  background: var(--primary);
+  font-weight: 600;
+  color: var(--accent-foreground);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-foreground) 14%, transparent);
 }
 
 .guide-go {
@@ -187,20 +191,23 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 12px;
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
   font-size: 14px;
   font-weight: 600;
   color: var(--primary-foreground) !important;
   background: var(--primary);
-  box-shadow: 0 6px 16px -6px color-mix(in oklab, var(--primary) 70%, transparent);
+  box-shadow: var(--press-shadow);
   text-decoration: none !important;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition:
+    transform var(--dur-fast) var(--ease-swift),
+    background var(--dur-fast) var(--ease-swift),
+    box-shadow var(--dur-fast) var(--ease-swift);
 }
 .guide-go:hover {
+  background: var(--primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px -8px color-mix(in oklab, var(--primary) 75%, transparent);
 }
 .guide-go svg {
   width: 16px;
@@ -227,13 +234,16 @@
   font-weight: 600;
   color: var(--muted-foreground) !important;
   text-decoration: none !important;
-  border-radius: 8px;
-  padding: 4px 6px;
-  margin: -4px -6px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  transition:
+    background var(--dur-fast) var(--ease-swift),
+    color var(--dur-fast) var(--ease-swift);
 }
 .guide-link:hover {
-  color: var(--foreground) !important;
-  background: var(--muted);
+  color: var(--accent-foreground) !important;
+  background: var(--accent);
 }
 .guide-link svg {
   width: 14px;
@@ -244,10 +254,10 @@
 }
 
 .guide-about {
-  border-top: 1px dashed var(--border);
-  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .guide-about summary {
   cursor: pointer;
@@ -286,13 +296,18 @@
   align-items: center;
   gap: 10px;
   max-width: min(340px, calc(100vw - 24px));
-  padding: 6px 16px 6px 6px;
+  padding: 6px 18px 6px 6px;
   border-radius: 999px;
   background: var(--card);
   color: var(--card-foreground);
   border: 1px solid var(--border);
-  box-shadow: 0 12px 32px -10px rgb(22 25 58 / 0.35);
-  animation: guide-in 0.3s ease;
+  box-shadow: var(--lift-shadow);
+  animation: guide-in 0.3s var(--ease-soft);
+  transition: transform var(--dur) var(--ease-soft), box-shadow var(--dur) var(--ease-soft);
+}
+.guide-fab:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--float-shadow);
 }
 .guide-fab:hover .guide-fab-face {
   transform: rotate(-12deg) scale(1.05);
@@ -306,14 +321,14 @@
   display: grid;
   min-width: 0;
   text-align: left;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 .guide-fab-kicker {
   font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--primary);
+  color: var(--accent-foreground);
 }
 .guide-fab-title {
   overflow: hidden;
@@ -328,31 +343,31 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 9px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
   color: var(--muted-foreground);
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background var(--dur-fast) var(--ease-swift),
+    color var(--dur-fast) var(--ease-swift);
 }
 .guide-toggle:hover {
   background: var(--muted);
   color: var(--foreground);
 }
 .guide-toggle.is-on {
-  color: #8a5a00;
-  background: color-mix(in oklab, #f5b83d 20%, transparent);
-}
-.dark .guide-toggle.is-on {
-  color: #fcd34d;
+  color: var(--gold-foreground);
+  background: var(--gold-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--gold) 35%, transparent);
 }
 .guide-toggle svg {
   width: 16px;
   height: 16px;
 }
 
-/* Where to go: a pulsing dot on the menu item, a glowing ring on the thing to click. */
+/* Where to go: a pulsing pink dot on the menu item, a glowing pink ring on the thing to click. */
 .guide-dot {
   position: relative;
 }
@@ -361,17 +376,17 @@
   position: absolute;
   top: 50%;
   right: 10px;
-  width: 9px;
-  height: 9px;
-  margin-top: -4.5px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
   border-radius: 50%;
-  background: #f5b83d;
-  box-shadow: 0 0 0 0 rgb(245 184 61 / 0.7);
+  background: var(--pink-400);
+  box-shadow: 0 0 0 0 rgb(255 133 181 / 0.7);
   animation: guide-pulse 1.8s ease-out infinite;
 }
 .guide-target {
   border-radius: 14px;
-  outline: 3px solid #f5b83d !important;
+  outline: 2px solid var(--pink-400) !important;
   outline-offset: 4px;
   animation: guide-ring 1.8s ease-out 3;
 }
@@ -393,30 +408,31 @@
 }
 @keyframes guide-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgb(245 184 61 / 0.7);
+    box-shadow: 0 0 0 0 rgb(255 133 181 / 0.7);
   }
   100% {
-    box-shadow: 0 0 0 9px rgb(245 184 61 / 0);
+    box-shadow: 0 0 0 9px rgb(255 133 181 / 0);
   }
 }
 @keyframes guide-ring {
   0% {
-    box-shadow: 0 0 0 0 rgb(245 184 61 / 0.55);
+    box-shadow: 0 0 0 0 rgb(255 133 181 / 0.5);
   }
   100% {
-    box-shadow: 0 0 0 14px rgb(245 184 61 / 0);
+    box-shadow: 0 0 0 14px rgb(255 133 181 / 0);
   }
 }
 
 /* Wide screens: a docked side panel, full height, next to the page. */
 @media (min-width: 1280px) {
   .guide-card {
-    top: 8px;
+    top: 10px;
     right: 8px;
-    bottom: 8px;
+    bottom: 10px;
     width: 380px;
     max-height: none;
-    border-radius: 16px;
+    border-radius: 20px;
+    box-shadow: var(--card-shadow);
   }
   .guide-body {
     flex: 1;

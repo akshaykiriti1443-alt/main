@@ -22,7 +22,7 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
         <Callout tone="error" className="mb-5">
           {VERIFY_EXPIRED}
         </Callout>
-        <Button asChild size="lg" className="w-full">
+        <Button asChild variant="cta" size="lg" className="w-full">
           <Link href="/login">Log in</Link>
         </Button>
       </AuthShell>

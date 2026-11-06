@@ -13,14 +13,14 @@ import { forgotAction, joinAction, loginAction, resetAction, signupAction, verif
 function Msg({ state }: { state: FormState }) {
   if (state.error)
     return (
-      <Alert role="alert" className="rounded-xl border-destructive/25 bg-destructive/10 px-4 py-3 text-destructive">
+      <Alert role="alert" className="rounded-xl border-destructive/20 bg-destructive-soft px-4 py-3 text-destructive">
         <CircleAlertIcon />
         <AlertDescription className="text-destructive">{state.error}</AlertDescription>
       </Alert>
     );
   if (state.ok)
     return (
-      <Alert role="status" className="rounded-xl border-success/25 bg-success-soft px-4 py-3 text-success">
+      <Alert role="status" className="rounded-xl border-success/20 bg-success-soft px-4 py-3 text-success">
         <CircleCheckIcon />
         <AlertDescription className="text-success">{state.ok}</AlertDescription>
       </Alert>
@@ -30,7 +30,7 @@ function Msg({ state }: { state: FormState }) {
 
 function Submit({ pending, children, pendingText }: { pending: boolean; children: ReactNode; pendingText: string }) {
   return (
-    <Button type="submit" size="lg" className="mt-1 w-full" disabled={pending}>
+    <Button type="submit" variant="cta" size="lg" className="mt-2 w-full" disabled={pending}>
       {pending ? <Spinner data-icon="inline-start" /> : null}
       {pending ? pendingText : children}
       {pending ? null : <ArrowRightIcon data-icon="inline-end" />}

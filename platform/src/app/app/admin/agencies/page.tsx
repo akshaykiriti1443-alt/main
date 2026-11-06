@@ -5,6 +5,7 @@ import { listAllAgencies } from "@/server/admin";
 import { adjustWalletAction, setAgencyAction } from "@/actions/admin";
 import { formatMoney } from "@/lib/util";
 import { Empty, Flash, PageHead, Panel } from "@/components/ui";
+import { Avatar, EdgeTable } from "@/components/crm-ui";
 import { SubmitButton } from "@/components/client";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -15,15 +16,16 @@ export default async function AdminAgencies({ searchParams }: { searchParams: Pr
   const rows = await listAllAgencies();
   return (
     <>
-      <PageHead title="Agencies" sub="Resellers on the Agency tier." />
+      <PageHead eyebrow="Platform admin" title="Agencies" sub="Resellers on the Agency tier: their clients, plan, status and wallet." />
       <Flash searchParams={await searchParams} />
       {rows.length === 0 ? (
         <Empty icon={Building2Icon} title="No agencies yet" body="Members start one from /app/agency/new." />
       ) : (
-        <Panel>
+        <Panel icon={Building2Icon} title="All agencies" sub={`${rows.length} agenc${rows.length === 1 ? "y" : "ies"}.`}>
+          <EdgeTable>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Agency</TableHead>
                 <TableHead className="text-right">Clients</TableHead>
                 <TableHead>Plan / status</TableHead>
@@ -33,20 +35,25 @@ export default async function AdminAgencies({ searchParams }: { searchParams: Pr
             <TableBody>
               {rows.map(({ agency: a, workspaces, balance }) => (
                 <TableRow key={a.id}>
-                  <TableCell>
-                    <Link href={`/app/agency/${a.id}`} className="font-medium text-foreground">
-                      {a.brand.name || a.name}
-                    </Link>
-                    <div className="text-xs text-muted-foreground">{a.appDomain ?? "no app domain"}</div>
+                  <TableCell className="min-w-52 py-2.5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar name={a.brand.name || a.name} size="sm" />
+                      <div className="grid min-w-0 leading-tight">
+                        <Link href={`/app/agency/${a.id}`} className="truncate font-medium text-foreground no-underline hover:text-primary hover:no-underline">
+                          {a.brand.name || a.name}
+                        </Link>
+                        <span className="mt-0.5 truncate text-xs text-muted-foreground">{a.appDomain ?? "No app domain"}</span>
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{workspaces}</TableCell>
                   <TableCell>
                     <form action={setAgencyAction.bind(null, a.id)} className="flex items-center gap-1.5">
-                      <NativeSelect size="sm" name="plan" defaultValue={a.plan} aria-label="Plan">
+                      <NativeSelect size="sm" name="plan" defaultValue={a.plan} aria-label="Plan" className="w-28 shrink-0">
                         <NativeSelectOption value="none">none</NativeSelectOption>
                         <NativeSelectOption value="agency">agency</NativeSelectOption>
                       </NativeSelect>
-                      <NativeSelect size="sm" name="status" defaultValue={a.status} aria-label="Status">
+                      <NativeSelect size="sm" name="status" defaultValue={a.status} aria-label="Status" className="w-28 shrink-0">
                         <NativeSelectOption value="active">active</NativeSelectOption>
                         <NativeSelectOption value="paused">paused</NativeSelectOption>
                       </NativeSelect>
@@ -58,7 +65,7 @@ export default async function AdminAgencies({ searchParams }: { searchParams: Pr
                   <TableCell>
                     <form action={adjustWalletAction.bind(null, "agency", a.id)} className="flex items-center gap-1.5">
                       <span className="mr-1 font-medium tabular-nums">{formatMoney(balance ?? 0)}</span>
-                      <Input name="amount" type="number" step="0.01" placeholder="±$" className="h-7 w-20" aria-label="Amount" />
+                      <Input name="amount" type="number" step="0.01" placeholder="±$" className="h-8 w-20" aria-label="Amount" />
                       <SubmitButton variant="outline" size="sm" pendingText="Applying…">
                         Apply
                       </SubmitButton>
@@ -68,6 +75,7 @@ export default async function AdminAgencies({ searchParams }: { searchParams: Pr
               ))}
             </TableBody>
           </Table>
+          </EdgeTable>
         </Panel>
       )}
     </>

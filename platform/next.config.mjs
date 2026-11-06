@@ -11,6 +11,8 @@ const nextConfig = {
   // PGlite ships WASM + data files that must not be bundled.
   serverExternalPackages: ["@electric-sql/pglite"],
   poweredByHeader: false,
+  // Local preview of the marketing host: MARKETING_HOSTS=scaleitads.localhost -> http://scaleitads.localhost:3000
+  allowedDevOrigins: ["*.localhost"],
   experimental: {
     serverActions: { bodySizeLimit: "2mb", ...(codespaceOrigin ? { allowedOrigins: [codespaceOrigin] } : {}) },
   },

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CreditCardIcon, GraduationCapIcon, LockKeyholeIcon, MailIcon, MailOpenIcon, PauseCircleIcon, RefreshCwIcon } from "lucide-react";
+import { ArrowUpRightIcon, CreditCardIcon, GraduationCapIcon, LockKeyholeIcon, MailIcon, MailOpenIcon, PauseCircleIcon, RefreshCwIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { checkAccessAction, resendVerifyAction } from "@/actions/account";
 import { memberCheckoutConfigured } from "@/server/billing/stripe";
@@ -15,11 +15,12 @@ function Head({ art, title, sub, email }: { art: ReactNode; title: string; sub: 
   return (
     <div className="flex flex-col items-center gap-4 text-center">
       {art}
-      <h1 className="text-[30px] leading-[1.1] font-bold md:text-[36px]">{title}</h1>
-      <p className="max-w-[52ch] text-base text-muted-foreground md:text-[17px]">{sub}</p>
+      <span className="eyebrow">Your account</span>
+      <h1 className="text-[36px] leading-[1.02] tracking-[-0.012em] md:text-[46px]">{title}</h1>
+      <p className="max-w-[52ch] text-[15.5px] leading-relaxed text-muted-foreground md:text-[17px]">{sub}</p>
       {email ? (
-        <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-sm shadow-card ring-1 ring-foreground/[0.07]">
-          <MailIcon className="size-4 shrink-0 text-primary" aria-hidden />
+        <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-sm shadow-card ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
+          <MailIcon className="size-4 shrink-0 text-primary dark:text-violet-300" aria-hidden />
           <span className="min-w-0 truncate">
             We look for <b className="font-semibold">{email}</b>
           </span>
@@ -69,7 +70,7 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
                 </span>
               </li>
             </ol>
-            <div className="flex flex-col gap-2 border-t border-dashed pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-t border-dashed border-border-strong pt-5 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">Not there? Check spam or promotions. The link works for 3 days.</p>
               <form action={resendVerifyAction.bind(null, wid)}>
                 <SubmitButton variant="outline" pendingText="Sending…" className="w-full sm:w-auto">
@@ -126,7 +127,7 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
       <Flash searchParams={sp} />
 
       {env.skoolGroupUrl ? (
-        <Card className="ring-primary/20">
+        <Card className="ring-violet-200/90 dark:ring-violet-400/20">
           <CardContent className="flex flex-col gap-5 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-start gap-3.5">
               <IconTile icon={GraduationCapIcon} className="size-11 rounded-2xl" />
@@ -135,9 +136,10 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
                 <p className="text-sm text-muted-foreground">Use this same email. Your account turns on by itself, no forms.</p>
               </div>
             </div>
-            <Button asChild size="lg" className="w-full shrink-0 sm:w-auto">
+            <Button asChild variant="cta" size="lg" className="w-full shrink-0 sm:w-auto">
               <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer">
                 Join on Skool
+                <ArrowUpRightIcon data-icon="inline-end" />
               </a>
             </Button>
           </CardContent>
@@ -150,25 +152,25 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
             <div className="flex min-w-0 flex-1 items-start gap-3.5">
               <IconTile icon={CreditCardIcon} tone="gold" />
               <div className="grid min-w-0 gap-0.5">
-                <span className="font-heading text-[15px] font-semibold">Or buy the app directly</span>
+                <span className="text-[15px] font-semibold tracking-[-0.01em]">Or buy the app directly</span>
                 <span className="text-sm text-muted-foreground">Pay by card and it turns on in seconds.{env.memberPriceLabel ? ` ${env.memberPriceLabel}.` : ""}</span>
               </div>
             </div>
-            <Button asChild variant={env.skoolGroupUrl ? "outline" : "default"} className="w-full shrink-0 sm:w-auto">
+            <Button asChild variant={env.skoolGroupUrl ? "outline" : "cta"} className="w-full shrink-0 sm:w-auto">
               <Link href={`/join?email=${encodeURIComponent(user.email)}`}>Buy access</Link>
             </Button>
           </CardContent>
         </Card>
       ) : null}
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-dashed border-foreground/15 bg-muted/35 p-5">
+      <div className="flex flex-col gap-4 rounded-2xl border border-dashed border-border-strong bg-muted/30 p-5">
         <div className="grid gap-1">
-          <span className="font-heading text-[15px] font-semibold">Already a member?</span>
+          <span className="text-[15px] font-semibold tracking-[-0.01em]">Already a member?</span>
           <span className="text-sm text-muted-foreground">{skoolTiming}</span>
         </div>
         <form action={checkAccessAction.bind(null, wid)} className="flex flex-col gap-3">
           <input type="hidden" name="back" value={`/app/w/${wid}/paused`} />
-          <SubmitButton variant="outline" className="w-full bg-card sm:w-auto sm:self-start" pendingText="Checking…">
+          <SubmitButton variant={env.skoolGroupUrl || canBuy ? "outline" : "default"} className="w-full sm:w-auto sm:self-start" pendingText="Checking…">
             <RefreshCwIcon data-icon="inline-start" />
             I&apos;m a member, check again
           </SubmitButton>

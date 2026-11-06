@@ -17,29 +17,22 @@ export const PLAYBOOKS: Playbook[] = [
 2. Ask me for this week's numbers from Skool › Settings › Growth (About-page visitors, new customers, Skool Network sign-ups and the level Skool shows), unless I already gave them. Also ask my ad spend per day and posts per week.
 3. Call save_growth_checkin with them.
 4. In at most 6 short bullets: my level, what's missing for the next one, and whether my ads alone can close the visitor gap at about $1 per visit (the 30-day window is rolling).
-5. Give me exactly 3 moves for this week, in the course's words (budget tier, the 3-Pack, Hook · Turn · Door, Unlocks for engagement).
+5. Give me exactly 3 moves for this week, in the course's words (budget tier, keep, fix or kill with one room fixed at a time: Hook, Door or About page, fresh statics from Make my 5 statics every 1 to 3 weeks, Unlocks for engagement).
 6. Call list_ai_tasks. If any are waiting, offer to do them now.`,
   },
   {
-    name: "write_my_3_pack",
-    title: "Write my 3-Pack",
-    description: "Study competitors' long-running ads, then write your Pain, Dream and Lesson ads.",
-    say: `Write my 3-Pack of ads with ${env.platformName}.`,
-    steps: `1. Call get_overview for my niche, offer and Skool link.
-2. Call search_competitor_ads with my niche keyword. If live search is off, open the website link it returns and ask me to paste 5-10 ads I like.
-3. Find the patterns in the longest-running ads (they usually make money): hooks, angles, offers, and one gap nobody uses.
-4. Write my 3-Pack: a Pain ad, a Dream ad and a Lesson ad. Each has a Hook (first line, stops the thumb), a Turn (the "wait, what?" line) and a Door (one way in: my Skool link to the About page). Add a headline and a one-line creative idea. Never copy competitor wording or claims. Follow Meta ad policy: no "Are you overweight?"-style personal attributes.
-5. Call save_ad_pack so the ads show in my Ad research page.`,
-  },
-  {
-    name: "member_messages",
-    title: "Member messages",
-    description: "Draft welcome, convert, save and win-back DMs for the members who need one.",
-    say: `Draft my member messages in ${env.platformName}.`,
-    steps: `1. Call list_leads three times: stage "trial" (welcome or convert), tag "skool-cancelling" (save), stage "lost" (win back). Look at no more than 20 people in total, newest first.
-2. For each, call get_lead and write one DM: 1-3 short sentences, their first name, one question, warm and human. No hype, no invented results.
-3. Call save_member_message for each one so it lands on their contact.
-4. Remind me to send them by hand inside Skool. Never ask for or use a Skool login.`,
+    name: "make_my_5_statics",
+    title: "Make my 5 statics",
+    description: "Your first ads, same day: your numbers, 5 genuinely different static ads with image prompts, the launch plan and a video script for later.",
+    say: `Make my 5 statics with ${env.platformName}.`,
+    steps: `1. Call get_overview for my business, niche, offer and Skool link.
+2. Ask me, unless I already said: my daily budget ($5, $10 or other), the country to target, who it's for in my own words, the result I promise, a real member result if I have one (optional), and the tone (friendly, bold or calm).
+3. Optional: call search_competitor_ads with my niche. Study the longest-running ads' hooks and angles. Never copy their wording, names or claims.
+4. Write 5 statics for ONE ad set. Meta's Andromeda system groups near-identical ads and treats them as one, so each static uses a different format (text_on_colour, photo_overlay, notes_app, before_after, checklist; quote_card only with a real member result) and a different persona, and every pair differs in at least two of: format, persona, angle, benefit. Angles: pain, dream, lesson; proof only with a real result.
+5. Each static: on-image text (7 words or fewer), a Hook, Turn and Door (the Door is one way in: my Skool link to the About page), a headline, a call to action (Learn more is the safe default), an image prompt ready for ChatGPT, Gemini or Midjourney (portrait 4:5, 1080×1350), a one-line 9:16 Stories note and a one-line design note. Meta policy: no "Are you…?" personal attributes, no income claims, no made-up testimonials or numbers.
+6. Write one 20-30 second selfie video script on the angle you think will win: Hook (0-2s), Turn and Door, each with what to say, the on-screen caption and the shot.
+7. Call make_ad_studio_pack with my answers, the 5 statics and the video. It checks Meta policy and Andromeda variety, adds my numbers and the Ads Manager click-steps, and saves it to my Ad studio page.
+8. Show me my numbers, the 5 statics and the launch plan's numbered steps it returns, plus any policy flags to fix. Remind me: hands off for 72 hours, then Ad review.`,
   },
   {
     name: "do_my_ai_tasks",
@@ -67,7 +60,7 @@ export const PLAYBOOKS: Playbook[] = [
     description: "Say what should happen and your AI builds the automation: trigger, emails and every step.",
     say: `Build me an automation in ${env.platformName}.`,
     steps: `1. Call get_overview and list_automations, so you know my numbers and what already runs.
-2. Ask me what should happen, to whom and when, unless I already said. If I'm not sure, look at my numbers (cancelling, trials, churned, new leads) and suggest the one that would plug my biggest leak.
+2. Ask me what should happen, to whom and when, unless I already said. If I'm not sure, look at my numbers (new leads, hot leads, Skool link clicks, engaged members) and suggest the one that would plug my biggest leak.
 3. Design it using only the triggers and steps that create_automation lists. Anything inside Skool: an ask_my_ai step drafts it and a notify_owner step tells me to send it myself.
 4. Show me the plan in plain words: one line per step, every email in full. Ask "build it?".
 5. When I say yes, call create_automation (switched off unless I said to switch it on) and give me the review link.`,
@@ -84,7 +77,8 @@ export const PLAYBOOKS: Playbook[] = [
   },
 ];
 
-// Earlier names, so chats that saved them still work.
-const ALIASES: Record<string, string> = { monday_review: "monday_check_in", engagement_drop: "plan_this_weeks_unlock" };
+// Earlier names, so chats that saved them still work. The 3-Pack is retired: course v5 makes ads
+// with Make my 5 statics.
+const ALIASES: Record<string, string> = { monday_review: "monday_check_in", engagement_drop: "plan_this_weeks_unlock", write_my_3_pack: "make_my_5_statics" };
 
 export const playbookByName = (name: string) => PLAYBOOKS.find((p) => p.name === (ALIASES[name] ?? name));

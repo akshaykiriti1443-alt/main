@@ -73,7 +73,8 @@ export const pageContentSchema = z.object({ sections: z.array(sectionSchema).max
 export type PageContent = z.infer<typeof pageContentSchema>;
 
 export const siteThemeSchema = z.object({
-  style: z.enum(["bold", "clean", "dark"]).default("bold"),
+  // "editorial" and "luxe" were added later; older sites keep their value and render as before.
+  style: z.enum(["bold", "clean", "dark", "editorial", "luxe"]).default("bold"),
   brandColor: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
@@ -92,10 +93,6 @@ export type WorkspaceSettings = {
   audience?: string;
   offer?: string;
   skoolUrl?: string;
-  skoolMemberPrice?: number;
-  // Skool Pro's onboarding / cancellation videos, sent by email instead (works on Hobby).
-  onboardingVideoUrl?: string;
-  cancelVideoUrl?: string;
   mailingAddress?: string;
   replyToEmail?: string;
   timezone?: string;
@@ -106,9 +103,6 @@ export type WorkspaceSettings = {
   // Bring your own AI: when set, AI features run on this key and are not billed to the wallet.
   aiProvider?: "anthropic" | "openai" | "gemini" | "groq" | "openrouter" | "custom";
   aiKeyEnc?: string;
-  // Skool's Webhook plugin URL for this member's own group (encrypted; it can invite people).
-  skoolInviteEnc?: string;
-  skoolInviteHint?: string;
   aiKeyHint?: string;
   aiModel?: string;
   // Only for aiProvider "custom": an OpenAI-compatible base URL (https).
@@ -136,9 +130,10 @@ export type CampaignAudience = {
 // ---------------------------------------------------------------------------
 
 export const automationTriggerSchema = z.object({
-  type: z.enum(["lead_created", "message_received", "tag_added", "temperature_changed", "stage_changed"]),
+  type: z.enum(["lead_created", "message_received", "tag_added", "temperature_changed", "stage_changed", "opportunity_stage_changed", "appointment_booked"]),
   // Optional filter: a site id for lead_created, a tag for tag_added, a channel for
-  // message_received, a temperature for temperature_changed, a stage for stage_changed.
+  // message_received, a temperature for temperature_changed, a stage for stage_changed,
+  // a deal stage's name for opportunity_stage_changed, a booking calendar's slug for appointment_booked.
   value: z.string().max(200).default(""),
 });
 export type AutomationTrigger = z.infer<typeof automationTriggerSchema>;
@@ -158,7 +153,17 @@ export const automationActionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("only_if_temperature"), temperature: z.enum(["hot", "warm", "cold"]) }),
   // Hands a task to the owner's own AI (their API key, or their connected Claude/ChatGPT via MCP).
   z.object({ type: z.literal("ask_my_ai"), instruction: z.string().min(1).max(2000) }),
-  // Invites the contact into the owner's own Skool group through Skool's Webhook plugin.
+  // Deals (pipelines). Stages are matched by name, any case, so a renamed stage is easy to fix.
+  z.object({ type: z.literal("move_opportunity"), stage: z.string().trim().min(1).max(60) }),
+  z.object({
+    type: z.literal("create_opportunity"),
+    title: z.string().max(200).default(""),
+    // Whole currency units (500 = $500).
+    value: z.number().min(0).max(100_000_000).default(0),
+    stage: z.string().max(60).default(""),
+  }),
+  // Legacy: Skool invites were removed. Kept so automations saved before then still load;
+  // the engine skips the step and nothing offers it any more.
   z.object({ type: z.literal("skool_invite") }),
 ]);
 export type AutomationAction = z.infer<typeof automationActionSchema>;

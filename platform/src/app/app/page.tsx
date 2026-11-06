@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { UserRoundSearchIcon } from "lucide-react";
+import { ArrowRightIcon, UserRoundSearchIcon } from "lucide-react";
 import { requireUser } from "@/server/auth";
 import { listUserAgencies, listUserWorkspaces } from "@/server/tenancy";
 import { EmptyArt } from "@/components/ui";
@@ -26,8 +26,11 @@ export default async function AppIndex() {
       <div className="flex flex-col gap-6">
         <EmptyArt icon={UserRoundSearchIcon} className="mx-0" />
         <div className="flex flex-col gap-2.5 sm:flex-row">
-          <Button asChild size="lg" className="sm:flex-1">
-            <Link href="/app/agency/new">Start an agency</Link>
+          <Button asChild variant="cta" size="lg" className="sm:flex-1">
+            <Link href="/app/agency/new">
+              Start an agency
+              <ArrowRightIcon data-icon="inline-end" />
+            </Link>
           </Button>
           <form action="/logout" method="post" className="sm:flex-1">
             <Button variant="outline" size="lg" type="submit" className="w-full">

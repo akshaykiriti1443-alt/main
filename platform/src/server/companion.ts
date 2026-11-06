@@ -19,6 +19,8 @@ export type CompanionStep = {
   href: string;
   done: boolean;
   locked?: string;
+  /** Optional steps and outcomes are never "next"; they still tick when done (see path.ts). */
+  kind?: "optional" | "outcome";
   stage: string;
 };
 export type CompanionSnapshot = {

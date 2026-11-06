@@ -18,6 +18,7 @@ const handlers: Record<JobType, Handler> = {
   "inbox.webhook": async (p) => (await import("../meta/webhooks")).processWebhookEvent(p.webhookEventId as string),
   "domain.check": async (p) => (await import("../domains")).checkDomainJob(p.siteId as string),
   "unlock.webhook": async (p) => (await import("../unlocks")).processUnlockWebhook(p),
+  "booking.reminder": async (p) => (await import("../booking")).processBookingReminder(p),
   "member.skool_invite": async (p) => (await import("../memberInvite")).sendSkoolInvite(p),
   "agency_domain.check": async (p) => (await import("../domains")).checkAgencyDomainJob(p.agencyId as string, Number(p.startedAt) || Date.now()),
 };

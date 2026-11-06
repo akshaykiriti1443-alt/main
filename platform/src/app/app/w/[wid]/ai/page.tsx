@@ -104,35 +104,33 @@ function doneByLabel(doneBy: string) {
 }
 
 const FREE_BADGE = {
-  yes: { label: "Free works", cls: "bg-success-soft text-success" },
-  limited: { label: "Free with limits", cls: "bg-gold-soft text-gold-foreground" },
-  no: { label: "Paid plans", cls: "" },
-};
+  yes: { label: "Free works", variant: "success" },
+  limited: { label: "Free with limits", variant: "gold" },
+  no: { label: "Paid plans", variant: "secondary" },
+} as const;
 
 /** One app's setup steps, folded. */
 function AppSteps({ app, open }: { app: App; open?: boolean }) {
   return (
-    <details open={open} className="group/app rounded-xl border bg-card transition-shadow open:shadow-card">
-      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-3.5 py-3 select-none hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
-        <span className="min-w-0 flex-1 font-medium">{app.name}</span>
-        <Badge variant="secondary" className={FREE_BADGE[app.free].cls}>
-          {FREE_BADGE[app.free].label}
-        </Badge>
+    <details open={open} className="group/app rounded-xl bg-card ring-1 ring-ink/[0.07] transition-shadow duration-200 open:shadow-card dark:ring-white/[0.08]">
+      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-3 transition-colors select-none hover:bg-accent/50 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0 flex-1 text-[14px] font-medium">{app.name}</span>
+        <Badge variant={FREE_BADGE[app.free].variant}>{FREE_BADGE[app.free].label}</Badge>
         <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-open/app:rotate-180" aria-hidden />
       </summary>
-      <div className="flex flex-col gap-3 border-t px-3.5 pt-3 pb-4">
-        <p className="text-xs text-muted-foreground">{app.plan}</p>
-        <ol className="flex flex-col gap-2 text-sm">
+      <div className="flex flex-col gap-3.5 border-t border-border/80 px-4 pt-3.5 pb-4">
+        <p className="text-xs leading-relaxed text-muted-foreground">{app.plan}</p>
+        <ol className="flex flex-col gap-2.5 text-sm">
           {app.steps.map((st, i) => (
             <li key={st} className="flex gap-2.5">
-              <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-bold text-accent-foreground tabular-nums">{i + 1}</span>
-              <span className="min-w-0">{st}</span>
+              <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground tabular-nums ring-1 ring-violet-200/70 ring-inset dark:ring-white/[0.06]">{i + 1}</span>
+              <span className="min-w-0 leading-relaxed">{st}</span>
             </li>
           ))}
         </ol>
         {app.snippet ? (
           <div className="flex flex-col gap-2">
-            <pre className="overflow-x-auto rounded-lg bg-muted p-3 text-xs">{app.snippet}</pre>
+            <pre className="overflow-x-auto rounded-xl bg-muted/70 p-3.5 font-mono text-xs leading-relaxed ring-1 ring-ink/[0.04] ring-inset dark:ring-white/[0.05]">{app.snippet}</pre>
             <div className="flex flex-wrap items-center gap-2">
               <CopyButton text={app.snippet} label="Copy config" />
               <span className="text-xs text-muted-foreground">Replace {URL_PH} with your connector URL.</span>
@@ -148,10 +146,10 @@ function AppSteps({ app, open }: { app: App; open?: boolean }) {
 function PathStep({ n, title, children, last }: { n: number; title: string; children: ReactNode; last?: boolean }) {
   return (
     <li className="relative flex gap-3.5">
-      {!last ? <span aria-hidden className="absolute top-9 bottom-0 left-[13px] w-0.5 rounded-full bg-foreground/[0.07]" /> : null}
+      {!last ? <span aria-hidden className="absolute top-9 bottom-1 left-[13.5px] w-px bg-border-strong" /> : null}
       <StepDot n={n} className="relative bg-card" />
-      <div className={cn("flex min-w-0 flex-1 flex-col gap-3", !last && "pb-6")}>
-        <h3 className="pt-0.5 text-[15px]">{title}</h3>
+      <div className={cn("flex min-w-0 flex-1 flex-col gap-3", !last && "pb-7")}>
+        <h3 className="pt-[3px] text-[15px] font-semibold tracking-[-0.011em]">{title}</h3>
         {children}
       </div>
     </li>
@@ -195,7 +193,7 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
               const brief = briefs[i];
               const prompt = `${r.task.instruction}\n\n${brief ? `About this member: ${JSON.stringify(brief)}` : ""}\n\nReply with only the finished text.`;
               return (
-                <li key={r.task.id} className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-4 text-sm">
+                <li key={r.task.id} className="flex flex-col gap-3 rounded-xl bg-background/60 p-4 text-sm ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">
                       {r.contact?.id ? <Link href={`${base}/leads/${r.contact.id}`}>{contactName({ firstName: r.contact.firstName ?? "", lastName: r.contact.lastName ?? "", email: r.contact.email, phone: null })}</Link> : "No contact"}
@@ -258,8 +256,8 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
-        lesson="0.4"
-        stage="Start here"
+        lesson="1.2"
+        stage="Optional"
         title="Your AI"
         sub="Plug in the AI you already use, free plans included. It does the writing and busywork in this account, and the AI bill is yours, never your wallet here."
         first={connected ? "You're connected. Try a playbook line in your AI app." : "Pick the path that sounds like you. One is plenty."}
@@ -290,11 +288,11 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
             key={c.href}
             href={c.href}
             data-slot="choice"
-            className="group flex items-center gap-3 rounded-2xl bg-card p-3.5 text-foreground shadow-card ring-1 ring-foreground/[0.07] transition-shadow hover:no-underline hover:ring-primary/40"
+            className="group flex items-center gap-3 rounded-2xl bg-card p-3.5 text-foreground shadow-card ring-1 ring-ink/[0.06] transition-shadow duration-150 hover:no-underline hover:shadow-lift hover:ring-primary/30 dark:ring-white/[0.07]"
           >
             <IconTile icon={c.icon} tone={c.tone} />
             <span className="grid min-w-0 flex-1">
-              <span className="font-heading font-semibold">{c.title}</span>
+              <span className="text-[14.5px] font-semibold">{c.title}</span>
               <span className="text-xs text-muted-foreground">{c.sub}</span>
             </span>
             <ArrowDownIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-y-0.5" aria-hidden />
@@ -304,29 +302,31 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
 
       <div className="grid items-start gap-5 @4xl/main:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         {/* Path 1: a paid AI app, connected with a private link. */}
-        <Card id="connect" className="scroll-mt-20 ring-2 ring-primary/25 dark:ring-primary/35">
-          <CardContent className="flex flex-col gap-6">
+        <Card id="connect" className="relative scroll-mt-20 shadow-lift ring-2 ring-primary/20 dark:ring-primary/40">
+          {/* The recommended path carries a faint violet glow along its top edge. */}
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(70%_100%_at_25%_0%,var(--accent),transparent_75%)] dark:bg-[radial-gradient(70%_100%_at_25%_0%,rgb(118_85_245/0.12),transparent_75%)]" />
+          <CardContent className="relative flex flex-col gap-7">
             <div className="flex items-start gap-3.5">
-              <IconTile icon={PlugIcon} className="size-11 rounded-2xl" />
-              <div className="grid min-w-0 flex-1 gap-1">
+              <IconTile icon={PlugIcon} className="size-11 rounded-2xl [&_svg]:size-5" />
+              <div className="grid min-w-0 flex-1 gap-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-xl">I pay for Claude or ChatGPT</h2>
-                  <Badge className="bg-primary/10 text-primary">Best results</Badge>
+                  <h2 className="text-[19px] tracking-[-0.015em]">I pay for Claude or ChatGPT</h2>
+                  <Badge variant="soft">Best results</Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm leading-relaxed text-muted-foreground">
                   Connect it once with a private link. Then your AI can read your leads, write ads, fix pages, switch on automations and do AI tasks. Nothing is deleted, and it never touches your Skool login.
                 </p>
               </div>
             </div>
             <ol className="flex flex-col">
               <PathStep n={1} title="Make your private link">
-                {isAdmin ? <NewConnector wid={wid} /> : <Callout tone="info">Ask the account owner or an admin to create a connector URL.</Callout>}
+                {isAdmin ? <NewConnector wid={wid} cta={!connected} /> : <Callout tone="info">Ask the account owner or an admin to create a connector URL.</Callout>}
                 {connectors.length ? (
-                  <ul className="flex flex-col divide-y rounded-xl border">
+                  <ul className="flex flex-col divide-y divide-border/80 overflow-hidden rounded-xl bg-background/60 ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
                     {connectors.map((c) => (
                       <li key={c.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm">
                         <span className="flex min-w-0 items-center gap-2.5">
-                          <span className={cn("size-2 shrink-0 rounded-full", c.lastUsedAt ? "bg-success" : "bg-foreground/20")} aria-hidden />
+                          <span className={cn("size-2 shrink-0 rounded-full", c.lastUsedAt ? "bg-success ring-3 ring-success/15" : "bg-border-strong")} aria-hidden />
                           <span className="min-w-0">
                             <span className="font-medium">{c.name}</span>
                             <span className="block text-xs text-muted-foreground">
@@ -358,9 +358,9 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
                 </p>
               </PathStep>
               <PathStep n={3} title="Ask it for a job" last>
-                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/60 p-2 pl-3.5">
-                  <MessageSquareTextIcon className="size-4 shrink-0 text-primary" aria-hidden />
-                  <span className="min-w-0 flex-1 font-mono text-[13px]">&ldquo;{firstPlaybook?.say ?? "Run my Monday check-in in OneX."}&rdquo;</span>
+                <div className="flex flex-wrap items-center gap-2.5 rounded-2xl rounded-bl-md bg-accent p-2 pl-3.5 ring-1 ring-violet-200/70 ring-inset dark:ring-white/[0.06]">
+                  <MessageSquareTextIcon className="size-4 shrink-0 text-primary dark:text-violet-300" aria-hidden />
+                  <span className="min-w-0 flex-1 text-[14px] font-medium text-accent-foreground">&ldquo;{firstPlaybook?.say ?? "Run my Monday check-in in OneX."}&rdquo;</span>
                   <CopyButton text={firstPlaybook?.say ?? "Run my Monday check-in in OneX."} />
                 </div>
               </PathStep>
@@ -371,20 +371,20 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
         {/* Path 2: free, with an API key. The form id stays "key": saving comes back to #key. */}
         <form id="key" data-guide="ai-key" action={saveAiKeyAction.bind(null, wid)} className="scroll-mt-20">
           <Card>
-            <CardContent className="flex flex-col gap-6">
+            <CardContent className="flex flex-col gap-7">
               <div className="flex items-start gap-3.5">
-                <IconTile icon={KeyRoundIcon} tone="success" className="size-11 rounded-2xl" />
-                <div className="grid min-w-0 flex-1 gap-1">
+                <IconTile icon={KeyRoundIcon} tone="success" className="size-11 rounded-2xl [&_svg]:size-5" />
+                <div className="grid min-w-0 flex-1 gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl">I want it free</h2>
-                    <Badge className="bg-success-soft text-success">Free</Badge>
+                    <h2 className="text-[19px] tracking-[-0.015em]">I want it free</h2>
+                    <Badge variant="success">Free</Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">Paste a free Google Gemini key. Every AI button here (launch kit, ad research, lead scores, reply drafts) and every Ask my AI step then runs by itself on your key.</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">Paste a free Google Gemini key. Every AI button here (launch kit, ad research, lead scores, reply drafts) and every Ask my AI step then runs by itself on your key.</p>
                 </div>
               </div>
 
               {provider ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-3.5 py-2.5 text-sm text-success">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-3.5 py-2.5 text-sm text-success ring-1 ring-success/15 ring-inset">
                   <CheckCircle2Icon className="size-4" aria-hidden />
                   <span className="flex-1 font-medium">
                     On · {AI_PROVIDERS[provider].label} {s.aiKeyHint}
@@ -462,7 +462,7 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
                     </ul>
                   </MoreOptions>
                   {isAdmin ? (
-                    <SubmitButton size="lg" className="self-start" pendingText="Checking your key…">
+                    <SubmitButton className="self-start" pendingText="Checking your key…">
                       <KeyRoundIcon data-icon="inline-start" />
                       Save key
                     </SubmitButton>
@@ -490,11 +490,11 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
           </div>
           <ul className="grid gap-2.5 @2xl/main:grid-cols-2">
             {PLAYBOOKS.map((p) => (
-              <li key={p.name} className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 text-sm">
+              <li key={p.name} className="flex flex-col gap-2 rounded-xl bg-card p-4 text-sm ring-1 ring-ink/[0.07] dark:ring-white/[0.08]">
                 <span className="font-semibold">{p.title}</span>
-                <span className="text-muted-foreground">{p.description}</span>
-                <div className="mt-auto flex items-center gap-2 pt-1">
-                  <span className="min-w-0 flex-1 truncate rounded-lg bg-muted px-2.5 py-1.5 font-mono text-xs">&ldquo;{p.say}&rdquo;</span>
+                <span className="leading-relaxed text-muted-foreground">{p.description}</span>
+                <div className="mt-auto flex items-center gap-2 pt-1.5">
+                  <span className="min-w-0 flex-1 truncate rounded-full bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground">&ldquo;{p.say}&rdquo;</span>
                   <CopyButton text={p.say} label="Copy" />
                 </div>
               </li>

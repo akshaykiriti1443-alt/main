@@ -9,7 +9,6 @@ import { getAutomation, listAutomations } from "../automations";
 import { listSequences } from "../email/sequences";
 import { latestCheckins } from "../growth";
 import { listSites } from "../sites";
-import { skoolMemberCounts } from "../skool";
 import { ENGAGED_TAG } from "../unlocks";
 import { env } from "@/lib/env";
 import { AI_PROVIDERS, chargeAi, describeAiError, generateStructured, isAiProvider, refundAi, VOICE_RULES } from "./client";
@@ -19,9 +18,9 @@ import { AI_PROVIDERS, chargeAi, describeAiError, generateStructured, isAiProvid
 // trigger and a list of steps the engine already runs. Nothing is saved here. The draft opens in the
 // builder, and the owner reads it and presses Save, same as a recipe.
 
-export const TRIGGER_TYPES = ["lead_created", "message_received", "tag_added", "temperature_changed", "stage_changed"] as const;
+export const TRIGGER_TYPES = ["lead_created", "message_received", "tag_added", "temperature_changed", "stage_changed", "opportunity_stage_changed", "appointment_booked"] as const;
 // No webhook: it needs a real Zapier/Make URL from the owner, so the AI says so in notes instead.
-export const STEP_TYPES = ["add_tag", "remove_tag", "set_stage", "wait", "send_email", "enroll_sequence", "notify_owner", "ai_score", "ai_draft_reply", "send_message", "only_if_temperature", "ask_my_ai", "skool_invite"] as const;
+export const STEP_TYPES = ["add_tag", "remove_tag", "set_stage", "wait", "send_email", "enroll_sequence", "notify_owner", "ai_score", "ai_draft_reply", "send_message", "only_if_temperature", "ask_my_ai", "move_opportunity", "create_opportunity"] as const;
 const STAGES = ["new", "engaged", "trial", "member", "lost"] as const;
 const CHANNELS = ["facebook", "instagram", "whatsapp", "sms"] as const;
 const TEMPERATURES = ["hot", "warm", "cold"] as const;
@@ -29,11 +28,13 @@ export const MAX_STEPS = 12;
 
 /** What the engine can do, in words an AI (ours or the owner's connected one) can build from. */
 export const AUTOMATION_GUIDE = `TRIGGERS (what starts it; value is an optional filter, "" means any):
-- stage_changed: value trial | member | lost | engaged | new. The weekly Skool member sync sets trial (started a free trial), member (paying) and lost (churned, left).
-- tag_added: value is the tag. The system adds "skool-cancelling" when a Skool member cancels but still has access, "skool-churned" when they leave, "${ENGAGED_TAG}" when a member posts or comments in Skool to claim an Unlock, "skool-member" for everyone from the Skool sync.
+- stage_changed: value trial | member | lost | engaged | new. Fires when the owner moves a contact to that pipeline stage, or a set_stage step does.
+- tag_added: value is the tag. The system adds "${ENGAGED_TAG}" when a member posts or comments in Skool to claim an Unlock; the owner (or an add_tag step) can add any other tag.
 - lead_created: someone fills in a landing page form. value: a site id to limit it to one funnel, or "".
 - message_received: a DM, WhatsApp or SMS arrives. value: facebook | instagram | whatsapp | sms, or "".
 - temperature_changed: after AI scoring. value: hot | warm | cold, or "".
+- opportunity_stage_changed: an opportunity (a deal on the pipeline board) moves to a stage, by hand, by a booking or by a move_opportunity step. value: the stage's name (any case), e.g. "Call booked", "Proposal sent", "Won", or "" for any stage. The default pipeline "Sales" has: New lead, Contacted, Call booked, Proposal sent, Won, Lost.
+- appointment_booked: someone books a call on one of the owner's booking calendars (they also get the "booked-call" tag, and their opportunity moves to "Call booked"). value: the calendar's slug, or "".
 
 STEPS (run in order, per contact):
 - send_email {subject, body}: emails the contact from the platform. Merge fields: {{first_name}}, {{business_name}}, {{owner_name}}, {{skool_url}}, {{lead_magnet_name}}, {{lead_magnet_url}}. Plain text, short, one question or one link.
@@ -47,7 +48,9 @@ STEPS (run in order, per contact):
 - ai_draft_reply: AI drafts a reply in the inbox conversation (message_received flows only).
 - send_message {body}: replies in the contact's DM/WhatsApp/SMS conversation. Only works when they messaged first, so only after a message_received trigger.
 - enroll_sequence {sequenceId}: starts one of the owner's existing email sequences (use only an id from the list given).
-- skool_invite: Skool emails the contact an invite to the owner's group (through the Skool webhook the owner connected; each person is invited once). Free groups: fine for new leads. Paid groups: only for people who already paid elsewhere.
+- move_opportunity {stage}: moves the contact's opportunity to the stage with that name (creates one in the default pipeline if they have none). Fires opportunity_stage_changed.
+- create_opportunity {title, value, stage}: a new opportunity for the contact in the default pipeline. title may use {{first_name}} (empty = their name); value in whole currency units (500 = $500), 0 if unknown; stage name, "" = the first stage.
+- Booking reminders (24 h and 1 h before) and confirmations are sent by the calendar itself: never build them as automations.
 
 HARD RULES:
 - Nothing can post, DM or act inside Skool, and nothing should pretend to. For Skool DMs or posts: ask_my_ai to draft it, then notify_owner to send it by hand. "AI writes, you send."
@@ -65,10 +68,13 @@ const stepSchema = z.object({
   temperature: z.string().describe("only_if_temperature only, else empty"),
   instruction: z.string().describe("ask_my_ai only, else empty"),
   sequenceId: z.string().describe("enroll_sequence only, else empty"),
+  // Defaults, so a reply from an AI (or an app) that leaves out these newer fields still parses.
+  title: z.string().default("").describe("create_opportunity only, else empty"),
+  value: z.number().default(0).describe("create_opportunity only (whole currency units), else 0"),
 });
 
 const draftSchema = z.object({
-  name: z.string().describe("2-6 words, like 'Save a cancelling member'"),
+  name: z.string().describe("2-6 words, like 'Follow up new leads'"),
   summary: z.string().describe("1-2 plain sentences for the owner: what happens, to whom, when"),
   why: z.string().describe("One sentence linking it to the owner's numbers (what is growing or leaking), or empty"),
   trigger: z.object({ type: z.enum(TRIGGER_TYPES), value: z.string() }),
@@ -95,7 +101,8 @@ const tagOf = (raw: string) =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
 
-type StepIn = z.infer<typeof stepSchema>;
+// The opportunity fields came later: callers built before them may leave them out.
+type StepIn = Omit<z.infer<typeof stepSchema>, "title" | "value"> & { title?: string; value?: number };
 
 /** Turns the AI's flat step into a real, validated action, or null if it doesn't hold up. */
 function toAction(s: StepIn, sequenceIds: Set<string>): AutomationAction | null {
@@ -130,6 +137,12 @@ function toAction(s: StepIn, sequenceIds: Set<string>): AutomationAction | null 
       if (!sequenceIds.has(s.sequenceId)) return null;
       candidate.sequenceId = s.sequenceId;
       break;
+    case "move_opportunity":
+      candidate.stage = s.stage.trim();
+      break;
+    case "create_opportunity":
+      Object.assign(candidate, { title: (s.title ?? "").trim(), value: Math.max(0, Math.round(Number(s.value) || 0)), stage: s.stage.trim() });
+      break;
   }
   const r = automationActionSchema.safeParse(candidate);
   return r.success ? r.data : null;
@@ -149,11 +162,15 @@ function cleanTrigger(t: { type: AutomationTrigger["type"]; value: string }, sit
       return { type: t.type, value: (STAGES as readonly string[]).includes(lower) ? lower : "" };
     case "tag_added":
       return { type: t.type, value: tagOf(v) };
+    case "opportunity_stage_changed":
+      return { type: t.type, value: v.slice(0, 60) };
+    case "appointment_booked":
+      return { type: t.type, value: lower.replace(/[^a-z0-9-]/g, "").slice(0, 60) };
   }
 }
 
 /** Makes a raw AI draft safe to show: valid trigger, valid steps only, sensible ordering. */
-export type RawDraft = z.infer<typeof draftSchema>;
+export type RawDraft = Omit<z.infer<typeof draftSchema>, "steps"> & { steps: StepIn[] };
 
 export function finishDraft(raw: RawDraft, ctx: { siteIds: Set<string>; sequenceIds: Set<string> }): AutomationDraft | { error: string } {
   const trigger = cleanTrigger(raw.trigger, ctx.siteIds);
@@ -194,9 +211,8 @@ export async function automationContext(workspaceId: string) {
   const db = await getDb();
   const since30 = new Date(Date.now() - 30 * 86_400_000);
   const n = sql<number>`count(*)::int`;
-  const [[ws], piles, [leads], [clicks], [engaged], [hot], checkins, existing, sites, sequences] = await Promise.all([
+  const [[ws], [leads], [clicks], [engaged], [hot], checkins, existing, sites, sequences] = await Promise.all([
     db.select().from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1),
-    skoolMemberCounts(workspaceId),
     db.select({ n }).from(activities).where(and(eq(activities.workspaceId, workspaceId), eq(activities.type, "lead"), gte(activities.createdAt, since30))),
     db.select({ n }).from(activities).where(and(eq(activities.workspaceId, workspaceId), eq(activities.type, "skool_visit"), gte(activities.createdAt, since30))),
     db.select({ n }).from(contacts).where(and(eq(contacts.workspaceId, workspaceId), sql`${ENGAGED_TAG} = any(${contacts.tags})`)),
@@ -209,18 +225,15 @@ export async function automationContext(workspaceId: string) {
   const s = ws?.settings ?? {};
   const last = checkins[0] ?? null;
   return {
-    business: { name: s.businessName || ws?.name || "", niche: s.niche || "", offer: s.offer || "", audience: s.audience || "", skoolUrl: s.skoolUrl || "", memberPrice: s.skoolMemberPrice ?? null },
+    business: { name: s.businessName || ws?.name || "", niche: s.niche || "", offer: s.offer || "", audience: s.audience || "", skoolUrl: s.skoolUrl || "" },
     numbers: {
       leadsLast30Days: leads?.n ?? 0,
       skoolLinkClicksLast30Days: clicks?.n ?? 0,
       hotLeads: hot?.n ?? 0,
-      onTrial: piles.trials,
-      paying: piles.members,
-      cancelling: piles.cancelling,
-      churned: piles.churned,
       engagedMembers: engaged?.n ?? 0,
       skoolLevel: last?.skoolLevel ?? null,
       aboutPageVisitors30d: last?.aboutVisitors ?? null,
+      newCustomers30d: last?.newPaid ?? null,
     },
     existing: existing.map((a) => ({ id: a.id, name: a.name, on: a.active, trigger: a.trigger, steps: a.actions.map((x) => x.type), runs: a.runsCount })),
     sites: sites.map((x) => ({ id: x.id, name: x.name })),
@@ -235,29 +248,17 @@ export function automationSuggestions(ctx: AutomationContext): { label: string; 
   const n = ctx.numbers;
   const has = (pred: (t: AutomationTrigger) => boolean) => ctx.existing.some((a) => a.on && pred(a.trigger));
   const out: { label: string; request: string; weight: number }[] = [];
-  if (!has((t) => t.type === "tag_added" && t.value === "skool-cancelling"))
-    out.push({
-      weight: 10 + n.cancelling * 3,
-      label: n.cancelling ? `${n.cancelling} cancelling: save them` : "Save people who cancel",
-      request: "When a member cancels (they still have access for now), email them a short, kind note asking what would have made them stay, have my AI draft a personal Skool DM, and tell me to send it today.",
-    });
-  if (!has((t) => t.type === "stage_changed" && t.value === "trial"))
-    out.push({
-      weight: 8 + n.onTrial * 2,
-      label: n.onTrial ? `${n.onTrial} on trial: help them convert` : "Turn trials into paying members",
-      request: "When someone starts a free trial, email a warm hello that points them to the one lesson worth finishing first. On day 4, email to ask how it's going with one question. On day 6, have my AI draft a personal Skool DM and tell me to send it.",
-    });
-  if (!has((t) => t.type === "stage_changed" && t.value === "lost"))
-    out.push({
-      weight: 6 + n.churned,
-      label: n.churned ? `${n.churned} churned: win some back` : "Win back people who left",
-      request: "A week after a member leaves, email them to say the door's open, mention one new thing inside, no guilt trip. Tag them win-back and tell me so I can say hi in Skool.",
-    });
   if (!has((t) => t.type === "lead_created"))
     out.push({
-      weight: 5 + Math.max(0, n.leadsLast30Days - n.paying),
+      weight: 6 + n.leadsLast30Days,
       label: n.leadsLast30Days ? `${n.leadsLast30Days} new leads: walk them to Skool` : "Walk new leads to your Skool",
       request: "When someone grabs my free guide, wait a day, then email them one useful tip from the guide and my Skool link with one question. Two days later, if they're still a lead, score them with AI and alert me if they're hot.",
+    });
+  if (!has((t) => t.type === "temperature_changed" && (t.value === "hot" || t.value === "")))
+    out.push({
+      weight: 5 + n.hotLeads * 2,
+      label: n.hotLeads ? `${n.hotLeads} hot leads: follow up fast` : "Follow up hot leads fast",
+      request: "When a lead turns hot, have my AI draft a short personal follow-up that mentions what they did, and email me straight away so I can send it today.",
     });
   if (!has((t) => t.type === "tag_added" && t.value === ENGAGED_TAG))
     out.push({
@@ -288,10 +289,6 @@ export function whoBuilds(ws: { plan: string; settings: { aiKeyEnc?: string; aiP
 /** No AI anywhere: pick the closest recipe so the owner still gets a working start. */
 export function recipeFor(request: string): string | null {
   const r = request.toLowerCase();
-  if (/cancel|quit|leaving|about to leave|save/.test(r)) return "skool-save";
-  if (/churn|win.?back|came back|left|gone|lost/.test(r)) return "skool-winback";
-  if (/trial|convert|upgrade/.test(r)) return "skool-convert";
-  if (/welcome|new member|onboard|joins?\b|paying/.test(r)) return "skool-welcome";
   if (/\bhot\b|\bdm\b|message|inbox|instagram|whatsapp/.test(r)) return "hot";
   if (/lead|opt.?in|guide|nurture|sign.?up/.test(r)) return "nurture";
   return null;
@@ -349,7 +346,7 @@ ${AUTOMATION_GUIDE}
 
 How to build well:
 - Do exactly what the owner asked. If they were vague, build the simplest version that does the job and say what you assumed in notes.
-- Use the owner's numbers to explain why it matters in "why" (one sentence, real numbers only), e.g. "4 members are cancelling right now, so this is your biggest leak."
+- Use the owner's numbers to explain why it matters in "why" (one sentence, real numbers only), e.g. "12 leads came in this month and none got a follow-up, so this is your biggest leak."
 - Don't duplicate an automation they already have switched on; if theirs nearly does it, say so in notes.
 - Emails: 40-120 words, sound like the owner talking to one person, first name, one clear next step. Sign off with {{owner_name}}.
 - Prefer ask_my_ai + notify_owner for anything personal or anything in Skool.

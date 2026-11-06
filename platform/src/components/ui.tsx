@@ -26,10 +26,15 @@ import { FlashToast } from "./client";
 /** "Lesson 1.2 · Stage 1": ties a page to the classroom, so the course and the app line up. */
 export function LessonTag({ lesson, stage, className }: { lesson: string; stage?: string; className?: string }) {
   return (
-    <span className={cn("inline-flex h-6 items-center gap-1.5 rounded-full bg-accent px-2.5 text-xs font-semibold text-accent-foreground tabular-nums", className)}>
+    <span
+      className={cn(
+        "inline-flex h-6 items-center gap-1.5 rounded-full bg-accent px-2.5 text-[11.5px] font-semibold text-accent-foreground tabular-nums ring-1 ring-violet-200/70 ring-inset dark:ring-white/[0.06]",
+        className,
+      )}
+    >
       <GraduationCapIcon className="size-3.5" aria-hidden />
       Lesson {lesson}
-      {stage ? <span className="font-medium opacity-75">· {stage}</span> : null}
+      {stage ? <span className="font-medium opacity-70">· {stage}</span> : null}
     </span>
   );
 }
@@ -59,20 +64,20 @@ export function PageHead({
     <header className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0 max-w-3xl">
         {lesson || eyebrow ? (
-          <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
             {lesson ? <LessonTag lesson={lesson} stage={stage} /> : null}
-            {eyebrow ? <span className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">{eyebrow}</span> : null}
+            {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
           </div>
         ) : null}
-        <h1 className="text-[30px] leading-[1.08] font-bold md:text-[38px]">{title}</h1>
-        {sub ? <p className="mt-2.5 max-w-[62ch] text-base text-muted-foreground md:text-[17px]">{sub}</p> : null}
+        <h1 className="text-[36px] leading-[1.02] tracking-[-0.012em] text-foreground md:text-[46px]">{title}</h1>
+        {sub ? <p className="mt-3 max-w-[60ch] text-[15.5px] leading-relaxed text-muted-foreground md:text-[17px]">{sub}</p> : null}
         {first ? (
-          <p className="mt-4 flex w-fit max-w-full items-start gap-2.5 rounded-2xl bg-card py-2 pr-4 pl-2 text-sm shadow-card ring-1 ring-foreground/[0.06]">
-            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+          <p className="mt-5 flex w-fit max-w-full items-start gap-3 rounded-2xl bg-card py-2.5 pr-4 pl-2.5 text-sm leading-snug shadow-card ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-press">
               <ArrowDownIcon className="size-3.5" strokeWidth={2.5} aria-hidden />
             </span>
-            <span className="min-w-0 pt-0.5">
-              <b className="font-semibold">Do this first:</b> {first}
+            <span className="min-w-0 pt-[3px]">
+              <b className="font-semibold text-foreground">Do this first:</b> <span className="text-foreground/85">{first}</span>
             </span>
           </p>
         ) : null}
@@ -83,8 +88,8 @@ export function PageHead({
 }
 
 /**
- * The one big thing to do on a page. Indigo, impossible to miss. Give it either an href + cta,
- * or children (a form, a set of buttons).
+ * The one big thing to do on a page: a calm galactic-night panel with the screen's single
+ * bubblegum-pink button. Give it either an href + cta, or children (a form, a set of buttons).
  */
 export function NextStep({
   eyebrow,
@@ -107,25 +112,25 @@ export function NextStep({
   className?: string;
 } & Omit<ComponentProps<"section">, "title" | "children">) {
   return (
-    <section className={cn("relative isolate overflow-hidden rounded-3xl bg-hero p-6 text-white shadow-lift md:p-8", className)} {...rest}>
-      <div aria-hidden className="bg-dots pointer-events-none absolute inset-0 -z-10 text-white/[0.09] [mask-image:linear-gradient(110deg,transparent_35%,black)]" />
-      <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 -z-10 size-64 rounded-full border border-white/15" />
-      <div aria-hidden className="pointer-events-none absolute top-10 -right-4 -z-10 size-36 rounded-full border border-white/10" />
-      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-8">
+    <section className={cn("relative isolate overflow-hidden rounded-3xl bg-hero p-6 text-white shadow-lift ring-1 ring-white/10 md:p-9", className)} {...rest}>
+      <div aria-hidden className="bg-stars pointer-events-none absolute inset-0 -z-10 text-white/45 [mask-image:linear-gradient(115deg,transparent_30%,black_80%)]" />
+      <div aria-hidden className="pointer-events-none absolute -top-24 -right-20 -z-10 size-72 rounded-full border border-white/[0.12]" />
+      <div aria-hidden className="pointer-events-none absolute -top-8 right-6 -z-10 size-40 rounded-full border border-white/[0.08]" />
+      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between md:gap-10">
         <div className="flex min-w-0 items-start gap-4">
           {Icon ? (
-            <span className="hidden size-12 shrink-0 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/25 sm:grid">
-              <Icon className="size-6" aria-hidden />
+            <span className="hidden size-12 shrink-0 place-items-center rounded-2xl bg-white/[0.12] ring-1 ring-white/20 backdrop-blur-sm sm:grid">
+              <Icon className="size-[22px]" aria-hidden />
             </span>
           ) : null}
-          <div className="grid min-w-0 gap-1.5">
-            {eyebrow ? <span className="text-xs font-bold tracking-[0.1em] text-white/75 uppercase">{eyebrow}</span> : null}
-            <h2 className="text-2xl leading-tight font-bold text-white md:text-[28px]">{title}</h2>
-            {body ? <p className="max-w-[58ch] text-[15px] text-white/85">{body}</p> : null}
+          <div className="grid min-w-0 gap-2">
+            {eyebrow ? <span className="text-[11.5px] font-semibold tracking-[0.14em] text-pink-200 uppercase">{eyebrow}</span> : null}
+            <h2 className="font-display text-[30px] leading-[1.05] tracking-[-0.01em] text-white md:text-[36px]">{title}</h2>
+            {body ? <p className="max-w-[58ch] text-[15px] leading-relaxed text-white/80">{body}</p> : null}
           </div>
         </div>
         {href && cta ? (
-          <Button size="lg" asChild className="shrink-0 bg-white text-[oklch(0.42_0.2_277)] shadow-[0_1px_0_oklch(1_0_0/40%)_inset,0_10px_24px_-10px_oklch(0.2_0.1_277/60%)] hover:bg-white/92 dark:text-[oklch(0.4_0.2_277)]">
+          <Button variant="cta" size="lg" asChild className="shrink-0">
             <Link href={href}>
               {cta}
               <ArrowRightIcon data-icon="inline-end" />
@@ -133,7 +138,7 @@ export function NextStep({
           </Button>
         ) : null}
       </div>
-      {children ? <div className="mt-5">{children}</div> : null}
+      {children ? <div className="mt-6">{children}</div> : null}
     </section>
   );
 }
@@ -162,18 +167,21 @@ export function MoreOptions({
       data-slot="more"
       id={id}
       open={defaultOpen}
-      className={cn("group/more scroll-mt-20 rounded-2xl border border-dashed border-foreground/15 bg-card/40 transition-colors open:border-solid open:border-transparent open:bg-card open:shadow-card open:ring-1 open:ring-foreground/[0.07]", className)}
+      className={cn(
+        "group/more scroll-mt-20 rounded-2xl border border-dashed border-border-strong bg-card/40 transition-[background-color,box-shadow,border-color] duration-200 open:border-solid open:border-transparent open:bg-card open:shadow-card open:ring-1 open:ring-ink/[0.06] dark:open:ring-white/[0.07]",
+        className,
+      )}
       {...rest}
     >
-      <summary className="flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-3.5 select-none hover:bg-muted/50 md:px-5">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground group-open/more:bg-accent group-open/more:text-primary">
+      <summary className="flex cursor-pointer items-center gap-3.5 rounded-2xl px-4 py-4 transition-colors select-none hover:bg-accent/50 md:px-5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground transition-colors group-open/more:bg-accent group-open/more:text-primary">
           <Icon className="size-4" aria-hidden />
         </span>
         <span className="grid min-w-0 flex-1 gap-0.5">
-          <span className="font-heading text-[15px] font-semibold">{title}</span>
+          <span className="font-heading text-[15px] font-semibold tracking-[-0.01em]">{title}</span>
           {sub ? <span className="text-sm text-muted-foreground">{sub}</span> : null}
         </span>
-        <ChevronDownIcon data-chevron className="size-4 shrink-0 text-muted-foreground transition-transform" aria-hidden />
+        <ChevronDownIcon data-chevron className="size-4 shrink-0 text-muted-foreground transition-transform duration-200" aria-hidden />
       </summary>
       <div className="flex flex-col gap-4 px-4 pt-1 pb-5 md:px-5">{children}</div>
     </details>
@@ -181,7 +189,8 @@ export function MoreOptions({
 }
 
 const TONE_TILE = {
-  primary: "bg-accent text-primary",
+  primary: "bg-accent text-primary dark:text-violet-300",
+  pink: "bg-cta-soft text-cta-soft-foreground",
   success: "bg-success-soft text-success",
   gold: "bg-gold-soft text-gold-foreground",
   hot: "bg-hot-soft text-hot",
@@ -193,7 +202,7 @@ export type Tone = keyof typeof TONE_TILE;
 /** A small rounded icon tile, the app's visual rhythm. */
 export function IconTile({ icon: Icon, tone = "primary", className }: { icon: LucideIcon; tone?: Tone; className?: string }) {
   return (
-    <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl", TONE_TILE[tone], className)}>
+    <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-current/10 ring-inset", TONE_TILE[tone], className)}>
       <Icon className="size-[18px]" aria-hidden />
     </span>
   );
@@ -204,8 +213,12 @@ export function StepDot({ n, done, active, className }: { n?: ReactNode; done?: 
   return (
     <span
       className={cn(
-        "grid size-7 shrink-0 place-items-center rounded-full border-2 font-heading text-[13px] font-bold tabular-nums",
-        done ? "border-success bg-success text-white dark:text-background" : active ? "border-primary bg-primary text-primary-foreground" : "border-foreground/15 text-muted-foreground",
+        "grid size-7 shrink-0 place-items-center rounded-full border font-sans text-[12.5px] font-semibold tabular-nums",
+        done
+          ? "border-success bg-success text-white dark:text-background"
+          : active
+            ? "border-primary bg-primary text-primary-foreground shadow-press"
+            : "border-border-strong bg-card text-muted-foreground",
         className,
       )}
     >
@@ -217,13 +230,13 @@ export function StepDot({ n, done, active, className }: { n?: ReactNode; done?: 
 export function Stat({ label, value, hint, icon: Icon, tone = "primary" }: { label: string; value: ReactNode; hint?: ReactNode; icon?: LucideIcon; tone?: Tone }) {
   return (
     <Card size="sm" className="gap-0">
-      <CardContent className="flex flex-col gap-2">
+      <CardContent className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium text-muted-foreground">{label}</span>
-          {Icon ? <IconTile icon={Icon} tone={tone} className="size-8 rounded-lg" /> : null}
+          <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
+          {Icon ? <IconTile icon={Icon} tone={tone} className="size-8 rounded-[10px]" /> : null}
         </div>
-        <span className="font-heading text-[28px] leading-none font-bold tracking-tight tabular-nums">{value}</span>
-        {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
+        <span className="font-display text-[38px] leading-[0.95] tracking-[-0.01em] tabular-nums">{value}</span>
+        {hint ? <span className="text-xs leading-snug text-muted-foreground">{hint}</span> : null}
       </CardContent>
     </Card>
   );
@@ -285,16 +298,16 @@ export function TempBadge({ t }: { t: Temperature }) {
   );
 }
 
-/** A little composed illustration: a tilted card with the icon, a gold coin and a green dot. */
+/** A little composed illustration: a tilted card with the icon, a gold coin and two candy dots. */
 export function EmptyArt({ icon: Icon, tone = "primary", className }: { icon: LucideIcon; tone?: Tone; className?: string }) {
   return (
     <div aria-hidden className={cn("relative mx-auto size-20", className)}>
-      <div className={cn("absolute inset-1 rotate-[8deg] rounded-[22px] opacity-60", TONE_TILE[tone])} />
-      <div className="absolute inset-1 -rotate-[4deg] grid place-items-center rounded-[22px] bg-card shadow-card ring-1 ring-foreground/[0.08]">
-        <Icon className={cn("size-8", TONE_TILE[tone].split(" ")[1])} strokeWidth={1.75} />
+      <div className={cn("absolute inset-1 rotate-[8deg] rounded-[22px] opacity-70", TONE_TILE[tone])} />
+      <div className="absolute inset-1 -rotate-[4deg] grid place-items-center rounded-[22px] bg-card shadow-lift ring-1 ring-ink/[0.06] dark:ring-white/[0.08]">
+        <Icon className={cn("size-8", TONE_TILE[tone].split(" ")[1])} strokeWidth={1.6} />
       </div>
-      <span className="absolute -top-0.5 -right-1 size-5 rounded-full bg-gold shadow-sm ring-2 ring-card" />
-      <span className="absolute bottom-0 -left-1.5 size-3 rounded-full bg-success ring-2 ring-card" />
+      <span className="absolute -top-0.5 -right-1 size-5 rounded-full bg-[radial-gradient(circle_at_35%_30%,#ffe7a3,var(--gold)_60%)] shadow-sm ring-2 ring-card" />
+      <span className="absolute bottom-0.5 -left-1.5 size-3 rounded-full bg-pink-300 ring-2 ring-card" />
       <span className="absolute top-3 -left-3 size-1.5 rounded-full bg-primary/40" />
     </div>
   );
@@ -317,10 +330,16 @@ export function Empty({
   className?: string;
 }) {
   return (
-    <div data-slot="empty" className={cn("flex w-full min-w-0 flex-col items-center gap-4 rounded-2xl border border-dashed border-foreground/15 bg-muted/35 px-6 py-10 text-center text-balance", className)}>
+    <div
+      data-slot="empty"
+      className={cn(
+        "flex w-full min-w-0 flex-col items-center gap-5 rounded-2xl border border-dashed border-border-strong bg-[radial-gradient(80%_100%_at_50%_0%,var(--accent),transparent_70%)] px-6 py-12 text-center text-balance dark:bg-[radial-gradient(80%_100%_at_50%_0%,rgb(118_85_245/0.08),transparent_70%)]",
+        className,
+      )}
+    >
       {Icon ? <EmptyArt icon={Icon} tone={tone} /> : null}
       <div className="flex max-w-sm flex-col items-center gap-1.5">
-        <div className="font-heading text-lg font-semibold tracking-tight">{title}</div>
+        <div className="font-heading text-[17px] font-semibold tracking-[-0.012em]">{title}</div>
         {body ? <div className="text-sm/relaxed text-muted-foreground [&_a]:underline [&_a]:underline-offset-4">{body}</div> : null}
       </div>
       {action ? <div className="flex flex-wrap items-center justify-center gap-2">{action}</div> : null}
@@ -328,19 +347,21 @@ export function Empty({
   );
 }
 
+/* Calm callouts: a soft tint, the tone on the icon and title only, body copy in ink. */
+const CALM_BODY = "text-foreground *:data-[slot=alert-description]:text-foreground/75";
 const TONES = {
-  info: { icon: InfoIcon, className: "border-primary/15 bg-accent text-accent-foreground *:data-[slot=alert-description]:text-accent-foreground/85" },
-  ok: { icon: CircleCheckIcon, className: "border-success/25 bg-success-soft text-success *:data-[slot=alert-description]:text-success/90" },
-  warn: { icon: TriangleAlertIcon, className: "border-warning/25 bg-warning-soft text-warning *:data-[slot=alert-description]:text-warning/90" },
-  error: { icon: CircleAlertIcon, className: "border-destructive/25 bg-destructive/10 text-destructive *:data-[slot=alert-description]:text-destructive/90" },
-  tip: { icon: LightbulbIcon, className: "border-gold/45 bg-gold-soft text-gold-foreground *:data-[slot=alert-description]:text-gold-foreground/90" },
+  info: { icon: InfoIcon, className: cn(CALM_BODY, "border-violet-200/80 bg-accent *:[svg]:text-primary *:data-[slot=alert-title]:text-accent-foreground dark:border-white/[0.08] dark:*:[svg]:text-violet-300") },
+  ok: { icon: CircleCheckIcon, className: cn(CALM_BODY, "border-success/20 bg-success-soft *:[svg]:text-success *:data-[slot=alert-title]:text-success") },
+  warn: { icon: TriangleAlertIcon, className: cn(CALM_BODY, "border-warning/25 bg-warning-soft *:[svg]:text-warning *:data-[slot=alert-title]:text-warning") },
+  error: { icon: CircleAlertIcon, className: cn(CALM_BODY, "border-destructive/20 bg-destructive-soft *:[svg]:text-destructive *:data-[slot=alert-title]:text-destructive") },
+  tip: { icon: LightbulbIcon, className: cn(CALM_BODY, "border-pink-200/80 bg-cta-soft *:[svg]:text-cta-soft-foreground *:data-[slot=alert-title]:text-cta-soft-foreground dark:border-pink-400/20") },
 };
 
 /** An inline message. Use for things that must stay visible; success messages go to a toast via Flash. */
 export function Callout({ tone = "info", title, children, action, className }: { tone?: keyof typeof TONES; title?: ReactNode; children?: ReactNode; action?: ReactNode; className?: string }) {
   const { icon: Icon, className: toneClass } = TONES[tone];
   return (
-    <Alert role={tone === "error" ? "alert" : "status"} className={cn("rounded-xl px-4 py-3 has-[>svg]:gap-x-2.5", toneClass, className)}>
+    <Alert role={tone === "error" ? "alert" : "status"} className={cn("rounded-xl px-4 py-3.5 leading-relaxed has-[>svg]:gap-x-3", toneClass, className)}>
       <Icon />
       {title ? <AlertTitle className="font-semibold">{title}</AlertTitle> : null}
       {children || action ? (

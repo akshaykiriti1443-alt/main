@@ -92,15 +92,16 @@ export default async function WorkspaceLayout({
       title: "Get members",
       items: [
         { href: `${base}/ads/research`, label: "Ad research", icon: "search" },
+        { href: `${base}/ads/studio`, label: "Ad studio", icon: "palette" },
         { href: `${base}/ads`, label: "Ad review", icon: "megaphone" },
         { href: `${base}/growth`, label: "Growth ladder", icon: "ladder" },
         { href: `${base}/leads`, label: "Leads", icon: "users" },
+        { href: `${base}/pipeline`, label: "Pipeline", icon: "pipeline", locked: !hasFeature(workspace.plan, "pipelines") },
       ],
     },
     {
       title: "Keep members",
       items: [
-        { href: `${base}/skool`, label: "Skool members", icon: "skool" },
         {
           href: `${base}/automations`,
           label: "Automations",
@@ -127,6 +128,7 @@ export default async function WorkspaceLayout({
           icon: "calendar",
           locked: !growth,
         },
+        { href: `${base}/calendar`, label: "Calendar", icon: "booking", locked: !hasFeature(workspace.plan, "calendar") },
       ],
     },
     {

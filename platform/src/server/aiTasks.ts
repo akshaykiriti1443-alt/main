@@ -120,14 +120,3 @@ export async function skipAiTask(workspaceId: string, taskId: string) {
     .returning({ id: aiTasks.id });
   return Boolean(task);
 }
-
-/** Save a finished draft from the owner's AI (e.g. a member DM) straight onto a contact. */
-export async function saveAiDraft(workspaceId: string, contactId: string, label: string, text: string, by: string) {
-  const db = await getDb();
-  const [task] = await db
-    .insert(aiTasks)
-    .values({ workspaceId, contactId, source: "Your AI", instruction: label.slice(0, 300), status: "done", result: text.trim().slice(0, 8000), doneBy: by.slice(0, 120), completedAt: new Date() })
-    .returning();
-  await logActivity({ workspaceId, contactId, type: "ai_task_done", refId: task.id, data: { instruction: task.instruction, result: task.result, by: task.doneBy } });
-  return task;
-}

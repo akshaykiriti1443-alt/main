@@ -18,6 +18,8 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RosterUpload } from "./roster";
+import { CloudUploadIcon, GraduationCapIcon, KeyRoundIcon, RefreshCwIcon, ShoppingBagIcon, TicketIcon, UsersIcon, ZapIcon } from "lucide-react";
+import { Avatar, EdgeTable } from "@/components/crm-ui";
 import { SkoolInviteCard } from "@/components/skool-invite-card";
 import { platformInviteHint } from "@/server/skoolInvite";
 import { removePlatformInviteAction, savePlatformInviteAction, testPlatformInviteAction } from "@/actions/skoolInvite";
@@ -47,16 +49,17 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHead
+        eyebrow="Platform admin"
         title="Members"
         sub="Active members get the app. No codes. People come in from Skool (Zapier or your member export), from a purchase on /join, or a manual grant. When someone leaves, their account pauses after a 7-day grace and turns back on if they return."
       />
       <Flash searchParams={sp} />
 
-      <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
-        <Stat label="Active members" value={stats.total} />
-        <Stat label="From Skool" value={(stats.byChannel.skool_export ?? 0) + (stats.byChannel.skool_zapier ?? 0)} hint={`${stats.byChannel.skool_zapier ?? 0} via Zapier`} />
-        <Stat label="Bought on /join" value={stats.byChannel.stripe ?? 0} hint={memberCheckoutConfigured() ? "Stripe on" : "Set STRIPE_PRICE_MEMBER"} />
-        <Stat label="Last Skool sync" value={last ? relativeTime(last.createdAt) : "Never"} hint={last ? `${last.added} in · ${last.removed} out` : undefined} />
+      <div className="grid grid-cols-2 gap-4 @4xl/main:grid-cols-4">
+        <Stat icon={UsersIcon} label="Active members" value={stats.total} />
+        <Stat icon={GraduationCapIcon} tone="success" label="From Skool" value={(stats.byChannel.skool_export ?? 0) + (stats.byChannel.skool_zapier ?? 0)} hint={`${stats.byChannel.skool_zapier ?? 0} via Zapier`} />
+        <Stat icon={ShoppingBagIcon} tone="gold" label="Bought on /join" value={stats.byChannel.stripe ?? 0} hint={memberCheckoutConfigured() ? "Stripe on" : "Set STRIPE_PRICE_MEMBER"} />
+        <Stat icon={RefreshCwIcon} tone="muted" label="Last Skool sync" value={last ? relativeTime(last.createdAt) : "Never"} hint={last ? `${last.added} in · ${last.removed} out` : undefined} />
       </div>
 
       {staleDays === null || staleDays > 7 ? (
@@ -65,7 +68,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
         </Callout>
       ) : null}
 
-      <Panel title="Sync from Skool" sub="Skool › your group › Members › Export. Upload the full, unfiltered file. Everyone on it gets access. Anyone who dropped off is removed after you confirm.">
+      <Panel icon={CloudUploadIcon} title="Sync from Skool" sub="Skool › your group › Members › Export. Upload the full, unfiltered file. Everyone on it gets access. Anyone who dropped off is removed after you confirm.">
         <RosterUpload />
         <p className="text-xs text-muted-foreground">
           Tip: add the membership question “What email will you use for the app?”. Its answers are in the export, so members who use a different email still match.
@@ -74,6 +77,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
 
       <form action={saveEntryTicketAction}>
         <Panel
+          icon={TicketIcon}
           title="Entry ticket: post to get connected"
           sub="Ask new members to introduce themselves in your community before their app account opens. They post, paste the link, and they're in. Every new member becomes a post, and Skool ranks communities on engagement."
           action={<SubmitButton size="sm" variant="outline">Save</SubmitButton>}
@@ -81,10 +85,10 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
           {myUnlocks.length === 0 ? (
             <Callout tone="info">Create an unlock in your own workspace first (Unlocks › New unlock, action: “Make their own post”, e.g. “Introduce yourself”). Then pick it here.</Callout>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 @2xl/main:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="unlockId">The intro unlock</FieldLabel>
-                <NativeSelect id="unlockId" name="unlockId" defaultValue={ticket?.unlockId ?? ""}>
+                <NativeSelect id="unlockId" name="unlockId" defaultValue={ticket?.unlockId ?? ""} className="w-full">
                   <NativeSelectOption value="">Pick one…</NativeSelectOption>
                   {myUnlocks.map((u) => (
                     <NativeSelectOption key={u.id} value={u.id}>{u.title} · {u.workspace}{u.active ? "" : " (paused)"}</NativeSelectOption>
@@ -92,11 +96,11 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                 </NativeSelect>
                 <FieldDescription>Its instructions and Skool link are what new members see.</FieldDescription>
               </Field>
-              <div className="flex flex-col gap-2 text-sm">
-                <Label className="flex items-center gap-2 font-normal">
+              <div className="flex flex-col gap-2.5 rounded-xl bg-muted/40 p-4 text-sm ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
+                <Label className="flex items-center gap-2.5 font-normal">
                   <input type="checkbox" name="on" defaultChecked={ticket?.enabled ?? false} /> Turn the entry ticket on
                 </Label>
-                <Label className="flex items-center gap-2 font-normal">
+                <Label className="flex items-center gap-2.5 font-normal">
                   <input type="checkbox" name="everyone" defaultChecked={ticket ? new Date(ticket.since).getTime() === 0 : false} /> Also ask existing members who haven&apos;t posted yet
                 </Label>
                 <span className="text-xs text-muted-foreground">
@@ -109,7 +113,6 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
       </form>
 
       <SkoolInviteCard
-        forPlatform
         connected={await platformInviteHint()}
         save={savePlatformInviteAction}
         test={testPlatformInviteAction}
@@ -117,8 +120,8 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
         defaultEmail={admin.email}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Instant access for paid joins (Skool Pro)" sub="Zapier: Skool “New Paid Member” → Webhooks by Zapier, POST JSON with email and name. Paid members get in about 15 minutes after joining.">
+      <div className="grid items-start gap-6 @4xl/main:grid-cols-2">
+        <Panel icon={ZapIcon} tone="gold" title="Instant access for paid joins (Skool Pro)" sub="Zapier: Skool “New Paid Member” → Webhooks by Zapier, POST JSON with email and name. Paid members get in about 15 minutes after joining.">
           <div className="flex items-center gap-2">
             <Input readOnly value={zapUrl} className="font-mono text-xs" aria-label="Zapier webhook URL" />
             <CopyButton text={zapUrl} />
@@ -126,9 +129,9 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
           {!env.skoolWebhookSecret ? <Callout tone="warn">Set SKOOL_WEBHOOK_SECRET on the server first.</Callout> : null}
         </Panel>
 
-        <Panel title="Give someone access" sub="For partners, comps or support fixes.">
-          <form action={grantMemberAction} className="flex flex-col gap-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+        <Panel icon={KeyRoundIcon} tone="success" title="Give someone access" sub="For partners, comps or support fixes.">
+          <form action={grantMemberAction} className="flex flex-col gap-4">
+            <div className="grid gap-4 @xl/main:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input id="email" name="email" type="email" required />
@@ -147,21 +150,24 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
       </div>
 
       <Panel
+        icon={UsersIcon}
         title="Everyone"
+        sub="Every email that has, or had, access."
         action={
           <form>
-            <Input name="q" defaultValue={sp.q ?? ""} placeholder="Search email or name" className="h-8 w-48" aria-label="Search members" />
+            <Input type="search" name="q" defaultValue={sp.q ?? ""} placeholder="Search email or name" className="h-9 w-52 rounded-full" aria-label="Search members" />
           </form>
         }
       >
         {rows.length === 0 ? (
-          <Empty title={sp.q ? `No one matches “${sp.q}”` : "No members yet"} body="Upload your Skool export above or give someone access." />
+          <Empty icon={UsersIcon} tone="muted" title={sp.q ? `No one matches “${sp.q}”` : "No members yet"} body="Upload your Skool export above or give someone access." />
         ) : (
+          <EdgeTable>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Email</TableHead>
-                <TableHead>Source</TableHead>
+                <TableHead className="hidden @2xl/main:table-cell">Source</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Active until</TableHead>
                 <TableHead className="text-right">
@@ -174,19 +180,20 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                 const live = r.status === "active" && (!r.activeUntil || r.activeUntil.getTime() > now);
                 return (
                   <TableRow key={r.id}>
-                    <TableCell>
-                      <span className="block font-medium">{r.email}</span>
-                      {r.name ? <span className="block text-xs text-muted-foreground">{r.name}</span> : null}
+                    <TableCell className="py-2.5">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Avatar name={r.name || r.email} size="sm" />
+                        <div className="grid min-w-0 leading-tight">
+                          <span className="truncate font-medium">{r.email}</span>
+                          {r.name ? <span className="mt-0.5 truncate text-xs text-muted-foreground">{r.name}</span> : null}
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell>{CHANNEL[r.channel] ?? r.channel}</TableCell>
+                    <TableCell className="hidden text-muted-foreground @2xl/main:table-cell">{CHANNEL[r.channel] ?? r.channel}</TableCell>
                     <TableCell>
-                      {live ? (
-                        <Badge variant="secondary" className="bg-success-soft text-success">Active</Badge>
-                      ) : (
-                        <Badge variant="outline">{r.status === "removed" ? "Removed" : "Expired"}</Badge>
-                      )}
+                      {live ? <Badge variant="success">Active</Badge> : <Badge variant="outline">{r.status === "removed" ? "Removed" : "Expired"}</Badge>}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{r.activeUntil ? r.activeUntil.toDateString() : "Lifetime"}</TableCell>
+                    <TableCell className="text-[13px] text-subtle-foreground">{r.activeUntil ? r.activeUntil.toDateString() : "Lifetime"}</TableCell>
                     <TableCell className="text-right">
                       {live ? (
                         <form action={revokeMemberAction.bind(null, r.email, r.channel)}>
@@ -201,6 +208,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
               })}
             </TableBody>
           </Table>
+          </EdgeTable>
         )}
       </Panel>
     </>

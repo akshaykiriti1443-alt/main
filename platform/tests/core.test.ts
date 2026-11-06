@@ -29,7 +29,7 @@ import { verifyTwilioSignature } from "@/server/sms";
 import { exportWorkspace, importTemplateData } from "@/server/templates";
 import { heuristicScore } from "@/server/ai/scoring";
 import { buildCapiPayload } from "@/server/meta/capi";
-import { ruleReview } from "@/server/ai/adReview";
+import { adReviewInputSchema, ruleReview } from "@/server/ai/adReview";
 import { saveAutomation } from "@/server/automations";
 import { workspaces } from "@/lib/db/schema";
 import { makeWorkspace, setPlan } from "./helpers";
@@ -288,7 +288,7 @@ describe("rules", () => {
   it("scores leads and reviews ads without AI", () => {
     expect(heuristicScore({ inboundMessages: ["what's the price?"], leadCount: 1, hasPhone: false, daysSinceLastActivity: 0 }).temperature).toBe("hot");
     expect(heuristicScore({ inboundMessages: [], leadCount: 0, hasPhone: false, daysSinceLastActivity: 30 }).temperature).toBe("cold");
-    const r = ruleReview({ spend: 30, impressions: 5000, linkClicks: 30, leads: 8, followers: 0, members: 0, days: 3, goal: "", notes: "" });
+    const r = ruleReview(adReviewInputSchema.parse({ destination: "optin", spend: 30, impressions: 5000, linkClicks: 30, leads: 8, days: 3 }));
     expect(r.metrics[0].status).toBe("fix"); // 0.6% CTR
     expect(r.actions.length).toBeGreaterThan(0);
   });

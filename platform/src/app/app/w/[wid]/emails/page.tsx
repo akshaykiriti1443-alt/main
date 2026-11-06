@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { desc, eq, sql } from "drizzle-orm";
-import { ArrowRightIcon, InboxIcon, LockIcon, MailIcon, MegaphoneIcon, PlusIcon, SendIcon, SparklesIcon, type LucideIcon } from "lucide-react";
+import { ChevronRightIcon, InboxIcon, LockIcon, MailIcon, MegaphoneIcon, PlusIcon, SendIcon, SparklesIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { emailEnrollments, emailMessages, emailSequenceSteps } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
@@ -9,8 +9,8 @@ import { listCampaigns } from "@/server/email/campaigns";
 import { hasFeature } from "@/server/plans";
 import { createCampaignAction, createSequenceAction } from "@/actions/marketing";
 import { relativeTime } from "@/lib/util";
-import { cn } from "@/lib/utils";
-import { Empty, Flash, IconTile, PageHead, Panel, type Tone } from "@/components/ui";
+import { Empty, Flash, IconTile, PageHead, Panel } from "@/components/ui";
+import { Avatar, EdgeTable, LiveDot, QuietEmpty, RowList, rowLink } from "@/components/crm-ui";
 import { SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,35 +20,13 @@ const TRIGGER: Record<string, string> = { lead_created: "New lead", tag_added: "
 
 /** Sent is green, failed is red; for broadcasts, anything past draft but not sent (scheduled, sending) is amber. */
 function StatusBadge({ status, title, broadcast }: { status: string; title?: string; broadcast?: boolean }) {
-  const tone =
-    status === "sent"
-      ? "bg-success-soft text-success"
-      : status === "failed"
-        ? "bg-destructive/10 text-destructive"
-        : broadcast && status !== "draft"
-          ? "bg-gold-soft text-gold-foreground"
-          : "";
+  const variant = status === "sent" ? "success" : status === "failed" ? "destructive" : broadcast && status !== "draft" ? "gold" : "secondary";
   return (
-    <Badge variant="secondary" className={`capitalize ${tone}`} title={title}>
+    <Badge variant={variant} className="capitalize" title={title}>
       {status}
     </Badge>
   );
 }
-
-/** A one-line empty state for the secondary lists, so the page doesn't turn into a stack of big empties. */
-function QuietEmpty({ icon, tone, title, body }: { icon: LucideIcon; tone: Tone; title: string; body: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-xl border border-dashed border-foreground/15 bg-muted/35 px-4 py-3.5">
-      <IconTile icon={icon} tone={tone} className="size-8 rounded-lg" />
-      <div className="grid gap-0.5 text-sm">
-        <span className="font-semibold">{title}</span>
-        <span className="text-muted-foreground">{body}</span>
-      </div>
-    </div>
-  );
-}
-
-const row = "group flex items-center gap-3 rounded-xl px-2.5 py-3 text-foreground transition-colors hover:bg-muted hover:no-underline";
 
 export default async function EmailsPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
@@ -68,6 +46,7 @@ export default async function EmailsPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
+        eyebrow="Email"
         title="Emails"
         sub="Sequences send by themselves when someone becomes a lead. Broadcasts go out once, to a group you pick."
         first={
@@ -100,7 +79,7 @@ export default async function EmailsPage({ params, searchParams }: { params: Pro
             title="No sequences yet"
             body="The AI launch kit writes your first 3 follow-up emails in about a minute. Or start a blank sequence above."
             action={
-              <Button asChild>
+              <Button asChild variant="cta" size="lg">
                 <Link href={`${base}/launch`}>
                   <SparklesIcon data-icon="inline-start" /> Open the AI launch kit
                 </Link>
@@ -108,37 +87,31 @@ export default async function EmailsPage({ params, searchParams }: { params: Pro
             }
           />
         ) : (
-          <ul className="-mx-1 flex flex-col">
+          <RowList>
             {seqs.map((s) => {
               const steps = stepCounts.find((x) => x.id === s.id)?.n ?? 0;
               const enrolled = enrollCounts.find((x) => x.id === s.id)?.n ?? 0;
               return (
                 <li key={s.id}>
-                  <Link href={`${base}/emails/sequences/${s.id}`} className={row}>
-                    <span className={cn("size-2.5 shrink-0 rounded-full", s.active ? "bg-success shadow-[0_0_0_4px] shadow-success/15" : "bg-foreground/20")} aria-hidden />
+                  <Link href={`${base}/emails/sequences/${s.id}`} className={rowLink}>
+                    <LiveDot on={s.active} />
                     <span className="grid min-w-0 flex-1 gap-0.5">
-                      <span className="truncate font-medium group-hover:text-primary">{s.name}</span>
+                      <span className="truncate font-medium transition-colors group-hover/row:text-primary dark:group-hover/row:text-violet-300">{s.name}</span>
                       <span className="truncate text-xs text-muted-foreground">
                         Starts when: {TRIGGER[s.trigger]}
                         {s.triggerValue ? `: ${s.triggerValue}` : ""}
                       </span>
                     </span>
-                    <span className="hidden shrink-0 text-xs text-muted-foreground tabular-nums sm:block">
+                    <span className="hidden shrink-0 text-xs text-subtle-foreground tabular-nums sm:block">
                       {steps} email{steps === 1 ? "" : "s"} · {enrolled} enrolled
                     </span>
-                    {s.active ? (
-                      <Badge variant="secondary" className="bg-success-soft text-success">
-                        On
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">Off</Badge>
-                    )}
-                    <ArrowRightIcon className="size-4 shrink-0 text-muted-foreground group-hover:text-primary" aria-hidden />
+                    <Badge variant={s.active ? "success" : "secondary"}>{s.active ? "On" : "Off"}</Badge>
+                    <ChevronRightIcon className="size-4 shrink-0 text-subtle-foreground transition-transform duration-150 group-hover/row:translate-x-0.5 group-hover/row:text-primary" aria-hidden />
                   </Link>
                 </li>
               );
             })}
-          </ul>
+          </RowList>
         )}
       </Panel>
 
@@ -171,25 +144,25 @@ export default async function EmailsPage({ params, searchParams }: { params: Pro
             body={growth ? "Got news, a live call or a new course? Press New broadcast, write it once, and pick who gets it." : "Broadcasts are on the Growth plan."}
           />
         ) : (
-          <ul className="-mx-1 flex flex-col">
+          <RowList>
             {campaigns.map((c) => (
               <li key={c.id}>
-                <Link href={`${base}/emails/campaigns/${c.id}`} className={row}>
-                  <IconTile icon={MegaphoneIcon} tone={c.status === "sent" ? "success" : "muted"} className="size-8 rounded-lg" />
+                <Link href={`${base}/emails/campaigns/${c.id}`} className={rowLink}>
+                  <IconTile icon={MegaphoneIcon} tone={c.status === "sent" ? "success" : c.status === "draft" ? "muted" : "gold"} className="size-8 rounded-[10px]" />
                   <span className="grid min-w-0 flex-1 gap-0.5">
-                    <span className="truncate font-medium group-hover:text-primary">{c.name}</span>
+                    <span className="truncate font-medium transition-colors group-hover/row:text-primary dark:group-hover/row:text-violet-300">{c.name}</span>
                     <span className="truncate text-xs text-muted-foreground">{c.subject || "No subject yet"}</span>
                   </span>
-                  <span className="hidden shrink-0 text-right text-xs text-muted-foreground tabular-nums sm:block">
+                  <span className="hidden shrink-0 text-right text-xs text-subtle-foreground tabular-nums sm:block">
                     {c.recipients ? `${c.recipients} recipients · ` : ""}
                     {c.sentAt ? `sent ${relativeTime(c.sentAt)}` : c.scheduledAt ? `scheduled ${relativeTime(c.scheduledAt)}` : "not sent"}
                   </span>
                   <StatusBadge status={c.status} broadcast />
-                  <ArrowRightIcon className="size-4 shrink-0 text-muted-foreground group-hover:text-primary" aria-hidden />
+                  <ChevronRightIcon className="size-4 shrink-0 text-subtle-foreground transition-transform duration-150 group-hover/row:translate-x-0.5 group-hover/row:text-primary" aria-hidden />
                 </Link>
               </li>
             ))}
-          </ul>
+          </RowList>
         )}
       </Panel>
 
@@ -197,28 +170,38 @@ export default async function EmailsPage({ params, searchParams }: { params: Pro
         {recent.length === 0 ? (
           <QuietEmpty icon={InboxIcon} tone="success" title="Nothing sent yet" body="When your first lead signs up, their first email shows up here within a minute." />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>To</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">When</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recent.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell>{m.toEmail}</TableCell>
-                  <TableCell className="max-w-72 truncate">{m.subject}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={m.status} title={m.error ?? undefined} />
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">{relativeTime(m.sentAt ?? m.createdAt)}</TableCell>
+          <EdgeTable>
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>To</TableHead>
+                  <TableHead className="hidden @2xl/main:table-cell">Subject</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">When</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {recent.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Avatar name={m.toEmail} size="sm" />
+                        <div className="grid min-w-0 leading-tight">
+                          <span className="max-w-56 truncate font-medium">{m.toEmail}</span>
+                          <span className="max-w-56 truncate text-xs text-muted-foreground @2xl/main:hidden">{m.subject}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden max-w-72 truncate text-muted-foreground @2xl/main:table-cell">{m.subject}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={m.status} title={m.error ?? undefined} />
+                    </TableCell>
+                    <TableCell className="text-right text-[13px] text-subtle-foreground">{relativeTime(m.sentAt ?? m.createdAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </EdgeTable>
         )}
       </Panel>
     </>

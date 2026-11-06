@@ -13,11 +13,12 @@ import {
 } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { computeLadder, latestCheckins, LEVELS, requirementLines, skoolLinkFor, skoolTargetFor, skoolVisits } from "@/server/growth";
-import { skoolMemberCounts } from "@/server/skool";
 import { saveCheckinAction } from "@/actions/growth";
 import { relativeTime } from "@/lib/util";
 import { cn } from "@/lib/utils";
-import { Callout, Flash, MoreOptions, PageHead, Panel } from "@/components/ui";
+import { Callout, Flash, MoreOptions, PageHead, Panel, StepDot } from "@/components/ui";
+import { EdgeTable } from "@/components/crm-ui";
+import { Badge } from "@/components/ui/badge";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -33,13 +34,13 @@ export const metadata = { title: "Growth ladder" };
 /** A flat number tile for inside a panel (a Stat card in a card gets heavy). */
 function MiniStat({ icon: Icon, label, value, hint }: { icon: typeof LinkIcon; label: string; value: string; hint?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-muted/60 px-3.5 py-3">
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-muted/50 px-4 py-3.5 ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
       <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Icon className="size-3.5" aria-hidden />
         {label}
       </dt>
-      <dd className="truncate font-heading text-2xl font-bold tabular-nums">{value}</dd>
-      {hint ? <dd className="text-xs text-muted-foreground">{hint}</dd> : null}
+      <dd className="truncate font-display text-[30px] leading-none tracking-[-0.01em] tabular-nums">{value}</dd>
+      {hint ? <dd className="text-xs text-subtle-foreground">{hint}</dd> : null}
     </div>
   );
 }
@@ -48,11 +49,10 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
   const { wid } = await params;
   const { workspace } = await requireWorkspace(wid);
   const base = `/app/w/${wid}`;
-  const [checkins, visits, target, counts] = await Promise.all([
+  const [checkins, visits, target] = await Promise.all([
     latestCheckins(wid, 8),
     skoolVisits(wid, 30),
     skoolTargetFor(wid, workspace.settings.skoolUrl),
-    skoolMemberCounts(wid),
   ]);
   const last = checkins[0] ?? null;
   const ladder = computeLadder(last);
@@ -70,7 +70,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
             {last ? ` Last one: ${relativeTime(last.createdAt)}.` : ""}
           </>
         }
-        className={cn(stale && "ring-2 ring-primary/25")}
+        className={cn(stale && "ring-violet-200/90 dark:ring-violet-400/20")}
       >
         <div className="grid grid-cols-2 items-end gap-4 @2xl/main:grid-cols-4">
           <Field>
@@ -96,17 +96,17 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
             </NativeSelect>
           </Field>
         </div>
-        <Label className="flex items-start gap-2.5 rounded-xl bg-muted/60 px-3 py-2.5 text-sm font-normal">
+        <Label className="flex cursor-pointer items-start gap-3 rounded-xl bg-muted/50 px-4 py-3 text-sm font-normal ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
           <input type="checkbox" name="linkInBio" defaultChecked={last?.linkInBio ?? false} className="mt-0.5" />
           <span>
-            My skool.com link is in my Instagram, TikTok and YouTube bios. <span className="text-muted-foreground">(Level 3 checks this.)</span>
+            A link to my group is in my bio (Instagram, TikTok or YouTube). <span className="text-muted-foreground">(Level 3 checks this.)</span>
           </span>
         </Label>
         <MoreOptions title="A few extra numbers" sub="Optional. They sharpen your next moves and the planner below.">
           <div className="grid grid-cols-2 items-start gap-4 @2xl/main:grid-cols-4">
             <Field>
               <FieldLabel htmlFor="members">Total members</FieldLabel>
-              <Input id="members" name="members" inputMode="numeric" defaultValue={last?.members ?? (counts.members + counts.trials || "")} placeholder="0" />
+              <Input id="members" name="members" inputMode="numeric" defaultValue={last?.members ?? ""} placeholder="0" />
             </Field>
             <Field>
               <FieldLabel htmlFor="adSpendPerDay">Your ad spend / day ($)</FieldLabel>
@@ -127,8 +127,8 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
             <Input id="note" name="note" placeholder="What I changed this week" />
           </Field>
         </MoreOptions>
-        <div className="flex flex-wrap items-center gap-3">
-          <SubmitButton size="lg" pendingText="Saving…">
+        <div className="flex flex-wrap items-center gap-3 border-t border-border/80 pt-5">
+          <SubmitButton variant={stale ? "cta" : "default"} size="lg" pendingText="Saving…">
             <CheckIcon data-icon="inline-start" />
             Save check-in
           </SubmitButton>
@@ -141,8 +141,9 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
-        lesson="3.4"
-        stage="Stage 3"
+        lesson="2.6"
+        stage="Day 7"
+        eyebrow="Get members"
         title="Growth ladder"
         sub="Skool runs ads for communities that climb its levels. See which rung you're on and exactly what gets you to the next one."
         first={stale ? "Do your Monday check-in: copy 4 numbers from Skool › Settings › Growth into the form below." : undefined}
@@ -160,40 +161,43 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
               <li
                 key={l.level}
                 className={cn(
-                  "relative flex flex-col gap-2 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/[0.07]",
-                  reached && "bg-success-soft ring-success/25",
-                  isNext && "ring-2 ring-primary",
+                  "relative flex flex-col gap-2.5 overflow-hidden rounded-2xl bg-card p-5 shadow-card ring-1 ring-ink/[0.06] dark:ring-white/[0.07]",
+                  reached && "bg-success-soft ring-success/20 dark:bg-success-soft",
+                  isNext && "shadow-lift ring-2 ring-primary dark:ring-violet-400",
                 )}
               >
-                <div className="flex items-center justify-between gap-2">
+                {isNext ? <span aria-hidden className="pointer-events-none absolute -top-14 -right-12 size-36 rounded-full bg-[radial-gradient(closest-side,var(--accent-strong),transparent)]" /> : null}
+                <div className="relative flex items-center justify-between gap-2">
                   <span
                     className={cn(
-                      "grid size-9 place-items-center rounded-xl font-heading text-lg font-bold",
-                      reached ? "bg-success text-white dark:text-background" : isNext ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+                      "grid size-9 place-items-center rounded-xl text-[15px] font-semibold tabular-nums",
+                      reached ? "bg-success text-white dark:text-background" : isNext ? "bg-primary text-primary-foreground shadow-press" : "bg-muted text-muted-foreground",
                     )}
                   >
                     {reached ? <CheckIcon className="size-5" strokeWidth={3} aria-hidden /> : l.level}
                   </span>
                   {here ? (
-                    <span className="rounded-full bg-success px-2 py-0.5 text-[11px] font-bold text-white dark:text-background">You&apos;re here</span>
+                    <Badge variant="success" className="bg-success text-white dark:text-background">
+                      You&apos;re here
+                    </Badge>
                   ) : isNext ? (
-                    <span className="flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-accent-foreground">
-                      <TargetIcon className="size-3" aria-hidden /> Next rung
-                    </span>
+                    <Badge>
+                      <TargetIcon data-icon="inline-start" /> Next rung
+                    </Badge>
                   ) : (
-                    <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Level {l.level}</span>
+                    <span className="text-[11px] font-semibold tracking-[0.08em] text-subtle-foreground uppercase">Level {l.level}</span>
                   )}
                 </div>
-                <span className="font-heading text-[17px] leading-tight font-semibold">
+                <span className="relative text-[16.5px] leading-tight font-semibold tracking-[-0.012em]">
                   <span className="sr-only">Level {l.level}: </span>
                   {l.name}
                 </span>
                 {/* On a phone only the rung you're climbing to keeps its details, so the check-in isn't miles down. */}
-                <span className={cn("text-sm text-muted-foreground", !isNext && "hidden @xl/main:block")}>{l.reward}</span>
-                <ul className={cn("mt-auto flex-col gap-1 border-t border-foreground/[0.07] pt-2.5 text-xs", isNext ? "flex" : "hidden @xl/main:flex")}>
+                <span className={cn("relative text-sm leading-relaxed text-muted-foreground", !isNext && "hidden @xl/main:block")}>{l.reward}</span>
+                <ul className={cn("relative mt-auto flex-col gap-1.5 border-t border-border/80 pt-3 text-xs leading-snug", reached && "border-success/15", isNext ? "flex" : "hidden @xl/main:flex")}>
                   {(l.level === 1 ? ["Cover, description, About page, 1 post, invited members"] : requirementLines(l.req)).map((r) => (
                     <li key={r} className="flex gap-1.5">
-                      <span className={cn("mt-1 size-1.5 shrink-0 rounded-full", reached ? "bg-success" : "bg-foreground/25")} aria-hidden />
+                      <span className={cn("mt-1 size-1.5 shrink-0 rounded-full", reached ? "bg-success" : isNext ? "bg-primary/60" : "bg-border-strong")} aria-hidden />
                       <span>{r}</span>
                     </li>
                   ))}
@@ -202,12 +206,12 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
             );
           })}
         </ol>
-        <p className="text-xs text-muted-foreground">Skool decides the spend, and it isn&apos;t guaranteed. Every requirement counts the last 30 days, so it&apos;s a pace, not a pile.</p>
+        <p className="text-xs text-subtle-foreground">Skool decides the spend, and it isn&apos;t guaranteed. Every requirement counts the last 30 days, so it&apos;s a pace, not a pile.</p>
       </section>
 
       {stale ? checkin : null}
 
-      <div className="grid items-start gap-5 @3xl/main:grid-cols-[1.15fr_1fr]">
+      <div className="grid items-start gap-6 @4xl/main:grid-cols-[1.15fr_1fr]">
         <Panel icon={TrendingUpIcon} tone="success" title={ladder.next ? `What's between you and Level ${ladder.next.level}` : "You're at the top"} sub={ladder.next?.reward}>
           {ladder.gaps.length ? (
             <ul className="flex flex-col gap-3.5">
@@ -215,22 +219,22 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
                 <li key={g.label} className="flex flex-col gap-1.5">
                   <div className="flex justify-between gap-2 text-sm">
                     <span className="font-medium">{g.label}</span>
-                    <span className={cn("tabular-nums", g.done ? "font-semibold text-success" : "text-muted-foreground")}>
+                    <span className={cn("text-[13px] tabular-nums", g.done ? "font-semibold text-success" : "text-muted-foreground")}>
                       {g.toggle ? (g.done ? "Done" : "Not yet") : `${g.have.toLocaleString()} / ${g.need.toLocaleString()}`}
                     </span>
                   </div>
-                  <Progress value={Math.min(100, g.need ? (g.have / g.need) * 100 : 100)} />
+                  <Progress value={Math.min(100, g.need ? (g.have / g.need) * 100 : 100)} className={g.done ? "*:data-[slot=progress-indicator]:bg-success" : undefined} />
                 </li>
               ))}
             </ul>
           ) : null}
-          <div className="flex flex-col gap-2.5 rounded-xl bg-muted/60 p-3.5">
-            <span className="text-sm font-semibold">Your next moves</span>
-            <ol className="flex flex-col gap-2.5 text-sm">
+          <div className="flex flex-col gap-3 rounded-xl bg-accent/60 p-4 ring-1 ring-violet-200/60 ring-inset dark:bg-accent/50 dark:ring-white/[0.05]">
+            <span className="eyebrow">Your next moves</span>
+            <ol className="flex flex-col gap-3 text-sm leading-relaxed">
               {ladder.moves.map((m, i) => (
-                <li key={m} className="flex gap-2.5">
-                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground tabular-nums">{i + 1}</span>
-                  <span>{m}</span>
+                <li key={m} className="flex gap-3">
+                  <StepDot n={i + 1} active={i === 0} className="size-6 text-[11.5px]" />
+                  <span className="pt-0.5">{m}</span>
                 </li>
               ))}
             </ol>
@@ -276,7 +280,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
           {visits.bySource.length > 1 ? (
             <ul className="flex flex-wrap gap-2 text-xs">
               {visits.bySource.slice(0, 8).map((s) => (
-                <li key={s.source} className="rounded-full border bg-background px-2.5 py-1">
+                <li key={s.source} className="rounded-full border border-border-strong bg-card px-2.5 py-1">
                   {s.source} · <span className="tabular-nums">{s.count}</span>
                 </li>
               ))}
@@ -294,7 +298,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
 
       <div className="flex flex-col gap-3">
         <MoreOptions icon={CalculatorIcon} title="Budget planner" sub="How many About-page visitors your budget buys, and which level's visitor bar it clears.">
-          <BudgetPlanner initialBudget={last?.adSpendPerDay ?? 10} initialOrganic={0} initialPrice={workspace.settings.skoolMemberPrice ?? 29} />
+          <BudgetPlanner initialBudget={last?.adSpendPerDay ?? 10} initialOrganic={0} initialPrice={29} />
         </MoreOptions>
         <MoreOptions icon={CoinsIcon} title="If Skool spends on you" sub="Plug in what Skool actually spends and see what you keep. Skool decides the spend, and it isn't guaranteed.">
           <BoostCalculator initialBoost={last?.boostPercent ?? 30} />
@@ -303,30 +307,32 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
 
       {checkins.length > 1 ? (
         <Panel icon={HistoryIcon} tone="muted" title="History" sub="Your last few Monday check-ins. Watch the visitor column climb.">
+          <EdgeTable>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Date</TableHead>
                 <TableHead className="text-right">Visitors</TableHead>
                 <TableHead className="text-right">New paid</TableHead>
-                <TableHead className="text-right">Network</TableHead>
-                <TableHead className="text-right">Skool level</TableHead>
-                <TableHead>Note</TableHead>
+                <TableHead className="hidden text-right @xl/main:table-cell">Network</TableHead>
+                <TableHead className="text-right">Level</TableHead>
+                <TableHead className="hidden @2xl/main:table-cell">Note</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {checkins.map((c) => (
                 <TableRow key={c.id}>
-                  <TableCell>{c.createdAt.toDateString()}</TableCell>
+                  <TableCell className="font-medium">{c.createdAt.toDateString().replace(/^\w+ /, "")}</TableCell>
                   <TableCell className="text-right tabular-nums">{c.aboutVisitors.toLocaleString()}</TableCell>
                   <TableCell className="text-right tabular-nums">{c.newPaid}</TableCell>
-                  <TableCell className="text-right tabular-nums">{c.networkSignups}</TableCell>
+                  <TableCell className="hidden text-right tabular-nums @xl/main:table-cell">{c.networkSignups}</TableCell>
                   <TableCell className="text-right tabular-nums">{c.skoolLevel}</TableCell>
-                  <TableCell className="max-w-56 truncate text-muted-foreground">{c.note}</TableCell>
+                  <TableCell className="hidden max-w-56 truncate text-muted-foreground @2xl/main:table-cell">{c.note}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          </EdgeTable>
         </Panel>
       ) : null}
     </>

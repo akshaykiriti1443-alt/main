@@ -17,6 +17,10 @@ export const env = {
   // Sites are served at <slug>.<ROOT_DOMAIN>. Leave empty to use /s/<slug> paths only.
   rootDomain: process.env.ROOT_DOMAIN ?? "",
   platformName: process.env.PLATFORM_NAME ?? "OneX",
+  // The company behind the platform: "<PLATFORM_NAME> by <PLATFORM_BY>" in the app sidebar, auth pages and
+  // account emails. Never shown on agencies' white-label screens. Set PLATFORM_BY= (empty) to hide it.
+  platformBy: process.env.PLATFORM_BY ?? "ScaleitAds",
+  platformByUrl: process.env.PLATFORM_BY_URL ?? "https://scaleitads.com",
   appSecret: process.env.APP_SECRET ?? "dev-only-secret-change-me-in-production-0000",
   databaseUrl: process.env.DATABASE_URL ?? "",
   pgliteDir: process.env.PGLITE_DIR ?? ".data/pglite",

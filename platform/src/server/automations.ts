@@ -29,6 +29,11 @@ function matches(trigger: AutomationTrigger, event: DomainEvent): boolean {
       return trigger.value === event.temperature;
     case "stage_changed":
       return trigger.value === event.stage;
+    case "opportunity_stage_changed":
+      // A stage name (any case) or a stage id.
+      return trigger.value.trim().toLowerCase() === event.stageName.trim().toLowerCase() || trigger.value === event.stageId;
+    case "appointment_booked":
+      return trigger.value.trim().toLowerCase() === event.calendarSlug || trigger.value === event.calendarId;
   }
 }
 
@@ -221,10 +226,29 @@ async function executeAction(
       }).catch((e: Error) => ({ ok: false, status: 0, statusText: e.message }) as const);
       return { kind: "next", message: `Webhook ${res.ok ? "sent" : `failed (${res.status} ${res.statusText})`}` };
     }
-    case "skool_invite": {
-      if (!contact) return { kind: "next", message: "No contact to invite" };
-      const { inviteContactToSkool } = await import("./skoolInvite");
-      return { kind: "next", message: await inviteContactToSkool(workspaceId, contact.id) };
+    case "skool_invite":
+      // Only in automations saved before Skool invites were removed: a no-op, so the rest still runs.
+      return { kind: "next", message: "Skipped: Skool invites were removed" };
+    case "move_opportunity": {
+      if (!contact) return { kind: "next", message: "No contact, so no opportunity to move" };
+      const { moveContactDealToStageNamed } = await import("./pipelines");
+      const r = await moveContactDealToStageNamed(workspaceId, contact.id, action.stage, {
+        opportunityId: typeof context.opportunityId === "string" ? context.opportunityId : undefined,
+        by: automationName,
+      });
+      return { kind: "next", message: r.ok ? r.message : `Opportunity not moved: ${r.message}` };
+    }
+    case "create_opportunity": {
+      if (!contact) return { kind: "next", message: "No contact to create an opportunity for" };
+      const { contactName } = await import("./contacts");
+      const { createOpportunity, ensureDefaultPipeline, stageNamed } = await import("./pipelines");
+      const p = await ensureDefaultPipeline(workspaceId);
+      const stage = action.stage ? stageNamed(p, action.stage) : p.stages[0];
+      if (!stage) return { kind: "next", message: `Opportunity not created: no stage called "${action.stage}" in ${p.name}` };
+      const name = contactName(contact);
+      const title = (action.title || name).replace(/\{\{\s*first_name\s*\}\}/g, contact.firstName || name).replace(/\{\{\s*name\s*\}\}/g, name);
+      const deal = await createOpportunity(workspaceId, { title, contactId: contact.id, stageId: stage.id, valueCents: Math.round(action.value * 100), source: automationName }, { by: automationName });
+      return { kind: "next", message: `Created opportunity "${deal.title}" in ${stage.name}` };
     }
     case "ask_my_ai": {
       const { createAiTask } = await import("./aiTasks");
@@ -288,7 +312,7 @@ export async function deleteAutomation(workspaceId: string, id: string) {
 export const ACTION_LABELS: Record<AutomationAction["type"], string> = {
   add_tag: "Add a tag",
   remove_tag: "Remove a tag",
-  set_stage: "Move to a pipeline stage",
+  set_stage: "Set the lead's stage",
   wait: "Wait",
   send_email: "Send an email",
   enroll_sequence: "Start an email sequence",
@@ -299,7 +323,9 @@ export const ACTION_LABELS: Record<AutomationAction["type"], string> = {
   webhook: "Send to a webhook (Zapier, Make)",
   only_if_temperature: "Continue only if lead is…",
   ask_my_ai: "Ask my AI (runs on your own AI)",
-  skool_invite: "Invite to my Skool group",
+  move_opportunity: "Move opportunity to stage",
+  create_opportunity: "Create opportunity",
+  skool_invite: "Skool invite (removed, skipped)",
 };
 
 export const TRIGGER_LABELS: Record<AutomationTrigger["type"], string> = {
@@ -307,5 +333,7 @@ export const TRIGGER_LABELS: Record<AutomationTrigger["type"], string> = {
   message_received: "New message (DM, WhatsApp, SMS)",
   tag_added: "Tag added",
   temperature_changed: "Lead temperature changes",
-  stage_changed: "Pipeline stage changes",
+  stage_changed: "Lead stage changes",
+  opportunity_stage_changed: "Opportunity moves to stage",
+  appointment_booked: "Appointment booked",
 };

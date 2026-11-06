@@ -1,21 +1,18 @@
-import Link from "next/link";
 import {
-  ArrowRightIcon,
   CircleCheckIcon,
   KeyRoundIcon,
   SendIcon,
   UserPlusIcon,
 } from "lucide-react";
-import { MoreOptions, Panel } from "@/components/ui";
+import { MoreOptions, Panel, StepDot } from "@/components/ui";
 import { SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
 /**
- * Skool's Webhook plugin, connected once. For a member's workspace it powers the
- * "Invite to my Skool group" automation step; for the platform it invites /join buyers.
+ * Skool's Webhook plugin, connected once by the platform owner (Admin › Members):
+ * people who buy access on /join get an invite to the owner's own Skool group.
  */
 export function SkoolInviteCard({
   connected,
@@ -23,20 +20,13 @@ export function SkoolInviteCard({
   test,
   remove,
   defaultEmail,
-  forPlatform = false,
-  recipeHref,
 }: {
   connected: string | null;
   save: (fd: FormData) => Promise<void>;
   test: (fd: FormData) => Promise<void>;
   remove: () => Promise<void>;
   defaultEmail: string;
-  forPlatform?: boolean;
-  recipeHref?: string;
 }) {
-  const what = forPlatform
-    ? "Anyone who buys access on your /join page gets a Skool invite by email, straight away. Pay here, get in there."
-    : "New leads (or anyone an automation picks) get a Skool invite by email, straight away. No copying emails into Skool by hand.";
   return (
     <Panel
       id="skool-invite"
@@ -45,17 +35,17 @@ export function SkoolInviteCard({
       title={
         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           Auto-invite to your Skool group{" "}
-          <Badge variant="secondary">Skool Pro</Badge>
+          <Badge variant="gold">Skool Pro</Badge>
         </span>
       }
-      sub={what}
+      sub="Anyone who buys access on your /join page gets a Skool invite by email, straight away. Pay here, get in there."
       className="scroll-mt-24"
     >
       {connected ? (
         <>
           <p className="flex flex-wrap items-center gap-2 text-sm">
-            <b>Connected</b>
-            <code className="rounded-md bg-muted px-2 py-0.5 text-xs">
+            <Badge variant="success">Connected</Badge>
+            <code className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
               {connected}
             </code>
           </p>
@@ -75,21 +65,6 @@ export function SkoolInviteCard({
               <SendIcon data-icon="inline-start" /> Send test invite
             </SubmitButton>
           </form>
-          {recipeHref ? (
-            <Button asChild className="self-start">
-              <Link href={recipeHref}>
-                Invite every new lead automatically{" "}
-                <ArrowRightIcon data-icon="inline-end" />
-              </Link>
-            </Button>
-          ) : null}
-          {!forPlatform ? (
-            <p className="text-xs text-muted-foreground">
-              Or add an <b>Invite to my Skool group</b> step to any automation.
-              Each person is only invited once. On a paid group, only invite
-              people who&apos;ve already paid you.
-            </p>
-          ) : null}
           <MoreOptions title="Change or disconnect">
             <form action={save} className="flex flex-col gap-3">
               <Field>
@@ -127,18 +102,28 @@ export function SkoolInviteCard({
         </>
       ) : (
         <>
-          <ol className="grid gap-2 text-sm">
-            <li>
-              <b>1.</b> In Skool, open your group&apos;s{" "}
-              <b>Settings › Plugins</b>.
+          <ol className="flex flex-col gap-3 text-sm leading-relaxed">
+            <li className="flex items-start gap-3">
+              <StepDot n={1} active className="size-6 text-[11.5px]" />
+              <span className="pt-0.5">
+                In Skool, open your group&apos;s{" "}
+                <b className="font-semibold">Settings › Plugins</b>.
+              </span>
             </li>
-            <li>
-              <b>2.</b> Switch on <b>Webhook</b> and click <b>Edit</b>. Copy the
-              URL it shows you.
+            <li className="flex items-start gap-3">
+              <StepDot n={2} className="size-6 text-[11.5px]" />
+              <span className="pt-0.5">
+                Switch on <b className="font-semibold">Webhook</b> and click{" "}
+                <b className="font-semibold">Edit</b>. Copy the URL it shows
+                you.
+              </span>
             </li>
-            <li>
-              <b>3.</b> Paste it here and press <b>Connect</b>. Then send
-              yourself a test invite.
+            <li className="flex items-start gap-3">
+              <StepDot n={3} className="size-6 text-[11.5px]" />
+              <span className="pt-0.5">
+                Paste it here and press <b className="font-semibold">Connect</b>
+                . Then send yourself a test invite.
+              </span>
             </li>
           </ol>
           <form action={save} className="flex flex-col gap-3">

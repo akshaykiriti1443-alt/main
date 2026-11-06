@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { LayoutTemplateIcon } from "lucide-react";
+import { LayoutTemplateIcon, SaveIcon } from "lucide-react";
 import { requireAgency, workspaceIdsForAgency, workspacesByIds } from "@/server/tenancy";
 import { listTemplates } from "@/server/templates";
 import { deleteTemplateAction, saveTemplateFromWorkspaceAction } from "@/actions/agency";
 import { relativeTime } from "@/lib/util";
-import { Callout, Empty, Flash, PageHead, Panel } from "@/components/ui";
+import { Callout, Empty, Flash, IconTile, PageHead, Panel } from "@/components/ui";
+import { EdgeTable } from "@/components/crm-ui";
 import { SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,15 +21,16 @@ export default async function AgencyTemplates({ params, searchParams }: { params
   const workspaces = await workspacesByIds(wsIds);
   return (
     <>
-      <PageHead title="Templates" sub="A template copies funnels, email sequences and automations. Build it once in a client account, save it, then load it into every new client." />
+      <PageHead eyebrow="Agency" title="Templates" sub="A template copies funnels, email sequences and automations. Build it once in a client account, save it, then load it into every new client." />
       <Flash searchParams={await searchParams} />
       {templates.length === 0 ? (
-        <Empty icon={LayoutTemplateIcon} title="No templates yet" />
+        <Empty icon={LayoutTemplateIcon} title="No templates yet" body="Build one great client account, then save it below. Every new client can start from it." />
       ) : (
-        <Panel>
+        <Panel icon={LayoutTemplateIcon} title="Your templates" sub="Pick one when you add a client.">
+          <EdgeTable>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Template</TableHead>
                 <TableHead>Owner</TableHead>
                 <TableHead>Created</TableHead>
@@ -40,14 +42,19 @@ export default async function AgencyTemplates({ params, searchParams }: { params
             <TableBody>
               {templates.map((t) => (
                 <TableRow key={t.id}>
-                  <TableCell className="min-w-56 whitespace-normal">
-                    <div className="font-medium">{t.name}</div>
-                    {t.description ? <div className="text-xs text-muted-foreground">{t.description}</div> : null}
+                  <TableCell className="min-w-56 py-3 whitespace-normal">
+                    <div className="flex items-start gap-3">
+                      <IconTile icon={LayoutTemplateIcon} tone={t.agencyId ? "primary" : "muted"} className="size-8 rounded-[10px]" />
+                      <div className="grid gap-0.5">
+                        <span className="font-medium">{t.name}</span>
+                        {t.description ? <span className="text-xs text-muted-foreground">{t.description}</span> : null}
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={t.agencyId ? "secondary" : "outline"}>{t.agencyId ? "Your agency" : "Platform"}</Badge>
+                    <Badge variant={t.agencyId ? "soft" : "outline"}>{t.agencyId ? "Your agency" : "Platform"}</Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{relativeTime(t.createdAt)}</TableCell>
+                  <TableCell className="text-[13px] text-subtle-foreground">{relativeTime(t.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     {t.agencyId ? (
                       <form action={deleteTemplateAction.bind(null, aid, t.id)}>
@@ -61,12 +68,13 @@ export default async function AgencyTemplates({ params, searchParams }: { params
               ))}
             </TableBody>
           </Table>
+          </EdgeTable>
         </Panel>
       )}
       {workspaces.length ? (
-        <Panel title="Save a client account as a template">
+        <Panel icon={SaveIcon} title="Save a client account as a template" sub="Copies its funnels, email sequences and automations. Contacts never come along.">
           <form action={saveTemplateFromWorkspaceAction.bind(null, aid)} className="flex flex-col gap-5">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 @xl/main:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="workspaceId">Account</FieldLabel>
                 <NativeSelect id="workspaceId" name="workspaceId" className="w-full">
@@ -81,7 +89,7 @@ export default async function AgencyTemplates({ params, searchParams }: { params
                 <FieldLabel htmlFor="name">Template name</FieldLabel>
                 <Input id="name" name="name" required placeholder="Fitness coach funnel" />
               </Field>
-              <Field className="sm:col-span-2">
+              <Field className="@xl/main:col-span-2">
                 <FieldLabel htmlFor="description">Description</FieldLabel>
                 <Input id="description" name="description" />
               </Field>

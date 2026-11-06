@@ -14,8 +14,8 @@ function NumField({ id, label, value, onChange, hint, prefix }: { id: string; la
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <div className="relative">
-        {prefix ? <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground">{prefix}</span> : null}
-        <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} className={prefix ? "pl-6" : undefined} />
+        {prefix ? <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-sm text-subtle-foreground">{prefix}</span> : null}
+        <Input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} className={cn("tabular-nums", prefix && "pl-7")} />
       </div>
       {hint ? <FieldDescription>{hint}</FieldDescription> : null}
     </Field>
@@ -72,7 +72,7 @@ export function BudgetPlanner({ initialBudget, initialOrganic, initialPrice }: {
           const ok = cleared.includes(t.level);
           const needPerDay = Math.max(0, ((t.visitors - o) * c) / 30);
           return (
-            <li key={t.level} className={cn("flex flex-col gap-0.5 rounded-xl border bg-background/60 p-3 text-sm", ok && "border-success/30 bg-success-soft")}>
+            <li key={t.level} className={cn("flex flex-col gap-1 rounded-xl bg-card p-3.5 text-sm ring-1 ring-ink/[0.06] dark:ring-white/[0.07]", ok && "bg-success-soft ring-success/20 dark:bg-success-soft")}>
               <div className="flex items-center gap-1.5 font-semibold">
                 {ok ? <CheckIcon className="size-4 text-success" strokeWidth={3} aria-hidden /> : null}
                 Level {t.level} · {t.visitors.toLocaleString()} visitors
@@ -115,18 +115,26 @@ export function BoostCalculator({ initialBoost }: { initialBoost: number }) {
         <Out label="You keep, month 1" value={money(gross * (1 - share))} strong />
         <Out label="You keep / month by month 6" value={money(runRate(6) * (1 - share))} sub="Members who stay keep paying" strong />
       </div>
-      <div className="overflow-x-auto rounded-xl border bg-background/60">
+      <div className="overflow-x-auto rounded-xl ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
         <table className="w-full min-w-[360px] text-sm">
           <thead>
-            <tr className="border-b text-left text-muted-foreground">
-              <th className="p-2 font-medium">Growth Boost</th>
-              {[30, 50, 70].map((p) => <th key={p} className="p-2 font-medium">{p}%</th>)}
+            <tr className="border-b border-border/80 bg-muted/40 text-left">
+              <th className="px-3.5 py-2.5 text-[11.5px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">Growth Boost</th>
+              {[30, 50, 70].map((p) => (
+                <th key={p} className="px-3.5 py-2.5 text-right text-[11.5px] font-semibold tracking-[0.06em] text-muted-foreground tabular-nums">
+                  {p}%
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td className="p-2 text-muted-foreground">You keep, month 1</td>
-              {[30, 50, 70].map((p) => <td key={p} className="p-2 tabular-nums">{money(gross * (1 - p / 100))}</td>)}
+              <td className="px-3.5 py-3 text-muted-foreground">You keep, month 1</td>
+              {[30, 50, 70].map((p) => (
+                <td key={p} className="px-3.5 py-3 text-right font-medium tabular-nums">
+                  {money(gross * (1 - p / 100))}
+                </td>
+              ))}
             </tr>
           </tbody>
         </table>
@@ -140,9 +148,9 @@ export function BoostCalculator({ initialBoost }: { initialBoost: number }) {
 
 function Out({ label, value, sub, strong }: { label: string; value: string; sub?: string; strong?: boolean }) {
   return (
-    <div className={cn("rounded-xl bg-muted/60 p-3.5", strong && "bg-accent ring-1 ring-primary/20")}>
+    <div className={cn("flex flex-col gap-1.5 rounded-xl bg-muted/50 px-4 py-3.5 ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]", strong && "bg-accent ring-violet-200/70 dark:ring-white/[0.06]")}>
       <div className={cn("text-xs font-medium text-muted-foreground", strong && "text-accent-foreground")}>{label}</div>
-      <div className="mt-1 font-heading text-2xl font-bold tabular-nums">{value}</div>
+      <div className="font-display text-[30px] leading-none tracking-[-0.01em] tabular-nums">{value}</div>
       {sub ? <div className="text-xs text-muted-foreground">{sub}</div> : null}
     </div>
   );

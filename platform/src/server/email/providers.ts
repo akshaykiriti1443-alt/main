@@ -9,6 +9,8 @@ export type OutgoingEmail = {
   text: string;
   headers?: Record<string, string>;
   stream?: "transactional" | "broadcast";
+  /** base64 content */
+  attachments?: { name: string; contentType: string; content: string }[];
 };
 
 export class EmailProviderError extends Error {
@@ -24,7 +26,7 @@ export async function sendEmail(msg: OutgoingEmail): Promise<{ provider: string;
     case "resend":
       return sendResend(msg);
     default:
-      console.info(`[email:console] to=${msg.to} subject="${msg.subject}"`);
+      console.info(`[email:console] to=${msg.to} subject="${msg.subject}"${msg.attachments?.length ? ` attachments=${msg.attachments.map((a) => a.name).join(",")}` : ""}`);
       return { provider: "console", id: `console-${Date.now().toString(36)}` };
   }
 }
@@ -47,6 +49,7 @@ async function sendPostmark(msg: OutgoingEmail) {
       TextBody: msg.text,
       MessageStream: msg.stream === "broadcast" ? (process.env.POSTMARK_BROADCAST_STREAM ?? "broadcast") : "outbound",
       Headers: Object.entries(msg.headers ?? {}).map(([Name, Value]) => ({ Name, Value })),
+      ...(msg.attachments?.length ? { Attachments: msg.attachments.map((a) => ({ Name: a.name, Content: a.content, ContentType: a.contentType })) } : {}),
     }),
   });
   const data = (await res.json().catch(() => ({}))) as { MessageID?: string; ErrorCode?: number; Message?: string };
@@ -70,6 +73,7 @@ async function sendResend(msg: OutgoingEmail) {
       html: msg.html,
       text: msg.text,
       headers: msg.headers,
+      ...(msg.attachments?.length ? { attachments: msg.attachments.map((a) => ({ filename: a.name, content: a.content, content_type: a.contentType })) } : {}),
     }),
   });
   const data = (await res.json().catch(() => ({}))) as { id?: string; message?: string };

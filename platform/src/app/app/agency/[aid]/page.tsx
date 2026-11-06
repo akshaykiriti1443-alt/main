@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { UsersIcon } from "lucide-react";
+import { UserPlusIcon, UsersIcon } from "lucide-react";
 import { requireAgency } from "@/server/tenancy";
 import { listSubAccounts } from "@/server/agency";
 import { listTemplates } from "@/server/templates";
 import { createSubAccountAction, setSubAccountStatusAction } from "@/actions/agency";
 import { Empty, Flash, PageHead, Panel } from "@/components/ui";
+import { Avatar, EdgeTable } from "@/components/crm-ui";
 import { SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,19 +18,26 @@ export default async function AgencyHome({ params, searchParams }: { params: Pro
   const { aid } = await params;
   const { agency } = await requireAgency(aid);
   const [subs, templates] = await Promise.all([listSubAccounts(aid), listTemplates(aid)]);
+  const firstClient = subs.length === 0 && agency.plan === "agency";
   return (
     <>
-      <PageHead eyebrow={agency.brand.name || agency.name} title="Client accounts" sub="Each client gets their own funnels, leads, inbox and automations. Usage is billed to your agency wallet." />
+      <PageHead
+        eyebrow={agency.brand.name || agency.name}
+        title="Client accounts"
+        sub="Each client gets their own funnels, leads, inbox and automations. Usage is billed to your agency wallet."
+        first={subs.length === 0 ? "Add your first client below. Load a template to give them a ready-made funnel." : undefined}
+      />
       <Flash searchParams={await searchParams} />
       {subs.length === 0 ? (
-        <Empty icon={UsersIcon} title="No clients yet" body="Add your first client below. Load a template to give them a ready-made funnel." />
+        <Empty icon={UsersIcon} title="No clients yet" body="Each client is a full account of their own: funnels, leads, emails and automations, under your brand." />
       ) : (
-        <Panel>
+        <Panel icon={UsersIcon} title="Your clients" sub={`${subs.length} account${subs.length === 1 ? "" : "s"}. Open one to work inside it, exactly as your client sees it.`}>
+          <EdgeTable>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Account</TableHead>
-                <TableHead>Owner</TableHead>
+                <TableHead className="hidden @2xl/main:table-cell">Owner</TableHead>
                 <TableHead className="text-right">Contacts</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>
@@ -40,16 +48,21 @@ export default async function AgencyHome({ params, searchParams }: { params: Pro
             <TableBody>
               {subs.map(({ workspace: w, contacts, owner }) => (
                 <TableRow key={w.id}>
-                  <TableCell>
-                    <Link href={`/app/w/${w.id}`} className="font-medium text-foreground">
-                      {w.name}
-                    </Link>
-                    <div className="text-xs text-muted-foreground capitalize">{w.plan}</div>
+                  <TableCell className="py-2.5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar name={w.name} />
+                      <div className="grid min-w-0 leading-tight">
+                        <Link href={`/app/w/${w.id}`} className="truncate font-medium text-foreground no-underline hover:text-primary hover:no-underline">
+                          {w.name}
+                        </Link>
+                        <span className="mt-0.5 text-xs text-muted-foreground capitalize">{w.plan}</span>
+                      </div>
+                    </div>
                   </TableCell>
-                  <TableCell>{owner ?? <span className="text-muted-foreground">no owner yet</span>}</TableCell>
+                  <TableCell className="hidden @2xl/main:table-cell">{owner ?? <span className="text-subtle-foreground">No owner yet</span>}</TableCell>
                   <TableCell className="text-right tabular-nums">{contacts}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className={w.status === "active" ? "bg-success-soft text-success" : "bg-destructive/10 text-destructive"}>
+                    <Badge variant={w.status === "active" ? "success" : "destructive"} className="capitalize">
                       {w.status}
                     </Badge>
                   </TableCell>
@@ -69,11 +82,12 @@ export default async function AgencyHome({ params, searchParams }: { params: Pro
               ))}
             </TableBody>
           </Table>
+          </EdgeTable>
         </Panel>
       )}
-      <Panel title="Add a client">
+      <Panel icon={UserPlusIcon} title="Add a client" sub="A new account under your brand. Invite the client now, or later." className={firstClient ? "ring-violet-200/90 dark:ring-violet-400/20" : undefined}>
         <form action={createSubAccountAction.bind(null, aid)} className="flex flex-col gap-5">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 @xl/main:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="name">Business name</FieldLabel>
               <Input id="name" name="name" required placeholder="Coach Maria Fitness" />
@@ -100,8 +114,11 @@ export default async function AgencyHome({ params, searchParams }: { params: Pro
               <FieldDescription>We email them a link to set their password.</FieldDescription>
             </Field>
           </div>
-          <div>
-            <SubmitButton pendingText="Creating…">Create client account</SubmitButton>
+          <div className="border-t border-border/80 pt-5">
+            {/* Pink only when it's the next step: the plan is active and there's no client yet. */}
+            <SubmitButton variant={firstClient ? "cta" : "default"} size={firstClient ? "lg" : "default"} pendingText="Creating…">
+              Create client account
+            </SubmitButton>
           </div>
         </form>
       </Panel>

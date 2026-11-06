@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { and, eq, sql } from "drizzle-orm";
-import { ArrowRightIcon, ExternalLinkIcon, FileTextIcon, GlobeIcon, GraduationCapIcon, MailCheckIcon, PlusIcon, RocketIcon, SparklesIcon, UsersIcon } from "lucide-react";
+import { ArrowRightIcon, ExternalLinkIcon, FileTextIcon, GraduationCapIcon, MailCheckIcon, PlusIcon, RocketIcon, SparklesIcon, UsersIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { contacts, pages } from "@/lib/db/schema";
+import type { SiteTheme } from "@/lib/db/types";
 import { requireWorkspace } from "@/server/tenancy";
 import { listSites, siteBaseUrl } from "@/server/sites";
 import { PLANS } from "@/server/plans";
 import { createSiteAction } from "@/actions/sites";
 import { cn } from "@/lib/utils";
-import { Flash, MoreOptions, NextStep, PageHead } from "@/components/ui";
+import { Flash, IconTile, MoreOptions, NextStep, PageHead } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,33 +22,67 @@ export const metadata = { title: "Funnels & pages" };
 /** What a funnel is, in three tiles. Shown until you have one, so "funnel" stops being jargon. */
 function HowAFunnelWorks() {
   const tiles = [
-    { icon: FileTextIcon, title: "Opt-in page", body: "Someone clicks your ad and swaps their email for your free guide.", tone: "bg-accent text-primary" },
-    { icon: MailCheckIcon, title: "Thank-you page", body: "They get the guide, plus 3 emails that follow up for you.", tone: "bg-gold-soft text-gold-foreground" },
-    { icon: GraduationCapIcon, title: "Your Skool group", body: "One big Join button sends them to your Skool About page.", tone: "bg-success-soft text-success" },
+    { icon: FileTextIcon, title: "Opt-in page", body: "Someone clicks your ad and swaps their email for your free guide.", tone: "primary" as const },
+    { icon: MailCheckIcon, title: "Thank-you page", body: "They get the guide, plus 3 emails that follow up for you.", tone: "gold" as const },
+    { icon: GraduationCapIcon, title: "Your Skool group", body: "One big Join button sends them to your Skool About page.", tone: "success" as const },
   ];
   return (
-    <section aria-labelledby="how-funnel" className="flex flex-col gap-3">
-      <h2 id="how-funnel" className="text-[17px]">
+    <section aria-labelledby="how-funnel" className="flex flex-col gap-4">
+      <h2 id="how-funnel" className="eyebrow">
         How a funnel works
       </h2>
-      <ol className="grid gap-3 @2xl/main:grid-cols-3">
+      <ol className="grid gap-3 @2xl/main:grid-cols-3 @2xl/main:gap-4">
         {tiles.map((t, i) => (
-          <li key={t.title} className="relative flex gap-3 rounded-2xl bg-card p-4 shadow-card ring-1 ring-foreground/[0.07] @2xl/main:flex-col">
-            <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", t.tone)}>
-              <t.icon className="size-5" aria-hidden />
-            </span>
-            <span className="grid gap-0.5">
-              <span className="text-xs font-semibold text-muted-foreground tabular-nums">Step {i + 1}</span>
-              <span className="font-heading font-semibold">{t.title}</span>
-              <span className="text-sm text-muted-foreground">{t.body}</span>
+          <li key={t.title} className="relative flex gap-3.5 rounded-2xl bg-card p-5 shadow-card ring-1 ring-ink/[0.06] @2xl/main:flex-col dark:ring-white/[0.07]">
+            <IconTile icon={t.icon} tone={t.tone} className="size-10 rounded-[14px]" />
+            <span className="grid gap-1">
+              <span className="text-[11.5px] font-semibold tracking-[0.06em] text-subtle-foreground uppercase tabular-nums">Step {i + 1}</span>
+              <span className="text-[15px] font-semibold">{t.title}</span>
+              <span className="text-sm leading-relaxed text-muted-foreground">{t.body}</span>
             </span>
             {i < tiles.length - 1 ? (
-              <ArrowRightIcon className="absolute top-1/2 -right-3 z-10 hidden size-6 -translate-y-1/2 rounded-full bg-background p-1 text-muted-foreground ring-1 ring-foreground/10 @2xl/main:block" aria-hidden />
+              <ArrowRightIcon
+                className="absolute top-1/2 -right-[14px] z-10 hidden size-6 -translate-y-1/2 rounded-full bg-card p-1 text-subtle-foreground shadow-xs ring-1 ring-ink/[0.06] @2xl/main:block dark:ring-white/[0.08]"
+                aria-hidden
+              />
             ) : null}
           </li>
         ))}
       </ol>
     </section>
+  );
+}
+
+/**
+ * A tiny picture of the funnel's opt-in page in its own colours. Funnels carry their own theme,
+ * so this stays light (or dark, for the Dark style) whatever the app theme is. Decorative only.
+ */
+function FunnelThumb({ theme, address, framed }: { theme: SiteTheme; address: string; framed?: boolean }) {
+  const filled = theme.style === "bold" || theme.style === "luxe";
+  const dark = theme.style === "dark";
+  const surface = filled ? "" : dark ? "bg-ink" : theme.style === "editorial" ? "bg-marshmallow" : "bg-white";
+  const strong = filled ? "bg-white" : dark ? "bg-white/85" : "bg-ink/75";
+  const line = filled ? "bg-white/45" : dark ? "bg-white/15" : "bg-ink/10";
+  const brand = { background: theme.brandColor };
+  return (
+    <div aria-hidden className={cn("overflow-hidden rounded-t-xl shadow-card ring-1 ring-ink/[0.07] dark:ring-white/10", framed && "@2xl/main:rounded-xl")}>
+      <div className="flex h-6 items-center gap-1 border-b border-border bg-card px-2.5">
+        <span className="size-1.5 rounded-full bg-border-strong" />
+        <span className="size-1.5 rounded-full bg-border-strong" />
+        <span className="size-1.5 rounded-full bg-border-strong" />
+        <span className="ml-2 min-w-0 truncate rounded-full bg-muted px-2 text-[9.5px] leading-4 text-subtle-foreground">{address}</span>
+      </div>
+      <div className={`relative flex h-[120px] flex-col justify-center gap-2 px-5 ${surface}`} style={filled ? brand : undefined}>
+        {/* Luxe pages are a deep velvet of the brand colour, so the thumbnail darkens it to match. */}
+        {theme.style === "luxe" ? <div className="pointer-events-none absolute inset-0 bg-black/60" /> : null}
+        {filled ? <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_120%_at_100%_0%,rgb(255_255_255/0.22),transparent_60%)]" /> : null}
+        <span className={`relative h-1.5 w-12 rounded-full ${filled ? "bg-white/55" : "opacity-60"}`} style={filled ? undefined : brand} />
+        <span className={`relative h-2.5 w-[72%] rounded-full ${strong}`} />
+        <span className={`relative h-2.5 w-[52%] rounded-full ${strong}`} />
+        <span className={`relative mt-1 h-1.5 w-[62%] rounded-full ${line}`} />
+        <span className={`relative mt-1.5 h-5 w-24 rounded-full shadow-xs ${filled ? "bg-white" : ""}`} style={filled ? undefined : brand} />
+      </div>
+    </div>
   );
 }
 
@@ -98,8 +133,8 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
     return (
       <>
         <PageHead
-          lesson="1.3"
-          stage="Stage 1"
+          lesson="1.2"
+          stage="Day 1"
           title="Funnels & pages"
           sub="Your funnel is where your ads send people: a page that collects their email, then points them at your Skool group."
           first="Let the AI launch kit build your first funnel. It takes about a minute."
@@ -122,8 +157,8 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
   return (
     <>
       <PageHead
-        lesson="1.3"
-        stage="Stage 1"
+        lesson="1.2"
+        stage="Day 1"
         title="Funnels & pages"
         sub="Your funnels: the pages your ads send people to. Open one to edit its pages or publish it."
         first={anyLive ? undefined : "Open your funnel, check the pages, then press Publish."}
@@ -140,7 +175,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
 
       {!anyLive && firstDraft ? (
         <NextStep
-          eyebrow="Up next · Lesson 1.3"
+          eyebrow="Up next · Lesson 1.2"
           title="Publish your funnel"
           body="Edit three lines, then press the scary button. You can change anything later and publish again."
           href={`${base}/sites/${firstDraft.id}`}
@@ -149,26 +184,36 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
         />
       ) : null}
 
-      <ul className="grid gap-4 @2xl/main:grid-cols-2">
+      {/* One funnel gets a wide card (picture beside the details); two or more sit in a grid. */}
+      <ul className={cn("grid gap-5", sites.length > 1 && "@2xl/main:grid-cols-2")}>
         {sites.map((s) => {
           const url = siteBaseUrl(s);
+          const address = s.customDomain ?? url.replace(/^https?:\/\//, "");
           const pageCount = counts.find((c) => c.siteId === s.id)?.pages ?? 0;
           const leadCount = leads.find((l) => l.siteId === s.id)?.n ?? 0;
+          const wide = sites.length === 1;
           return (
             <li key={s.id}>
-              <Card className="h-full">
-                <CardContent className="flex h-full flex-col gap-4">
+              <Card className={cn("group/funnel h-full gap-0 py-0 transition-shadow duration-200 hover:shadow-lift", wide && "@2xl/main:flex-row")}>
+                <Link
+                  href={`${base}/sites/${s.id}`}
+                  className={cn("block bg-muted/50 p-4 pb-0 hover:no-underline dark:bg-white/[0.02]", wide && "@2xl/main:flex @2xl/main:w-[46%] @2xl/main:shrink-0 @2xl/main:items-center @2xl/main:p-6")}
+                  tabIndex={-1}
+                  aria-hidden
+                >
+                  <div className="w-full translate-y-px transition-transform duration-200 ease-soft group-hover/funnel:-translate-y-0.5">
+                    <FunnelThumb theme={s.theme} address={address} framed={wide} />
+                  </div>
+                </Link>
+                <CardContent className={cn("flex flex-1 flex-col gap-4 border-t border-border/80 py-5", wide && "@2xl/main:border-t-0 @2xl/main:border-l @2xl/main:py-6")}>
                   <div className="flex items-start gap-3">
-                    <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", s.published ? "bg-success-soft text-success" : "bg-muted text-muted-foreground")}>
-                      <GlobeIcon className="size-5" aria-hidden />
-                    </span>
-                    <div className="grid min-w-0 flex-1 gap-0.5">
-                      <Link href={`${base}/sites/${s.id}`} className="truncate font-heading text-[17px] font-semibold text-foreground hover:text-primary hover:no-underline">
+                    <div className="grid min-w-0 flex-1 gap-1">
+                      <Link href={`${base}/sites/${s.id}`} className="truncate text-[16px] font-semibold tracking-[-0.011em] text-foreground hover:text-primary hover:no-underline">
                         {s.name}
                       </Link>
                       {s.published ? (
                         <a href={url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground hover:text-primary">
-                          <span className="truncate">{s.customDomain ?? url.replace(/^https?:\/\//, "")}</span>
+                          <span className="truncate">{address}</span>
                           <ExternalLinkIcon className="size-3 shrink-0" aria-label="Opens the live funnel" />
                         </a>
                       ) : (
@@ -176,7 +221,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
                       )}
                     </div>
                     {s.published ? (
-                      <Badge variant="secondary" className="bg-success-soft text-success">
+                      <Badge variant="success">
                         <span className="size-1.5 rounded-full bg-current" aria-hidden />
                         Live
                       </Badge>
@@ -185,21 +230,21 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
                     )}
                   </div>
 
-                  <dl className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-muted/60 px-3 py-2">
+                  <dl className="grid grid-cols-2 gap-2.5">
+                    <div className="rounded-xl bg-background/70 px-3.5 py-2.5 ring-1 ring-ink/[0.05] dark:bg-white/[0.02] dark:ring-white/[0.06]">
                       <dt className="text-xs text-muted-foreground">Pages</dt>
-                      <dd className="font-heading text-xl font-bold tabular-nums">{pageCount}</dd>
+                      <dd className="font-display text-[28px] leading-tight tabular-nums">{pageCount}</dd>
                     </div>
-                    <div className="rounded-xl bg-muted/60 px-3 py-2">
+                    <div className="rounded-xl bg-background/70 px-3.5 py-2.5 ring-1 ring-ink/[0.05] dark:bg-white/[0.02] dark:ring-white/[0.06]">
                       <dt className="flex items-center gap-1 text-xs text-muted-foreground">
                         <UsersIcon className="size-3" aria-hidden /> Leads
                       </dt>
-                      <dd className="font-heading text-xl font-bold tabular-nums">{leadCount.toLocaleString()}</dd>
+                      <dd className="font-display text-[28px] leading-tight tabular-nums">{leadCount.toLocaleString()}</dd>
                     </div>
                   </dl>
 
                   <div className="mt-auto flex flex-wrap items-center gap-2">
-                    <Button asChild variant="outline" size="sm">
+                    <Button asChild variant={s.published ? "outline" : "default"} size="sm">
                       <Link href={`${base}/sites/${s.id}`}>
                         {s.published ? "Open funnel" : "Open and publish"}
                         <ArrowRightIcon data-icon="inline-end" />

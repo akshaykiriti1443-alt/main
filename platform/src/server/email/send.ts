@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { contacts, emailMessages, sites, users, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { contacts, emailMessages, sites, users, workspaceMembers, workspaces, type EmailAttachment } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { logActivity } from "../activity";
 import { enqueue } from "../jobs/queue";
@@ -9,7 +9,6 @@ import { chargeUsage, InsufficientBalanceError, refundUsage } from "../wallet";
 import { isWorkspaceLive } from "../liveness";
 import { EmailProviderError, sendEmail } from "./providers";
 import { renderEmail, unsubscribeUrl } from "./render";
-import { videoVars } from "../skoolHobby";
 
 type Workspace = typeof workspaces.$inferSelect;
 type Contact = typeof contacts.$inferSelect;
@@ -51,7 +50,6 @@ export async function buildVars(ws: Workspace, contact: Contact | null, site?: S
     lead_magnet_url: fromSite.lead_magnet_url || "",
     lead_magnet_name: fromSite.lead_magnet_name || "your free guide",
     site_url: fromSite.site_url || "",
-    ...videoVars(ws.settings),
   } as Record<string, string>;
 }
 
@@ -65,6 +63,8 @@ export async function queueEmail(input: {
   campaignId?: string;
   sequenceStepId?: string;
   runAt?: Date;
+  /** e.g. a calendar invite (.ics). Small files only. */
+  attachments?: EmailAttachment[];
 }) {
   const db = await getDb();
   const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, input.workspaceId)).limit(1);
@@ -89,6 +89,7 @@ export async function queueEmail(input: {
       provider: env.emailProvider,
       campaignId: input.campaignId,
       sequenceStepId: input.sequenceStepId,
+      attachments: input.attachments?.length ? input.attachments : null,
     })
     .returning({ id: emailMessages.id });
   await enqueue("email.send", { emailMessageId: msg.id }, { runAt: input.runAt });
@@ -141,6 +142,7 @@ export async function processEmailSend(emailMessageId: string) {
       text: msg.text,
       headers,
       stream: msg.campaignId ? "broadcast" : "transactional",
+      attachments: msg.attachments ?? undefined,
     });
     await db
       .update(emailMessages)
@@ -167,6 +169,8 @@ export async function processEmailSend(emailMessageId: string) {
 export async function sendSystemEmail(input: { to: string; subject: string; body: string; brandName?: string }) {
   const { renderEmail } = await import("./render");
   const brand = input.brandName || env.platformName;
-  const r = renderEmail({ subject: input.subject, body: input.body, vars: {}, businessName: brand });
+  // Footer: "OneX by ScaleitAds" for the platform's own emails; an agency's emails carry only its name.
+  const footer = input.brandName || !env.platformBy ? brand : `${env.platformName} by ${env.platformBy}`;
+  const r = renderEmail({ subject: input.subject, body: input.body, vars: {}, businessName: footer });
   return sendEmail({ from: `"${brand.replace(/["<>]/g, "")}" <${env.emailFrom}>`, to: input.to, subject: r.subject, html: r.html, text: r.text });
 }

@@ -1,8 +1,9 @@
 import { isEmail, normalizeEmail } from "@/lib/util";
-import type { SkoolStatus } from "@/server/skool";
 
 // Pure Skool-export parsing, shared by the server and the admin's browser (which trims a big
 // export to just names and emails before upload, so it fits the server-action body limit).
+
+export type SkoolStatus = "trial" | "active" | "cancelling" | "churned";
 
 // Map a free-text status cell from any Skool export/paste onto our four states.
 export function normalizeStatus(raw: string): SkoolStatus {

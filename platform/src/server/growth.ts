@@ -4,29 +4,39 @@ import { activities, sites, skoolCheckins, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { safeUrl } from "@/lib/html";
 
-// The Skool growth ladder, in the words of Skool's help center (help.skool.com/article/245-growth-tab-and-skool-ads)
-// and its Growth tab. Every requirement is the last 30 days, so a level can drop as well as rise.
-//   L1  Carousel ads          Paid communities (subscription or tiers) appear in Skool's carousel ads.
-//                             Skool runs no ads for free or freemium communities.
-//   L2  Custom ads            100 About-page visitors · 1 new customer · subscription or tiers pricing
-//                             → Skool generates custom ads (up to 10 variations). Spend isn't guaranteed.
-//   L3  Dedicated campaign    3,000 visitors · consistent organic promo · 10 Skool Network sign-ups
-//   L4  Partnership campaign  10,000 visitors · consistent organic promo · 30 Skool Network sign-ups
-// Skool makes the ads (you can't upload your own) and decides the spend; it names no amounts.
-// Running your own ads counts as organic promotion. A skool.com link in your bios is a tip, not a requirement.
+// The Skool growth ladder as Skool's own Growth tab shows it (Community › Settings › Growth, the
+// owner's admin screen, Nov 2026). Where Skool's help center words it differently, the admin screen
+// wins. Every requirement is the last 30 days, so a level can drop as well as rise.
+//   L1  Discovery            Shown in Skool Discovery and suggested communities.
+//   L2  6 custom ads         100 About-page visitors · 1 new customer · subscription or tiers pricing
+//   L3  Upload your own      3,000 visitors · Skool link in bio · consistent organic promo · 10 Skool Network sign-ups
+//                            → upload your own ads; Skool spends up to $1,000/day on them
+//   L4  Partnership ads      10,000 visitors · link in bio · organic promo · 30 Skool Network sign-ups
+//                            → partnership ads + video uploads, up to around $10,000/day
+// Skool decides the spend ("up to", never a promise). Running your own ads counts as organic promotion.
 
 export type LevelReq = { visitors: number; newPaid: number; networkSignups: number; linkInBio: boolean; organic: boolean; paidPricing: boolean };
 const req = (r: Partial<LevelReq>): LevelReq => ({ visitors: 0, newPaid: 0, networkSignups: 0, linkInBio: false, organic: false, paidPricing: false, ...r });
 export const LEVELS: { level: 1 | 2 | 3 | 4; name: string; reward: string; req: LevelReq }[] = [
-  { level: 1, name: "Carousel ads", reward: "Paid communities (subscription or tiers) appear in Skool's carousel ads. Free and freemium communities get no Skool ads.", req: req({}) },
+  { level: 1, name: "Discovery", reward: "Shown in Skool Discovery and suggested communities.", req: req({}) },
   {
     level: 2,
-    name: "Custom ads",
-    reward: "Skool generates custom ads for you (up to 10 variations). Spend isn't guaranteed; it depends on how the ads perform.",
+    name: "6 custom ads",
+    reward: "Skool runs 6 custom ads for your community with its own money. Spend isn't guaranteed: Skool decides.",
     req: req({ visitors: 100, newPaid: 1, paidPricing: true }),
   },
-  { level: 3, name: "Dedicated campaign", reward: "A dedicated ad campaign with more creatives and meaningful daily spend.", req: req({ visitors: 3000, networkSignups: 10, organic: true }) },
-  { level: 4, name: "Partnership campaign", reward: "A partnership-level campaign with the highest spend and custom video ads.", req: req({ visitors: 10000, networkSignups: 30, organic: true }) },
+  {
+    level: 3,
+    name: "Upload your own ads",
+    reward: "Upload your own ads, and Skool spends up to $1,000 a day on them. Skool decides how much, if any.",
+    req: req({ visitors: 3000, networkSignups: 10, linkInBio: true, organic: true }),
+  },
+  {
+    level: 4,
+    name: "Partnership ads",
+    reward: "Partnership ads and video uploads, up to around $10,000 a day. Skool decides how much, if any.",
+    req: req({ visitors: 10000, networkSignups: 30, linkInBio: true, organic: true }),
+  },
 ];
 
 /** The requirement lines for a level card, in Skool's own words. */
@@ -92,13 +102,13 @@ export function computeLadder(c: CheckinInput | null): Ladder {
   }
   if (next?.req.paidPricing && v.newPaid < 1) moves.push("Turn on subscription or tiers pricing in Skool, then get one new customer: message your hot leads today and invite the ones who replied.");
   else if (next?.req.newPaid && v.newPaid < next.req.newPaid) moves.push("Get one new customer: message your hot leads today and invite the ones who replied.");
-  if (next?.req.linkInBio && !v.linkInBio) moves.push("Put your plain skool.com link in your Instagram, TikTok and YouTube bios. Skool checks this one directly.");
-  else if (next && next.level >= 3 && !v.linkInBio) moves.push("Tip: put your plain skool.com link in your Instagram, TikTok and YouTube bios. It sends more people to your About page.");
+  if (next?.req.linkInBio && !v.linkInBio) moves.push("Put your plain skool.com link in your bio (Instagram, TikTok or YouTube). Skool checks this one directly.");
+  else if (next && next.level >= 3 && !v.linkInBio) moves.push("Tip: put your plain skool.com link in your bio (Instagram, TikTok or YouTube). It sends more people to your About page.");
   if (next?.req.organic && !organic) moves.push("Post at least 3 times a week, or keep your own ad running. Both count as consistent organic promo.");
   if (next?.req.networkSignups && v.networkSignups < next.req.networkSignups) {
     moves.push("Skool Network sign-ups come from Discovery, Skool's ads, the recommended communities sidebar and other members' profiles. Raise them with a sharper cover and About page, daily posts (engagement), keeping members (retention), and a higher Growth Boost %.");
   }
-  if (next?.level === 3) moves.push("At Level 3 Skool runs a dedicated campaign for you. Skool makes the ads and decides the spend, so make your About page and cover as sharp as they can be.");
+  if (next?.level === 3) moves.push("At Level 3 you upload your own ads and Skool decides the spend (up to $1,000 a day). Keep your three best ads ready, and make your About page and cover as sharp as they can be.");
   if (!next) moves.push("You're at the top level. Protect it: retention and engagement keep you there.");
   return { qualifies, reported: v.skoolLevel, next, gaps, moves };
 }
@@ -199,4 +209,19 @@ export async function skoolVisits(workspaceId: string, days = 30) {
     .groupBy(sql`1`)
     .orderBy(sql`2 desc`);
   return { total: rows.reduce((n, r) => n + r.count, 0), bySource: rows };
+}
+
+/**
+ * Is this Skool-link source a click on an ad? Meta's click id ("meta-ad"), a Facebook or Instagram
+ * referrer ("meta": bios use the plain skool.com link, lesson 5.1), or a tag like ?src=ads / fb-ad.
+ */
+export function isAdSource(source: string): boolean {
+  const s = source.toLowerCase();
+  return /^(meta|fb|facebook|ig|instagram|paid)([-_].*)?$/.test(s) || /(^|[-_])ads?([-_\d]|$)/.test(s);
+}
+
+/** Ad visits the Skool link counted in the last N days (the "ad visits Growth ladder counted", lesson 2.6). */
+export async function skoolAdVisits(workspaceId: string, days = 30) {
+  const visits = await skoolVisits(workspaceId, days);
+  return visits.bySource.filter((r) => isAdSource(r.source)).reduce((n, r) => n + r.count, 0);
 }

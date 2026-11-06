@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { CalendarIcon, PenLineIcon, Share2Icon } from "lucide-react";
+import { CalendarIcon, PenLineIcon, PlugIcon, Share2Icon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
 import { listConnections } from "@/server/inbox";
 import { listPosts } from "@/server/social";
 import { hasFeature } from "@/server/plans";
 import { cancelPostAction, schedulePostAction } from "@/actions/marketing";
 import { relativeTime, truncate } from "@/lib/util";
-import { cn } from "@/lib/utils";
 import { Empty, Flash, Locked, PageHead, Panel } from "@/components/ui";
+import { EdgeTable, QuietEmpty } from "@/components/crm-ui";
 import { SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,10 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
-const STATUS_CLASS: Record<string, string> = {
-  published: "bg-success-soft text-success",
-  failed: "bg-destructive/10 text-destructive",
-  scheduled: "bg-accent text-accent-foreground",
+const STATUS_VARIANT: Record<string, "success" | "destructive" | "soft" | "secondary"> = {
+  published: "success",
+  failed: "destructive",
+  scheduled: "soft",
 };
 
 export default async function SocialPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
@@ -29,7 +29,7 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
   if (!hasFeature(workspace.plan, "social")) {
     return (
       <>
-        <PageHead title="Social planner" sub="Write once, post to Instagram and Facebook on a schedule." />
+        <PageHead eyebrow="Talk" title="Social planner" sub="Write once, post to Instagram and Facebook on a schedule." />
         <Locked feature="The social planner" wid={wid} />
       </>
     );
@@ -40,6 +40,7 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
+        eyebrow="Talk"
         title="Social planner"
         sub="Write once, post to your Instagram and Facebook Page on a schedule. Instagram posts need an image link."
         first={postable.length === 0 ? "Connect Instagram and Facebook in Settings. Then you can schedule." : "Write a caption, pick a time, press Schedule post."}
@@ -51,17 +52,20 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
           title="Connect an account first"
           body="Hook up Instagram and your Facebook Page in Settings. Takes about a minute, and then posts go out while you sleep."
           action={
-            <Button asChild size="lg">
-              <Link href={`/app/w/${wid}/settings#channels`}>Connect accounts</Link>
+            <Button asChild size="lg" variant="cta">
+              <Link href={`/app/w/${wid}/settings#channels`}>
+                <PlugIcon data-icon="inline-start" />
+                Connect accounts
+              </Link>
             </Button>
           }
         />
       ) : (
-        <Panel icon={PenLineIcon} title="New post" sub="Hook first. Then value. Then a call to action.">
+        <Panel icon={PenLineIcon} title="New post" sub="Hook first. Then value. Then a call to action." className="ring-violet-200/90 dark:ring-violet-400/20">
           <form action={schedulePostAction.bind(null, wid)} className="flex flex-col gap-4">
             <Field>
               <FieldLabel htmlFor="caption">Caption</FieldLabel>
-              <Textarea id="caption" name="caption" rows={5} maxLength={2200} placeholder="Hook first. Then value. Then a call to action: link in bio." />
+              <Textarea id="caption" name="caption" rows={5} maxLength={2200} placeholder="Hook first. Then value. Then a call to action: link in bio." className="min-h-32 rounded-xl text-[15px] leading-relaxed" />
             </Field>
             <div className="grid gap-4 @xl/main:grid-cols-2">
               <Field>
@@ -76,32 +80,40 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
               </Field>
             </div>
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 text-sm font-medium">Post to</legend>
+              <legend className="mb-2 text-[13.5px] font-medium">Post to</legend>
               <div className="flex flex-wrap gap-2">
                 {postable.map((c) => (
-                  <Label key={c.id} className="cursor-pointer rounded-xl border bg-card px-3 py-2 font-normal has-checked:border-primary/40 has-checked:bg-accent">
+                  <Label
+                    key={c.id}
+                    className="h-10 cursor-pointer gap-2.5 rounded-full border border-border-strong bg-card pr-4 pl-3 font-medium shadow-xs transition-colors duration-150 hover:border-violet-200 has-checked:border-violet-300 has-checked:bg-accent has-checked:text-accent-foreground dark:bg-white/[0.03] dark:has-checked:border-violet-400/40 dark:has-checked:bg-accent"
+                  >
                     <input type="checkbox" name="connectionIds" value={c.id} defaultChecked className="size-4 accent-primary" />
                     {c.name}
-                    <span className="text-xs text-muted-foreground">({c.kind === "instagram" ? "Instagram" : "Facebook"})</span>
+                    <span className="text-xs font-normal text-muted-foreground">{c.kind === "instagram" ? "Instagram" : "Facebook"}</span>
                   </Label>
                 ))}
               </div>
             </fieldset>
-            <div>
-              <SubmitButton size="lg">Schedule post</SubmitButton>
+            <div className="flex flex-wrap items-center gap-3 border-t border-border/80 pt-5">
+              <SubmitButton variant="cta" size="lg">
+                <CalendarIcon data-icon="inline-start" />
+                Schedule post
+              </SubmitButton>
+              <span className="text-xs text-muted-foreground">No time picked? It posts right away.</span>
             </div>
           </form>
         </Panel>
       )}
       {/* Nothing connected and nothing posted: one empty state is enough. */}
       {postable.length === 0 && posts.length === 0 ? null : (
-      <Panel icon={CalendarIcon} tone="muted" title="Posts">
+      <Panel icon={CalendarIcon} tone="muted" title="Posts" sub="Scheduled and published, newest first.">
         {posts.length === 0 ? (
-          <Empty icon={CalendarIcon} tone="muted" title="No posts yet" body="Scheduled and published posts show up here, with how each one went." />
+          <QuietEmpty icon={CalendarIcon} title="No posts yet" body="Scheduled and published posts show up here, with how each one went." />
         ) : (
+          <EdgeTable>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Post</TableHead>
                 <TableHead>Accounts</TableHead>
                 <TableHead>When</TableHead>
@@ -114,11 +126,11 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
             <TableBody>
               {posts.map((p) => (
                 <TableRow key={p.id}>
-                  <TableCell className="max-w-80 min-w-56 whitespace-normal">{truncate(p.caption || "(image only)", 80)}</TableCell>
+                  <TableCell className="max-w-80 min-w-56 py-3 whitespace-normal">{truncate(p.caption || "(image only)", 80)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{p.connectionIds.map((id) => names.get(id) ?? "removed").join(", ")}</TableCell>
-                  <TableCell className="text-muted-foreground">{p.scheduledAt ? relativeTime(p.scheduledAt) : "—"}</TableCell>
+                  <TableCell className="text-[13px] text-subtle-foreground">{p.scheduledAt ? relativeTime(p.scheduledAt) : "—"}</TableCell>
                   <TableCell className="whitespace-normal">
-                    <Badge variant="secondary" className={cn("capitalize", STATUS_CLASS[p.status])}>
+                    <Badge variant={STATUS_VARIANT[p.status] ?? "secondary"} className="capitalize">
                       {p.status}
                     </Badge>
                     {p.status === "failed" ? <div className="mt-1 text-xs text-destructive">{Object.values(p.results).find((r) => !r.ok)?.error}</div> : null}
@@ -136,6 +148,7 @@ export default async function SocialPage({ params, searchParams }: { params: Pro
               ))}
             </TableBody>
           </Table>
+          </EdgeTable>
         )}
       </Panel>
       )}

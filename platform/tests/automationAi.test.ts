@@ -25,17 +25,17 @@ describe("Tell your AI what to automate: checking the AI's draft", () => {
   it("keeps only steps the engine can run, and spaces out emails", () => {
     const d = finishDraft(
       {
-        name: "Save a cancelling member",
+        name: "Follow up quiet leads",
         summary: "Emails them and drafts a DM.",
-        why: "3 members are cancelling.",
-        trigger: { type: "tag_added", value: "Skool Cancelling" },
+        why: "3 leads went quiet.",
+        trigger: { type: "tag_added", value: "Needs Follow Up" },
         steps: [
-          step({ type: "send_email", subject: "Did we miss something?", body: "Hey {{first_name}}, what would have made you stay?" }),
+          step({ type: "send_email", subject: "Still thinking it over?", body: "Hey {{first_name}}, what's the one thing holding you back?" }),
           step({ type: "send_email", subject: "Still here", body: "The door's open, {{first_name}}." }),
           step({ type: "send_message", body: "hi" }), // needs a conversation they started: dropped
           step({ type: "enroll_sequence", sequenceId: "not-theirs" }), // unknown sequence: dropped
           step({ type: "add_tag", tag: "Save Attempt!" }),
-          step({ type: "ask_my_ai", instruction: "Draft a short Skool DM asking what would make them stay." }),
+          step({ type: "ask_my_ai", instruction: "Draft a short Skool DM asking what's holding them back." }),
           step({ type: "notify_owner", message: "Send the DM your AI drafted, in Skool." }),
         ],
         notes: [],
@@ -43,7 +43,7 @@ describe("Tell your AI what to automate: checking the AI's draft", () => {
       ctx,
     );
     if ("error" in d) throw new Error(d.error);
-    expect(d.trigger).toEqual({ type: "tag_added", value: "skool-cancelling" });
+    expect(d.trigger).toEqual({ type: "tag_added", value: "needs-follow-up" });
     expect(d.actions.map((a) => a.type)).toEqual(["send_email", "wait", "send_email", "add_tag", "ask_my_ai", "notify_owner"]);
     expect(d.actions[1]).toEqual({ type: "wait", minutes: 1440 });
     expect(d.actions[3]).toEqual({ type: "add_tag", tag: "save-attempt" });
@@ -65,18 +65,18 @@ describe("Tell your AI what to automate: building", () => {
     const db = await getDb();
     await db.update(workspaces).set({ settings: { ...ws.settings, aiProvider: "gemini", aiKeyEnc: encrypt("test-key"), aiModel: "gemini-2.5-flash" } }).where(eq(workspaces.id, ws.id));
     for (const name of ["Ann", "Bo", "Cy"]) {
-      const { contact } = await upsertContact({ workspaceId: ws.id, email: `${name.toLowerCase()}-${Date.now()}@example.com`, firstName: name, source: "skool" });
-      await db.update(contacts).set({ tags: ["skool-member", "skool-cancelling"], stage: "member" }).where(eq(contacts.id, contact.id));
+      const { contact } = await upsertContact({ workspaceId: ws.id, email: `${name.toLowerCase()}-${Date.now()}@example.com`, firstName: name, source: "landing_page" });
+      await db.update(contacts).set({ temperature: "hot" }).where(eq(contacts.id, contact.id));
     }
 
     const draft = {
-      name: "Save a cancelling member",
-      summary: "When someone cancels, they get a kind email and you get a DM to send.",
-      why: "3 members are cancelling right now, your biggest leak.",
-      trigger: { type: "tag_added", value: "skool-cancelling" },
+      name: "Follow up hot leads",
+      summary: "When a lead turns hot, your AI drafts a follow-up and you get told to send it.",
+      why: "3 leads are hot right now, your biggest chance.",
+      trigger: { type: "temperature_changed", value: "hot" },
       steps: [
-        step({ type: "send_email", subject: "Did we miss something, {{first_name}}?", body: "Hey {{first_name}}, I saw you cancelled. What would have made it click? {{owner_name}}" }),
-        step({ type: "ask_my_ai", instruction: "Draft a 2-line Skool DM asking what would make them stay." }),
+        step({ type: "send_email", subject: "Quick question, {{first_name}}", body: "Hey {{first_name}}, what made you grab the guide? {{owner_name}}" }),
+        step({ type: "ask_my_ai", instruction: "Draft a 2-line Skool DM that mentions what they did." }),
         step({ type: "notify_owner", message: "Send the DM your AI drafted, in Skool, today." }),
       ],
       notes: [],
@@ -87,18 +87,19 @@ describe("Tell your AI what to automate: building", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const before = (await listAutomations(ws.id)).length;
-    const r = await draftAutomation(ws.id, { request: "Save people who cancel before they go" });
+    const r = await draftAutomation(ws.id, { request: "Follow up hot leads before they go cold" });
     if (!r.ok) throw new Error(r.error);
     expect(r.draft.actions.map((a) => a.type)).toEqual(["send_email", "ask_my_ai", "notify_owner"]);
-    expect(r.draft.why).toContain("3 members");
-    // The AI saw their numbers (what's leaking) and the rules for Skool.
+    expect(r.draft.why).toContain("3 leads");
+    // The AI saw their numbers and the rules for Skool, and nothing of the removed member CRM.
     const sent = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     const prompt = sent.messages.map((m: { content: string }) => m.content).join("\n");
-    expect(prompt).toContain('"cancelling":3');
+    expect(prompt).toContain('"hotLeads":3');
     expect(prompt).toContain("AI writes, you send");
+    expect(prompt).not.toMatch(/cancelling|skool_invite|skool-member/);
     // A draft, not an automation: nothing runs until the owner saves it.
     expect(await listAutomations(ws.id)).toHaveLength(before);
-    expect((await getAutomationDraft(ws.id, r.draftId, null))?.draft.name).toBe("Save a cancelling member");
+    expect((await getAutomationDraft(ws.id, r.draftId, null))?.draft.name).toBe("Follow up hot leads");
     // Drafts are private to their workspace and to the automation they were made for.
     const other = await makeWorkspace();
     expect(await getAutomationDraft(other.ws.id, r.draftId, null)).toBeNull();
@@ -106,22 +107,24 @@ describe("Tell your AI what to automate: building", () => {
 
     expect(whoBuilds({ plan: "growth", settings: { aiKeyEnc: "x", aiProvider: "gemini" } })).toMatch(/Google Gemini \(free tier\)/);
     const ideas = automationSuggestions(await automationContext(ws.id));
-    expect(ideas[0].label).toBe("3 cancelling: save them");
+    expect(ideas[0].label).toBe("3 hot leads: follow up fast");
+    expect(ideas.map((i) => i.label).join(" ")).not.toMatch(/cancel|trial|churn/i);
   });
 
   it.skipIf(env.aiEnabled)("with no AI connected, falls back to the closest recipe", async () => {
     const { ws } = await makeWorkspace({ plan: "growth" });
-    const r = await draftAutomation(ws.id, { request: "when a trial is about to end, nudge them to upgrade" });
-    expect(r.ok && r.recipe).toBe("skool-convert");
+    const r = await draftAutomation(ws.id, { request: "follow up new leads from my free guide" });
+    expect(r.ok && r.recipe).toBe("nurture");
     const none = await draftAutomation(ws.id, { request: "do something clever with my calendar" });
     expect(none.ok).toBe(false);
   });
 
   it("matches plain words to recipes", () => {
-    expect(recipeFor("Save people who cancel")).toBe("skool-save");
-    expect(recipeFor("win back members who left")).toBe("skool-winback");
-    expect(recipeFor("welcome new paying members")).toBe("skool-welcome");
+    expect(recipeFor("alert me when a hot lead messages on instagram")).toBe("hot");
     expect(recipeFor("follow up new leads from my guide")).toBe("nurture");
+    // The Skool member recipes are gone, so member-lifecycle asks have no recipe.
+    expect(recipeFor("Save people who cancel")).toBeNull();
+    expect(recipeFor("win back members who left")).toBeNull();
   });
 });
 

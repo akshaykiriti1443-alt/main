@@ -20,7 +20,6 @@ import {
 } from "@/actions/account";
 import { saveTemplateFromWorkspaceAction } from "@/actions/agency";
 
-import { cn } from "@/lib/utils";
 import { Callout, Flash, IconTile, LessonTag, MoreOptions, PageHead, Panel, StepDot } from "@/components/ui";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,7 +38,7 @@ import { OpenOnHash } from "./open-on-hash";
 const KIND: Record<string, string> = { facebook_page: "Facebook Page", instagram: "Instagram", whatsapp: "WhatsApp", sms: "SMS number" };
 
 /** A "More options" that sits inside a card: lighter, no second shadow. */
-const INNER_MORE = "border-foreground/10 bg-muted/30 open:border-solid open:border-foreground/10 open:bg-muted/30 open:shadow-none open:ring-0";
+const INNER_MORE = "bg-background/50 open:border-solid open:border-border open:bg-background/60 open:shadow-none open:ring-0 dark:bg-white/[0.02] dark:open:bg-white/[0.02]";
 
 /** One numbered line in a how-to, so a field reads like the lesson's steps. */
 function FieldStep({ n, children }: { n: number; children: React.ReactNode }) {
@@ -71,12 +70,16 @@ export default async function SettingsPage({ params, searchParams }: { params: P
     : !s.metaPixelId
       ? "Add your Meta Pixel ID so your ads learn who lands on your pages."
       : undefined;
-  // One dominant button: the Save of whichever card is the next step.
+  // One dominant button: the Save of whichever card is the next step. While it's the step,
+  // that Save is the screen's one pink button.
   const pixelIsNext = Boolean(s.skoolUrl) && !s.metaPixelId;
+  const businessSave = !s.skoolUrl ? "cta" : pixelIsNext ? "outline" : "default";
+  const pixelSave = pixelIsNext ? "cta" : "outline";
 
   return (
     <>
       <PageHead
+        eyebrow="Account"
         title="Settings"
         sub="The few things your funnel needs to know about you. Most people only ever fill in the first two cards."
         first={first}
@@ -89,19 +92,19 @@ export default async function SettingsPage({ params, searchParams }: { params: P
           step={1}
           title="Business details"
           sub="Every Join button on your pages points at your Skool group link."
-          action={<LessonTag lesson="1.2" stage="Stage 1" />}
+          action={<LessonTag lesson="1.2" stage="Day 1" />}
         >
           <div className="grid gap-5 @2xl/main:grid-cols-2">
             <Field data-guide="skool-link" className="@2xl/main:col-span-2">
               <FieldLabel htmlFor="skoolUrl" className="flex items-center gap-2">
                 Skool group link
                 {s.skoolUrl ? (
-                  <Badge variant="secondary" className="bg-success-soft text-success">
+                  <Badge variant="success">
                     <CircleCheckIcon data-icon="inline-start" /> Saved
                   </Badge>
                 ) : null}
               </FieldLabel>
-              <Input id="skoolUrl" name="skoolUrl" type="url" defaultValue={s.skoolUrl ?? ""} placeholder="https://www.skool.com/your-group/about" className="h-11 text-base" />
+              <Input id="skoolUrl" name="skoolUrl" type="url" defaultValue={s.skoolUrl ?? ""} placeholder="https://www.skool.com/your-group/about" className="h-12 rounded-xl px-4 text-[15px]" />
               <FieldDescription>Open your group in Skool, go to its About page and copy the address bar.</FieldDescription>
             </Field>
             <Field>
@@ -132,7 +135,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
             </div>
           </MoreOptions>
           <div>
-            <SubmitButton variant={pixelIsNext ? "outline" : "default"}>Save</SubmitButton>
+            <SubmitButton variant={businessSave}>Save</SubmitButton>
           </div>
         </Panel>
       </form>
@@ -141,8 +144,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         <Panel
           step={2}
           title="Meta Pixel & Conversions API"
-          sub="So your ads learn who actually lands on your pages. Works on Skool's $9 plan too."
-          action={<LessonTag lesson="2.5" stage="Stage 2" />}
+          sub="Optional: your Day 1 ads don't need it. Add it later so your ads learn who actually lands on your pages. Works on Skool's $9 plan too."
+          action={<LessonTag lesson="1.4" stage="Optional" />}
         >
           <div className="flex flex-col gap-5">
             <FieldStep n={1}>
@@ -150,7 +153,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                 <FieldLabel htmlFor="metaPixelId" className="flex items-center gap-2">
                   Pixel (dataset) ID
                   {s.metaPixelId ? (
-                    <Badge variant="secondary" className="bg-success-soft text-success">
+                    <Badge variant="success">
                       <CircleCheckIcon data-icon="inline-start" /> Connected
                     </Badge>
                   ) : null}
@@ -188,7 +191,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
             </FieldStep>
           </div>
           <div>
-            <SubmitButton variant={pixelIsNext ? "default" : "outline"}>Save</SubmitButton>
+            <SubmitButton variant={pixelSave}>Save</SubmitButton>
           </div>
         </Panel>
       </form>
@@ -197,7 +200,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <IconTile icon={BotIcon} />
           <div className="grid min-w-0 flex-1 basis-60 gap-0.5">
-            <span className="font-heading text-[15px] font-semibold">Your AI</span>
+            <span className="text-[15px] font-semibold">Your AI</span>
             <span className="text-sm text-muted-foreground">Connect the AI you already use (Claude, ChatGPT, Gemini…), or add your own API key, so AI never touches your wallet.</span>
           </div>
           <Button asChild variant="outline">
@@ -233,9 +236,9 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         </form>
       ) : null}
 
-      <section aria-labelledby="more-settings" className="flex flex-col gap-3 pt-2">
-        <div className="flex flex-col gap-1">
-          <h2 id="more-settings" className="text-lg">
+      <section aria-labelledby="more-settings" className="flex flex-col gap-3 pt-4">
+        <div className="flex flex-col gap-1.5 pb-1">
+          <h2 id="more-settings" className="eyebrow">
             When you need them
           </h2>
           <p className="text-sm text-muted-foreground">Folded away until the day you want them. Nothing here is needed to launch.</p>
@@ -275,14 +278,14 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                         <TableCell className="font-medium">{c.name}</TableCell>
                         <TableCell className="text-muted-foreground">{KIND[c.kind]}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className={cn("capitalize", c.status === "active" ? "bg-success-soft text-success" : "bg-destructive/10 text-destructive")}>
+                          <Badge variant={c.status === "active" ? "success" : "destructive"} className="capitalize">
                             {c.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           {c.status === "active" ? (
                             <form action={disconnectChannelAction.bind(null, wid, c.id)}>
-                              <SubmitButton variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" confirm="Confirm">
+                              <SubmitButton variant="ghost" size="sm" className="text-destructive hover:bg-destructive-soft hover:text-destructive" confirm="Confirm">
                                 Disconnect
                               </SubmitButton>
                             </form>
@@ -327,7 +330,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                       numbers.numbers.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No numbers found. Try another area code.</p>
                       ) : (
-                        <div className="flex flex-col divide-y rounded-xl border bg-card">
+                        <div className="flex flex-col divide-y divide-border/80 overflow-hidden rounded-xl bg-card ring-1 ring-ink/[0.07] dark:ring-white/[0.08]">
                           {numbers.numbers.map((n) => (
                             <form key={n.phone_number} action={buyNumberAction.bind(null, wid)} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                               <span className="text-sm">
@@ -381,7 +384,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                   <TableCell className="text-right">
                     {m.role !== "owner" && m.userId !== user.id && role !== "user" ? (
                       <form action={removeMemberAction.bind(null, wid, m.userId)}>
-                        <SubmitButton variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" confirm="Confirm">
+                        <SubmitButton variant="ghost" size="sm" className="text-destructive hover:bg-destructive-soft hover:text-destructive" confirm="Confirm">
                           Remove
                         </SubmitButton>
                       </form>
@@ -393,7 +396,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
           </Table>
           <p className="text-sm text-muted-foreground">Team members can work leads and the inbox. Admins can also edit funnels, emails, automations and settings.</p>
           {role !== "user" ? (
-            <form action={inviteMemberAction.bind(null, wid)} className="grid gap-3 rounded-xl bg-muted/50 p-3 @2xl/main:grid-cols-[1fr_1fr_auto_auto] @2xl/main:items-end">
+            <form action={inviteMemberAction.bind(null, wid)} className="grid gap-3 rounded-xl bg-background/60 p-4 ring-1 ring-ink/[0.06] @2xl/main:grid-cols-[1fr_1fr_auto_auto] @2xl/main:items-end dark:bg-white/[0.02] dark:ring-white/[0.07]">
               <Field>
                 <FieldLabel htmlFor="iname">Name</FieldLabel>
                 <Input id="iname" name="name" />
@@ -436,8 +439,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         ) : null}
       </section>
 
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
-        <IconTile icon={BriefcaseIcon} tone="muted" className="size-6 rounded-md [&_svg]:size-3.5" />
+      <p className="flex items-center gap-2.5 text-[13px] text-muted-foreground">
+        <IconTile icon={BriefcaseIcon} tone="muted" className="size-7 rounded-lg [&_svg]:size-3.5" />
         <span>
           Looking for your plan or wallet? It&apos;s in <Link href={`/app/w/${wid}/billing`}>Plan & wallet</Link>.
         </span>

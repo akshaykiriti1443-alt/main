@@ -1,9 +1,10 @@
-import { CircleCheckIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon, ClockIcon, WebhookIcon } from "lucide-react";
 import { requirePlatformAdmin } from "@/server/auth";
 import { recentJobs, recentWebhooks } from "@/server/admin";
 import { retryJobAction, runTickAction } from "@/actions/admin";
 import { relativeTime, truncate } from "@/lib/util";
-import { Empty, Flash, PageHead, Panel } from "@/components/ui";
+import { Flash, PageHead, Panel } from "@/components/ui";
+import { EdgeTable, QuietEmpty } from "@/components/crm-ui";
 import { SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,6 +15,7 @@ export default async function AdminJobs({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHead
+        eyebrow="Platform admin"
         title="Jobs & webhooks"
         sub="Background work: emails, Conversions API events, scoring, posts and webhooks."
         actions={
@@ -23,13 +25,14 @@ export default async function AdminJobs({ searchParams }: { searchParams: Promis
         }
       />
       <Flash searchParams={await searchParams} />
-      <Panel title={`Failed (${failed.length})`}>
+      <Panel icon={failed.length ? CircleAlertIcon : CircleCheckIcon} tone={failed.length ? "warning" : "success"} title={`Failed (${failed.length})`} sub="Retry one once you've fixed what it complains about.">
         {failed.length === 0 ? (
-          <Empty icon={CircleCheckIcon} title="Nothing failed. 🎉" />
+          <QuietEmpty icon={CircleCheckIcon} tone="success" title="Nothing failed. 🎉" body="Every background job ran." />
         ) : (
+          <EdgeTable>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Type</TableHead>
                 <TableHead>Error</TableHead>
                 <TableHead className="text-right">Attempts</TableHead>
@@ -45,7 +48,7 @@ export default async function AdminJobs({ searchParams }: { searchParams: Promis
                   <TableCell className="font-mono text-xs">{j.type}</TableCell>
                   <TableCell className="max-w-md min-w-64 text-xs break-words whitespace-normal text-muted-foreground">{truncate(j.lastError ?? "", 160)}</TableCell>
                   <TableCell className="text-right tabular-nums">{j.attempts}</TableCell>
-                  <TableCell className="text-muted-foreground">{relativeTime(j.createdAt)}</TableCell>
+                  <TableCell className="text-[13px] text-subtle-foreground">{relativeTime(j.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <form action={retryJobAction.bind(null, j.id)}>
                       <SubmitButton variant="outline" size="sm" pendingText="Retrying…">
@@ -57,12 +60,17 @@ export default async function AdminJobs({ searchParams }: { searchParams: Promis
               ))}
             </TableBody>
           </Table>
+          </EdgeTable>
         )}
       </Panel>
-      <Panel title={`Pending (${pending.length})`}>
+      <Panel icon={ClockIcon} tone="muted" title={`Pending (${pending.length})`} sub="Waiting for their turn.">
+        {pending.length === 0 ? (
+          <QuietEmpty icon={ClockIcon} title="Queue is empty" body="New jobs show up here until they run." />
+        ) : (
+        <EdgeTable>
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="hover:bg-transparent">
               <TableHead>Type</TableHead>
               <TableHead>Runs</TableHead>
               <TableHead className="text-right">Attempts</TableHead>
@@ -72,17 +80,23 @@ export default async function AdminJobs({ searchParams }: { searchParams: Promis
             {pending.map((j) => (
               <TableRow key={j.id}>
                 <TableCell className="font-mono text-xs">{j.type}</TableCell>
-                <TableCell>{relativeTime(j.runAt)}</TableCell>
+                <TableCell className="text-[13px] text-muted-foreground">{relativeTime(j.runAt)}</TableCell>
                 <TableCell className="text-right tabular-nums">{j.attempts}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        </EdgeTable>
+        )}
       </Panel>
-      <Panel title="Recent webhooks">
+      <Panel icon={WebhookIcon} tone="muted" title="Recent webhooks" sub="What Meta, Stripe, Skool and Twilio sent us.">
+        {hooks.length === 0 ? (
+          <QuietEmpty icon={WebhookIcon} title="No webhooks yet" body="They show up here the moment one arrives." />
+        ) : (
+        <EdgeTable>
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="hover:bg-transparent">
               <TableHead>Source</TableHead>
               <TableHead>Received</TableHead>
               <TableHead>Status</TableHead>
@@ -92,16 +106,14 @@ export default async function AdminJobs({ searchParams }: { searchParams: Promis
             {hooks.map((h) => (
               <TableRow key={h.id}>
                 <TableCell>{h.source}</TableCell>
-                <TableCell className="text-muted-foreground">{relativeTime(h.createdAt)}</TableCell>
+                <TableCell className="text-[13px] text-subtle-foreground">{relativeTime(h.createdAt)}</TableCell>
                 <TableCell>
                   {h.error ? (
                     <Badge variant="destructive" title={h.error}>
                       error
                     </Badge>
                   ) : h.processedAt ? (
-                    <Badge variant="secondary" className="bg-success-soft text-success">
-                      processed
-                    </Badge>
+                    <Badge variant="success">processed</Badge>
                   ) : (
                     <Badge variant="secondary">queued</Badge>
                   )}
@@ -110,6 +122,8 @@ export default async function AdminJobs({ searchParams }: { searchParams: Promis
             ))}
           </TableBody>
         </Table>
+        </EdgeTable>
+        )}
       </Panel>
     </>
   );

@@ -1,19 +1,15 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { contacts, platformSettings, workspaces } from "@/lib/db/schema";
+import { platformSettings } from "@/lib/db/schema";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { env } from "@/lib/env";
-import { isEmail } from "@/lib/util";
-import { addTag } from "./contacts";
-import { logActivity } from "./activity";
 
 // Skool invites through Skool's own Webhook plugin (Skool › Settings › Plugins › Webhook › Edit
 // gives a private URL; sending it an email address makes Skool email that person an invite that
 // skips approval). A Zapier catch hook wired to Skool's "Invite Member" works the same way.
-// Every workspace can connect its own group, so members (and agency clients) get it too.
+// Only the platform owner's own community uses it: people who buy on /join get invited.
 // No Skool login is ever stored or used.
 
-export const INVITED_TAG = "skool-invited";
 const PLATFORM_KEY = "skool_invite";
 
 /** Only Skool's own webhook or a Zapier hook: the URL is a secret that invites people, nothing else. */
@@ -125,93 +121,4 @@ export async function platformInviteHint(): Promise<string | null> {
       ? `${maskInviteUrl(env.skoolInviteWebhookUrl)} (server setting)`
       : null)
   );
-}
-
-// ----- a member's own Skool group -----
-
-export async function workspaceInviteUrl(
-  workspaceId: string,
-): Promise<string | null> {
-  const db = await getDb();
-  const [ws] = await db
-    .select({ settings: workspaces.settings })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId))
-    .limit(1);
-  const sealed = ws?.settings.skoolInviteEnc;
-  if (!sealed) return null;
-  try {
-    return decrypt(sealed);
-  } catch {
-    return null;
-  }
-}
-
-export async function setWorkspaceInviteUrl(
-  workspaceId: string,
-  url: string | null,
-) {
-  const db = await getDb();
-  const [ws] = await db
-    .select({ settings: workspaces.settings })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId))
-    .limit(1);
-  const settings = { ...(ws?.settings ?? {}) };
-  if (url) {
-    settings.skoolInviteEnc = encrypt(url);
-    settings.skoolInviteHint = maskInviteUrl(url);
-  } else {
-    delete settings.skoolInviteEnc;
-    delete settings.skoolInviteHint;
-  }
-  await db
-    .update(workspaces)
-    .set({ settings })
-    .where(eq(workspaces.id, workspaceId));
-}
-
-/**
- * The "Invite to my Skool group" automation step. Never invites the same person twice, and a
- * failed invite never stops the rest of the automation.
- */
-export async function inviteContactToSkool(
-  workspaceId: string,
-  contactId: string,
-): Promise<string> {
-  const db = await getDb();
-  const [c] = await db
-    .select({
-      id: contacts.id,
-      email: contacts.email,
-      firstName: contacts.firstName,
-      lastName: contacts.lastName,
-      tags: contacts.tags,
-    })
-    .from(contacts)
-    .where(
-      and(eq(contacts.id, contactId), eq(contacts.workspaceId, workspaceId)),
-    )
-    .limit(1);
-  if (!c?.email || !isEmail(c.email))
-    return "Skipped the Skool invite: no email address";
-  if (c.tags.includes(INVITED_TAG) || c.tags.includes("skool-member"))
-    return "Already invited to Skool";
-  const url = await workspaceInviteUrl(workspaceId);
-  if (!url)
-    return "Skipped the Skool invite: connect your Skool webhook in Skool members first";
-  const r = await postSkoolInvite(url, {
-    email: c.email,
-    name: [c.firstName, c.lastName].filter(Boolean).join(" "),
-  });
-  if (!r.ok)
-    return `Skool didn't take the invite (${r.status || "no answer"}). Check your webhook in Skool members`;
-  await addTag(workspaceId, c.id, INVITED_TAG);
-  await logActivity({
-    workspaceId,
-    contactId: c.id,
-    type: "skool_invite",
-    data: {},
-  });
-  return "Sent a Skool invite";
 }

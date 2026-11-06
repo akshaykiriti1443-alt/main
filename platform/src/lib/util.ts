@@ -69,7 +69,13 @@ export function relativeTime(date: Date | string | null | undefined): string {
 }
 
 export function fillTemplate(text: string, vars: Record<string, string | undefined>): string {
-  return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, key: string) => vars[key] ?? "");
+  return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, key: string, offset: number) => {
+    const value = vars[key] ?? "";
+    // "Here's your {{lead_magnet_name}}" with "your free guide" or "The 5-Minute Script" must not
+    // read "your your free guide" / "your The 5-Minute Script": drop the value's own leading word.
+    if (/\byour\s+$/i.test(text.slice(Math.max(0, offset - 6), offset))) return value.replace(/^(?:your|the|a|an)\s+/i, "");
+    return value;
+  });
 }
 
 export function truncate(text: string, max: number): string {

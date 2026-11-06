@@ -18,6 +18,8 @@ import { requireWorkspace } from "@/server/tenancy";
 import { getSite, listPages, siteBaseUrl } from "@/server/sites";
 import { dnsInstructions } from "@/server/domains";
 import { hasFeature } from "@/server/plans";
+import { getDomainAffiliate } from "@/server/domainAffiliate";
+import { GetDomain } from "@/components/get-domain";
 import {
   addPageAction,
   connectDomainAction,
@@ -28,8 +30,7 @@ import {
   unpublishSiteAction,
   updateSiteAction,
 } from "@/actions/sites";
-import { cn } from "@/lib/utils";
-import { Callout, Flash, MoreOptions, NextStep, PageHead, Panel } from "@/components/ui";
+import { Callout, Flash, IconTile, MoreOptions, NextStep, PageHead, Panel, type Tone } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,16 +42,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 export const metadata = { title: "Funnel" };
 
-const KIND: Record<"optin" | "thankyou" | "sales" | "custom", { label: string; icon: LucideIcon; tone: string }> = {
-  optin: { label: "Opt-in", icon: FileTextIcon, tone: "bg-accent text-primary" },
-  thankyou: { label: "Thank-you", icon: MailCheckIcon, tone: "bg-gold-soft text-gold-foreground" },
-  sales: { label: "Sales", icon: TagIcon, tone: "bg-success-soft text-success" },
-  custom: { label: "Page", icon: FileTextIcon, tone: "bg-muted text-muted-foreground" },
+const KIND: Record<"optin" | "thankyou" | "sales" | "custom", { label: string; icon: LucideIcon; tone: Tone }> = {
+  optin: { label: "Opt-in", icon: FileTextIcon, tone: "primary" },
+  thankyou: { label: "Thank-you", icon: MailCheckIcon, tone: "gold" },
+  sales: { label: "Sales", icon: TagIcon, tone: "success" },
+  custom: { label: "Page", icon: FileTextIcon, tone: "muted" },
 };
 
-const DOMAIN_TONE: Record<string, string> = {
-  verified: "bg-success-soft text-success",
-  error: "bg-destructive/10 text-destructive",
+const DOMAIN_BADGE: Record<string, "success" | "destructive"> = {
+  verified: "success",
+  error: "destructive",
 };
 
 export default async function SitePage({ params, searchParams }: { params: Promise<{ wid: string; siteId: string }>; searchParams: Promise<Record<string, string>> }) {
@@ -59,14 +60,16 @@ export default async function SitePage({ params, searchParams }: { params: Promi
   const site = await getSite(wid, siteId);
   if (!site) notFound();
   const pages = await listPages(siteId);
+  const domainPartner = await getDomainAffiliate();
   const base = siteBaseUrl(site);
   const dns = site.customDomain ? dnsInstructions(site.customDomain) : null;
   const changed = pages.some((p) => !p.publishedAt || p.updatedAt > p.publishedAt);
   const optin = pages.find((p) => p.kind === "optin");
 
-  const publishForm = (className: string, variant?: "outline") => (
+  // Pink only when publishing is THE thing to do on this screen (a draft, or edits nobody can see yet).
+  const publishForm = (variant: "cta" | "outline") => (
     <form action={publishSiteAction.bind(null, wid, siteId)} data-guide="site-publish" className="inline-flex">
-      <SubmitButton size="lg" variant={variant} className={className} pendingText="Publishing…">
+      <SubmitButton size={variant === "cta" ? "lg" : "default"} variant={variant} pendingText="Publishing…">
         {!site.published ? <RocketIcon data-icon="inline-start" /> : null}
         {site.published ? (changed ? "Publish changes" : "Republish") : "Publish"}
       </SubmitButton>
@@ -75,13 +78,16 @@ export default async function SitePage({ params, searchParams }: { params: Promi
 
   return (
     <>
-      <Link href={`/app/w/${wid}/sites`} className="-mb-4 inline-flex w-fit items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:no-underline">
-        <ArrowLeftIcon className="size-4" aria-hidden />
+      <Link
+        href={`/app/w/${wid}/sites`}
+        className="group -mb-3 inline-flex w-fit items-center gap-1.5 rounded-full py-1 pr-3 pl-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground hover:no-underline"
+      >
+        <ArrowLeftIcon className="size-4 transition-transform duration-150 group-hover:-translate-x-0.5" aria-hidden />
         All funnels
       </Link>
       <PageHead
-        lesson="1.3"
-        stage="Stage 1"
+        lesson="1.2"
+        stage="Day 1"
         title={site.name}
         sub={site.published ? "Live and taking sign-ups. Edit any page, then publish the changes." : "A draft, so nobody can see it yet. Check your pages, then publish."}
         first={site.published ? undefined : "Open the opt-in page, make the headline sound like you, then press Publish."}
@@ -89,18 +95,26 @@ export default async function SitePage({ params, searchParams }: { params: Promi
       <Flash searchParams={await searchParams} />
 
       {site.published ? (
-        <Card className="ring-success/25">
-          <CardContent className="flex flex-col gap-4 @2xl/main:flex-row @2xl/main:items-center @2xl/main:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-success-soft text-success">
-                <GlobeIcon className="size-5" aria-hidden />
-                <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-success ring-2 ring-card" aria-hidden />
+        <Card className="relative">
+          {/* A soft jade glow: live, calm, nothing to worry about. */}
+          <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-[radial-gradient(70%_120%_at_0%_0%,var(--success-soft),transparent_70%)]" />
+          <CardContent className="relative flex flex-col gap-5 @4xl/main:flex-row @4xl/main:items-center @4xl/main:justify-between">
+            <div className="flex min-w-0 items-start gap-4">
+              <span className="relative grid size-12 shrink-0 place-items-center rounded-2xl bg-success-soft text-success ring-1 ring-success/15 ring-inset">
+                <GlobeIcon className="size-[22px]" aria-hidden />
+                <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-success ring-[3px] ring-card" aria-hidden />
               </span>
-              <div className="grid min-w-0 gap-1.5">
-                <span className="font-heading text-lg font-semibold">Your funnel is live</span>
+              <div className="grid min-w-0 gap-2">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="text-[17px] font-semibold tracking-[-0.012em]">Your funnel is live</span>
+                  <Badge variant="success">
+                    <span className="size-1.5 rounded-full bg-current" aria-hidden />
+                    Taking sign-ups
+                  </Badge>
+                </span>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <a href={base} target="_blank" rel="noreferrer" className="min-w-0 truncate font-mono text-xs">
-                    {base}
+                  <a href={base} target="_blank" rel="noreferrer" className="min-w-0 truncate rounded-full bg-background/70 px-3 py-1 font-mono text-xs ring-1 ring-ink/[0.06] dark:bg-white/[0.03] dark:ring-white/[0.08]">
+                    {base.replace(/^https?:\/\//, "")}
                   </a>
                   <CopyButton text={base} label="Copy link" />
                   <Button variant="ghost" size="sm" asChild>
@@ -111,24 +125,24 @@ export default async function SitePage({ params, searchParams }: { params: Promi
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-row-reverse flex-wrap items-center justify-end gap-2 pl-16 @4xl/main:flex-row @4xl/main:pl-0">
               <form action={unpublishSiteAction.bind(null, wid, siteId)}>
                 <SubmitButton variant="ghost" size="sm" confirm="Yes, take it offline">
                   Unpublish
                 </SubmitButton>
               </form>
-              {publishForm("", changed ? undefined : "outline")}
+              {publishForm(changed ? "cta" : "outline")}
             </div>
           </CardContent>
         </Card>
       ) : (
         <NextStep
-          eyebrow="Lesson 1.3 · The scary button"
+          eyebrow="Lesson 1.2 · The scary button"
           title="Publish your funnel"
           body="It goes online the moment you press it. Nothing is permanent: change anything later and publish again."
           icon={RocketIcon}
         >
-          {publishForm("bg-white text-[oklch(0.42_0.2_277)] shadow-[0_10px_24px_-10px_oklch(0.2_0.1_277/60%)] hover:bg-white/92 dark:text-[oklch(0.4_0.2_277)]")}
+          {publishForm("cta")}
         </NextStep>
       )}
       {site.published && changed ? <Callout tone="tip">You have edits nobody can see yet. Press &quot;Publish changes&quot; to make them live.</Callout> : null}
@@ -148,22 +162,28 @@ export default async function SitePage({ params, searchParams }: { params: Promi
           ) : undefined
         }
       >
-        <ul className="flex flex-col gap-2">
-          {pages.map((p) => {
+        <ul className="flex flex-col gap-2.5">
+          {pages.map((p, i) => {
             const k = KIND[p.kind];
             return (
-              <li key={p.id} className="flex flex-col gap-3 rounded-xl border bg-background/60 p-3 sm:flex-row sm:items-center">
-                <Link href={`/app/w/${wid}/sites/${siteId}/pages/${p.id}`} className="group flex min-w-0 flex-1 items-center gap-3 text-foreground hover:no-underline">
-                  <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl", k.tone)}>
-                    <k.icon className="size-[18px]" aria-hidden />
+              <li
+                key={p.id}
+                className="flex flex-col gap-3 rounded-xl bg-background/60 p-3 pr-3.5 ring-1 ring-ink/[0.06] transition-[background-color,box-shadow] duration-150 hover:bg-card hover:shadow-card sm:flex-row sm:items-center dark:bg-white/[0.02] dark:ring-white/[0.07]"
+              >
+                <Link href={`/app/w/${wid}/sites/${siteId}/pages/${p.id}`} className="group flex min-w-0 flex-1 items-center gap-3.5 text-foreground hover:no-underline">
+                  <span className="relative">
+                    <IconTile icon={k.icon} tone={k.tone} className="size-10 rounded-[14px]" />
+                    <span className="absolute -bottom-1 -left-1 grid size-[18px] place-items-center rounded-full bg-card text-[10px] font-semibold text-muted-foreground tabular-nums shadow-xs ring-1 ring-ink/[0.08] dark:ring-white/10">
+                      {i + 1}
+                    </span>
                   </span>
-                  <span className="grid min-w-0 gap-0.5">
+                  <span className="grid min-w-0 gap-1">
                     <span className="truncate font-medium group-hover:text-primary">{p.title}</span>
                     <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                       <Badge variant="secondary" className="h-5 px-2 text-[11px]">
                         {k.label}
                       </Badge>
-                      <span className="truncate font-mono">/{p.slug}</span>
+                      <span className="truncate font-mono text-subtle-foreground">/{p.slug}</span>
                     </span>
                   </span>
                 </Link>
@@ -246,7 +266,10 @@ export default async function SitePage({ params, searchParams }: { params: Promi
                   <NativeSelectOption value="bold">Bold (color hero)</NativeSelectOption>
                   <NativeSelectOption value="clean">Clean (light)</NativeSelectOption>
                   <NativeSelectOption value="dark">Dark</NativeSelectOption>
+                  <NativeSelectOption value="editorial">Editorial (paper, magazine type)</NativeSelectOption>
+                  <NativeSelectOption value="luxe">Luxe (deep color, centered)</NativeSelectOption>
                 </NativeSelect>
+                <FieldDescription>Editorial and Luxe look best with the Classic serif font.</FieldDescription>
               </Field>
               <div className="grid grid-cols-[1fr_auto] items-end gap-4">
                 <Field>
@@ -279,7 +302,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="flex min-w-0 flex-wrap items-center gap-2">
                   <span className="font-medium break-all">{site.customDomain}</span>
-                  <Badge variant="secondary" className={DOMAIN_TONE[site.domainStatus] ?? "bg-warning-soft text-warning"}>
+                  <Badge variant={DOMAIN_BADGE[site.domainStatus] ?? "warning"} className="capitalize">
                     {site.domainStatus}
                   </Badge>
                 </span>
@@ -290,7 +313,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
                 </form>
               </div>
               {site.domainStatus !== "verified" ? (
-                <div className="rounded-xl border">
+                <div className="overflow-hidden rounded-xl ring-1 ring-ink/[0.07] dark:ring-white/[0.08] [&_tr>*:first-child]:pl-4 [&_tr>*:last-child]:pr-4">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -320,6 +343,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
               <SubmitButton variant="outline">Connect domain</SubmitButton>
             </form>
           )}
+          {domainPartner && !site.customDomain ? <GetDomain wid={wid} partner={domainPartner.partner} /> : null}
         </MoreOptions>
 
         <MoreOptions icon={Trash2Icon} title="Delete this funnel" sub="Pages go offline. Leads you collected stay in your Leads list.">

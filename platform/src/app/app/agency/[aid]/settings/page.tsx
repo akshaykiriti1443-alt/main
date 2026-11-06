@@ -3,17 +3,22 @@ import { saveAgencySettingsAction } from "@/actions/agency";
 import { UNIT_PRICES, resalePrice, type UsageUnit } from "@/server/pricing";
 import { dnsInstructions } from "@/server/domains";
 import { formatMoney } from "@/lib/util";
+import { GlobeIcon, PaletteIcon, PercentIcon } from "lucide-react";
 import { Callout, Flash, PageHead, Panel } from "@/components/ui";
+import { EdgeTable } from "@/components/crm-ui";
 import { SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const DOMAIN_TONE: Record<string, string> = {
-  verified: "bg-success-soft text-success",
-  error: "bg-destructive/10 text-destructive",
+const DOMAIN_VARIANT: Record<string, "success" | "destructive"> = {
+  verified: "success",
+  error: "destructive",
 };
+
+/** The colour picker's starting point: galactic violet, until the agency picks its own. */
+const DEFAULT_BRAND_COLOR = "#5b33e8";
 
 export default async function AgencySettings({ params, searchParams }: { params: Promise<{ aid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { aid } = await params;
@@ -23,11 +28,11 @@ export default async function AgencySettings({ params, searchParams }: { params:
   const status = agency.appDomainStatus;
   return (
     <>
-      <PageHead title="Branding & pricing" sub="Your clients see your name, logo and colors. Point your own domain at the platform for a fully white-label login." />
+      <PageHead eyebrow="Agency" title="Branding & pricing" sub="Your clients see your name, logo and colors. Point your own domain at the platform for a fully white-label login." />
       <Flash searchParams={await searchParams} />
-      <form action={saveAgencySettingsAction.bind(null, aid)} className="flex flex-col gap-4 md:gap-6">
-        <Panel title="Brand">
-          <div className="grid gap-4 sm:grid-cols-2">
+      <form action={saveAgencySettingsAction.bind(null, aid)} className="flex flex-col gap-6">
+        <Panel icon={PaletteIcon} title="Brand" sub="What your clients see on every screen and email.">
+          <div className="grid gap-4 @xl/main:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="brandName">Brand name</FieldLabel>
               <Input id="brandName" name="brandName" defaultValue={b.name ?? agency.name} />
@@ -42,12 +47,15 @@ export default async function AgencySettings({ params, searchParams }: { params:
             </Field>
             <Field>
               <FieldLabel htmlFor="color">Brand color</FieldLabel>
-              <input id="color" name="color" type="color" defaultValue={b.color ?? "#2A44EE"} />
+              <div className="flex items-center gap-3">
+                <input id="color" name="color" type="color" defaultValue={b.color ?? DEFAULT_BRAND_COLOR} className="h-10 w-14 rounded-full p-1" />
+                <span className="text-xs text-muted-foreground">Buttons, links and your logo tile.</span>
+              </div>
             </Field>
           </div>
         </Panel>
 
-        <Panel title="Your app domain">
+        <Panel icon={GlobeIcon} title="Your app domain" sub="Your clients log in on your own address.">
           {agency.plan !== "agency" ? <Callout tone="info">Your own app domain unlocks with the Agency plan.</Callout> : null}
           <Field className="max-w-[420px]">
             <FieldLabel htmlFor="appDomain">Domain</FieldLabel>
@@ -55,10 +63,10 @@ export default async function AgencySettings({ params, searchParams }: { params:
             <FieldDescription>Clients log in at https://{agency.appDomain || "app.youragency.com"}/login and see only your brand.</FieldDescription>
           </Field>
           {agency.appDomain && dns ? (
-            <div className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3">
+            <div className="flex flex-col gap-3 rounded-xl bg-muted/40 p-4 ring-1 ring-ink/[0.04] ring-inset dark:ring-white/[0.05]">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium break-all">{agency.appDomain}</span>
-                <Badge variant="secondary" className={DOMAIN_TONE[status] ?? "bg-warning-soft text-warning"}>
+                <Badge variant={DOMAIN_VARIANT[status] ?? "warning"} className="capitalize">
                   {status}
                 </Badge>
               </div>
@@ -91,14 +99,15 @@ export default async function AgencySettings({ params, searchParams }: { params:
           ) : null}
         </Panel>
 
-        <Panel title="Resale pricing" sub="Usage comes out of your agency wallet at platform prices. Use these suggested prices when you bill your clients.">
+        <Panel icon={PercentIcon} tone="gold" title="Resale pricing" sub="Usage comes out of your agency wallet at platform prices. Use these suggested prices when you bill your clients.">
           <Field className="max-w-[200px]">
             <FieldLabel htmlFor="markupPercent">Your markup on usage (%)</FieldLabel>
             <Input id="markupPercent" name="markupPercent" type="number" min={0} max={500} defaultValue={agency.markupPercent} />
           </Field>
+          <EdgeTable>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Item</TableHead>
                 <TableHead className="text-right">You pay</TableHead>
                 <TableHead className="text-right">Suggested client price</TableHead>
@@ -114,9 +123,11 @@ export default async function AgencySettings({ params, searchParams }: { params:
               ))}
             </TableBody>
           </Table>
+          </EdgeTable>
         </Panel>
 
-        <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card py-3 pr-3 pl-5 shadow-card ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
+          <span className="text-sm text-muted-foreground">Brand, domain and markup save together.</span>
           <SubmitButton pendingText="Saving…">Save</SubmitButton>
         </div>
       </form>
