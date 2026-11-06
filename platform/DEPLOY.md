@@ -111,12 +111,11 @@ sites still work at `app.scaleitads.com/s/<slug>` and on their own domains.
 
 ## 4. Background jobs (the cron caveat)
 
-`vercel.json` asks Vercel Cron to call `/api/cron/tick` **every minute** (emails, sequences,
-automations, maintenance). Vercel sends `Authorization: Bearer <CRON_SECRET>` automatically.
+`vercel.json` asks Vercel Cron to call `/api/cron/tick` **once a day** (06:00 UTC), because the
+Hobby plan allows nothing more often. Emails, sequences and automations need it **every minute**:
 
-- **Vercel Pro:** works as is.
-- **Vercel Hobby:** cron jobs can run at most once a day, and a deploy with a per-minute schedule
-  can be rejected. Remove the `crons` entry from `vercel.json` and use an external scheduler that
+- **Vercel Pro:** change the schedule in `vercel.json` to `* * * * *`.
+- **Vercel Hobby (today):** keep the daily entry, and add an external scheduler that
   calls `GET https://app.scaleitads.com/api/cron/tick` every minute with the header
   `Authorization: Bearer <CRON_SECRET>`: e.g. cron-job.org (free, supports custom headers),
   Upstash QStash, or a GitHub Actions `schedule` workflow. Without a header the route answers 401.

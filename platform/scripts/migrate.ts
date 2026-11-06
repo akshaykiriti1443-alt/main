@@ -4,6 +4,10 @@ import path from "node:path";
 
 async function main() {
   const migrationsFolder = path.join(process.cwd(), "drizzle");
+  // On Vercel there is no local disk to keep data on, so a missing database must stop the deploy.
+  if (process.env.VERCEL && !process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is not set. Connect a Neon database (Vercel › Project › Storage › Neon), then redeploy.");
+  }
   if (process.env.DATABASE_URL) {
     const { default: postgres } = await import("postgres");
     const { drizzle } = await import("drizzle-orm/postgres-js");
