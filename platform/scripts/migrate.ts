@@ -12,7 +12,9 @@ async function main() {
     const { default: postgres } = await import("postgres");
     const { drizzle } = await import("drizzle-orm/postgres-js");
     const { migrate } = await import("drizzle-orm/postgres-js/migrator");
-    const client = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
+    // Migrations want a direct connection (Neon's pooler is for the app), when one is provided.
+    const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+    const client = postgres(url, { max: 1, prepare: false });
     await migrate(drizzle(client), { migrationsFolder });
     await client.end();
     console.log("Postgres migrated.");
