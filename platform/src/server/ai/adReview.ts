@@ -37,6 +37,8 @@ export const adReviewInputSchema = z.object({
   followers: z.coerce.number().int().min(0).default(0),
   /** New members (joins) since the ad went live. Blank means "not known", so the About page isn't judged. */
   members: z.preprocess(blank, z.coerce.number().int().min(0).optional()),
+  /** Optional: Ads Manager's total for every ad so far. Blank means add up the ads reviewed this week. */
+  totalSpent: z.preprocess(blank, z.coerce.number().min(0).optional()),
   /** How many times the member already fixed this ad: 0, 1 or 2 (twice or more). */
   fixes: z.coerce
     .number()
@@ -80,7 +82,7 @@ export type AdReview = {
   /** The member's daily budget (from the Monday check-in) and what to set it to. */
   budget?: { now: number; next: number } | null;
   /** What the Skool link counted, and cost per visit = total spend ÷ counted ad visits. */
-  counted?: { ready: boolean; adVisits: number; days: number; totalSpend: number; ads: number; costPerVisit: number | null } | null;
+  counted?: { ready: boolean; adVisits: number; days: number; totalSpend: number; ads: number; costPerVisit: number | null; spendTyped?: boolean } | null;
 };
 
 /** The funnel review the AI writes (opt-in page ads). */
@@ -97,6 +99,7 @@ const skoolAiSchema = z.object({ why: z.string(), actions: z.array(z.object({ ti
  * Rules of thumb, in the course's order. Sources: the 72-hour rule; "$5 to $10 a day to start";
  * link CTR 1%+ good and under 0.8% means a new hook; cost per click $1 good, $2 OK; "clicks are
  * coming in" past 20; 10 clicks is the least that says anything (so 1,000 impressions, at 1%);
+ * 100 visits is the least that can judge an About page (the same 100 Growth Level 2 asks for);
  * fixed twice and still failing means kill.
  */
 export const RULES = {
@@ -109,6 +112,7 @@ export const RULES = {
   goodCpc: 1,
   okCpc: 2,
   visitsComing: 20,
+  aboutMinVisits: 100,
   killAfterFixes: 2,
   feedPercent: 20,
 } as const;
@@ -122,6 +126,8 @@ export type SkoolLinkCounts = {
   days: number;
   /** This ad's spend plus the latest spend of every other ad reviewed this week. */
   totalSpend: number;
+  /** The member typed Ads Manager's total, so totalSpend covers every ad, reviewed or not. */
+  spendTyped?: boolean;
   ads: number;
 };
 export type AdReviewContext = { link?: SkoolLinkCounts | null; budgetPerDay?: number | null };
@@ -157,7 +163,7 @@ export function skoolLinkCall(i: AdReviewInput, link?: SkoolLinkCounts | null): 
   if (link && (!link.ready || (i.linkClicks > RULES.visitsComing && link.adVisits === 0))) return { call: "fix_door", learning, barely };
   // 3. People joining? Visits but no joins: the About page, not the ad.
   const visits = link && link.adVisits > 0 ? link.adVisits : i.linkClicks;
-  if (i.members === 0 && visits > RULES.visitsComing) return { call: "fix_about", learning, barely };
+  if (i.members === 0 && visits >= RULES.aboutMinVisits) return { call: "fix_about", learning, barely };
   return { call: "keep", learning, barely };
 }
 
@@ -216,8 +222,9 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
         name: "Cost per visit, all ads",
         value: usd(costPerVisit),
         status: judged(costPerVisit <= RULES.goodCpc ? "good" : costPerVisit <= RULES.okCpc ? "ok" : "fix"),
-        note:
-          link.ads > 1
+        note: link.spendTyped
+          ? `The ${usd(link.totalSpend)} you typed ÷ ${plural(link.adVisits, "ad visit")} counted.`
+          : link.ads > 1
             ? `Total spend of the ${link.ads} ads you reviewed this week (${usd(link.totalSpend)}) ÷ ${plural(link.adVisits, "ad visit")} counted.`
             : `This ad's spend ÷ every ad visit counted. Review each ad by name (S1, S2…) and the total adds up.`,
       });
@@ -227,7 +234,7 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
     metrics.push({
       name: "New members",
       value: String(i.members),
-      status: i.members > 0 ? "good" : judged(visits > RULES.visitsComing ? "fix" : "wait"),
+      status: i.members > 0 ? "good" : judged(visits >= RULES.aboutMinVisits ? "fix" : "wait"),
       note: "From Skool. Visits but no joins means the About page, not the ad.",
     });
   }
@@ -306,7 +313,7 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
     metrics,
     actions: actions[call],
     budget,
-    counted: link ? { ready: link.ready, adVisits: link.adVisits, days: link.days, totalSpend: round2(link.totalSpend), ads: link.ads, costPerVisit: costPerVisit === null ? null : round2(costPerVisit) } : null,
+    counted: link ? { ready: link.ready, adVisits: link.adVisits, days: link.days, totalSpend: round2(link.totalSpend), ads: link.ads, costPerVisit: costPerVisit === null ? null : round2(costPerVisit), spendTyped: link.spendTyped } : null,
     nextBudgetUsdPerDay: budget ? budget.next : round2(call === "keep" ? pace * feed : pace),
   };
 }
@@ -359,8 +366,9 @@ async function skoolLinkContext(workspaceId: string, input: AdReviewInput, skool
       .orderBy(desc(aiGenerations.createdAt))
       .limit(50),
   ]);
-  // Cost per visit = total spend ÷ the ad visits counted (lesson 2.6). Total spend: this ad, plus
-  // the latest review of every other ad reviewed by name this week.
+  // Cost per visit = total spend ÷ the ad visits counted (lesson 2.6). Total spend: Ads Manager's
+  // total if the member typed it, else this ad plus the latest review of every other ad reviewed
+  // by name this week (which reads low when only some ads were reviewed).
   const key = (s: unknown) => String(s ?? "").trim().toLowerCase();
   const seen = new Set([key(input.adName)]);
   let others = 0;
@@ -373,7 +381,7 @@ async function skoolLinkContext(workspaceId: string, input: AdReviewInput, skool
     ads += 1;
   }
   return {
-    link: { ready: Boolean(target), adVisits, days, totalSpend: input.spend + others, ads },
+    link: { ready: Boolean(target), adVisits, days, totalSpend: input.totalSpent ?? input.spend + others, spendTyped: input.totalSpent !== undefined, ads },
     budgetPerDay: checkins[0]?.adSpendPerDay || null,
   };
 }
@@ -386,7 +394,7 @@ The verdict comes from these rules, in this order. The first "no" picks the room
 2. Meta barely spent on it (under 1,000 impressions, or under $5 spent with under 10 link clicks): Too early. Leave it on. It hasn't lost.
 3. Getting clicks? Link CTR under 0.8%, or clicks dearer than $2: Fix: Hook. New on-image text and first line, same picture. Fixed twice already and still failing: Kill. Switch it off and put a fresh static in its slot.
 4. About-page visits? Over 20 link clicks but the Skool link counted no ad visits, or the Skool link has no group link yet: Fix: Door. The Website URL must be the Skool link.
-5. People joining? Over 20 visits and no new members: Fix: About page. Fix the shopfront, not the ad.
+5. People joining? 100 or more visits and no new members: Fix: About page. Fix the shopfront, not the ad.
 6. Otherwise: Keep. Feed it slowly: about 20% more budget every 2 to 3 days.
 Rules of thumb, never promises: link CTR 1% or more is good. Cost per click is the cost per About-page visit: $1 or less is good, up to $2 is OK. Use no other benchmarks.
 You are given the verdict. Don't change it. Write:

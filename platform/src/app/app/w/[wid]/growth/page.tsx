@@ -12,7 +12,8 @@ import {
   TrendingUpIcon,
 } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
-import { computeLadder, latestCheckins, LEVELS, requirementLines, skoolLinkFor, skoolTargetFor, skoolVisits } from "@/server/growth";
+import { computeLadder, isAdSource, latestCheckins, LEVELS, requirementLines, skoolLinkFor, skoolTargetFor, skoolVisits } from "@/server/growth";
+import { launchDay } from "@/server/path";
 import { saveCheckinAction } from "@/actions/growth";
 import { relativeTime } from "@/lib/util";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,9 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
   const ladder = computeLadder(last);
   const link = skoolLinkFor(workspace.slug);
   const stale = !last || Date.now() - last.createdAt.getTime() > 8 * 86_400_000;
+  // The first check-in is Day 7 (lesson 2.6). Before that, members come here for the Skool link.
+  const beforeFirstCheckin = !last && launchDay(workspace.createdAt) < 7;
+  const checkinFirst = stale && !beforeFirstCheckin;
 
   const checkin = (
     <form action={saveCheckinAction.bind(null, wid)} data-guide="checkin" className="scroll-mt-20" id="checkin">
@@ -146,7 +150,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
         eyebrow="Get members"
         title="Growth ladder"
         sub="Skool runs ads for communities that climb its levels. See which rung you're on and exactly what gets you to the next one."
-        first={stale ? "Do your Monday check-in: copy 4 numbers from Skool › Settings › Growth into the form below." : undefined}
+        first={beforeFirstCheckin ? "Your first check-in is Day 7. Today you only need the Your Skool link panel below." : stale ? "Do your Monday check-in: copy 4 numbers from Skool › Settings › Growth into the form below." : undefined}
       />
       <Flash searchParams={await searchParams} />
 
@@ -209,7 +213,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
         <p className="text-xs text-subtle-foreground">Skool decides the spend, and it isn&apos;t guaranteed. Every requirement counts the last 30 days, so it&apos;s a pace, not a pile.</p>
       </section>
 
-      {stale ? checkin : null}
+      {checkinFirst ? checkin : null}
 
       <div className="grid items-start gap-6 @4xl/main:grid-cols-[1.15fr_1fr]">
         <Panel icon={TrendingUpIcon} tone="success" title={ladder.next ? `What's between you and Level ${ladder.next.level}` : "You're at the top"} sub={ladder.next?.reward}>
@@ -274,7 +278,8 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
             </Callout>
           )}
           <dl className="grid grid-cols-2 gap-3">
-            <MiniStat icon={MousePointerClickIcon} label="Clicks, 30 days" value={visits.total.toLocaleString()} hint={visits.total ? undefined : "Your own test click doesn't count"} />
+            <MiniStat icon={MousePointerClickIcon} label="Clicks, 30 days" value={visits.total.toLocaleString()} hint={visits.total ? "Your own test click counts here" : "Meta may still be warming up"} />
+            <MiniStat icon={MousePointerClickIcon} label="From ads, 30 days" value={visits.bySource.filter((r) => isAdSource(r.source)).reduce((n, r) => n + r.count, 0).toLocaleString()} hint="Ad clicks only" />
             <MiniStat icon={LinkIcon} label="Top source" value={visits.bySource[0]?.source ?? "—"} hint={visits.bySource[0] ? `${visits.bySource[0].count} clicks` : "Shows once clicks come in"} />
           </dl>
           {visits.bySource.length > 1 ? (
@@ -294,7 +299,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
         </Panel>
       </div>
 
-      {stale ? null : checkin}
+      {checkinFirst ? null : checkin}
 
       <div className="flex flex-col gap-3">
         <MoreOptions icon={CalculatorIcon} title="Budget planner" sub="How many About-page visitors your budget buys, and which level's visitor bar it clears.">

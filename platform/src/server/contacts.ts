@@ -1,6 +1,7 @@
 import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { activities, contacts, type ContactSource, type Stage, type Temperature } from "@/lib/db/schema";
+import { toCsv } from "@/lib/csv";
 import { normalizeEmail, normalizePhone, isUuid } from "@/lib/util";
 import { logActivity } from "./activity";
 import { emitEvent } from "./events";
@@ -228,3 +229,13 @@ export async function unsubscribeContact(contactId: string) {
 
 export const contactName = (c: Pick<Contact, "firstName" | "lastName" | "email" | "phone">) =>
   [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || c.phone || "Unknown";
+
+/** Every lead in this workspace as a CSV, newest first. Theirs to take, paused or not. */
+export async function leadsCsv(workspaceId: string) {
+  const db = await getDb();
+  const rows = await db.select().from(contacts).where(eq(contacts.workspaceId, workspaceId)).orderBy(desc(contacts.createdAt)).limit(50_000);
+  return toCsv([
+    ["First name", "Last name", "Email", "Phone", "Stage", "Temperature", "Source", "Tags", "Unsubscribed", "Notes", "Added"],
+    ...rows.map((c) => [c.firstName, c.lastName, c.email ?? "", c.phone ?? "", c.stage, c.temperature, c.source, c.tags.join("; "), c.unsubscribed ? "yes" : "no", c.notes, c.createdAt.toISOString()]),
+  ]);
+}

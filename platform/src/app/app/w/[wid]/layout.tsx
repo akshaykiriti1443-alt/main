@@ -216,8 +216,9 @@ export default async function WorkspaceLayout({
     workspace.accessVerifiedUntil &&
     workspace.accessVerifiedUntil.getTime() - Date.now() < 4 * 86_400_000
   ) {
-    // Say what keeps it on for how this owner got in: a card renews by itself, the free welcome
-    // days need a membership, a Skool member is confirmed by the next sync.
+    // Say what keeps it on for how this owner got in: a card renews by itself, a Skool member is
+    // confirmed by the next sync. The welcome window is a matching delay, never a free-trial clock:
+    // the app can't see a Skool trial, and most people here started theirs minutes ago.
     const ownerEmail = (await workspaceOwnerEmail(wid)) ?? user.email;
     const channels = (await membershipFor(ownerEmail)).channels;
     const until = workspace.accessVerifiedUntil.toDateString();
@@ -238,23 +239,24 @@ export default async function WorkspaceLayout({
       >
         {welcomeOnly ? (
           <>
-            Your free days end on {until}.{" "}
+            Your app is on while we match you to your Skool membership.
+            Joined with {ownerEmail}? Nothing to do. Not in the community yet?{" "}
             {env.skoolGroupUrl ? (
               <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer">
-                Join the Skool community
+                Join here
               </a>
             ) : (
-              "Join the Skool community"
+              "Join on Skool"
             )}
-            {canBuy ? " or buy access" : ""} with {ownerEmail} to keep going.
             {canBuy ? (
               <>
-                {" "}
+                {" or "}
                 <Link href={`/join?email=${encodeURIComponent(ownerEmail)}`}>
-                  Buy access
+                  buy access
                 </Link>
               </>
             ) : null}
+            .
           </>
         ) : (
           <>

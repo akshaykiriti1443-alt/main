@@ -65,3 +65,17 @@ export function parseCsv(text: string): ParsedCsv {
   const rows = all.slice(1).map((r) => headers.map((_, i) => (r[i] ?? "").trim()));
   return { headers, rows, delimiter };
 }
+
+/** A bare number or phone ("+44 7700 900123", "-5") can't run as a spreadsheet formula. */
+const PLAIN_NUMBER = /^[+-]?[\d\s().-]+$/;
+
+/** One CSV cell. A lead types their own name, so anything a spreadsheet would run as a formula is defused. */
+function csvCell(value: string): string {
+  const safe = /^[=+\-@\t\r]/.test(value) && !PLAIN_NUMBER.test(value) ? `'${value}` : value;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+
+/** Rows to CSV text, with the byte-order mark Excel needs to read names in UTF-8. */
+export function toCsv(rows: string[][]): string {
+  return `\ufeff${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+}

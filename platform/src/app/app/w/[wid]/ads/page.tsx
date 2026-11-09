@@ -186,11 +186,16 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
 
             <div className="grid grid-cols-2 items-start gap-4">{MAIN.map(numberField)}</div>
 
-            <MoreOptions title="Add more detail" sub="Optional: followers, your goal and notes. Your AI's plan gets sharper.">
+            <MoreOptions title="Add more detail" sub="Optional: followers, your total spend, your goal and notes. Your AI's plan gets sharper.">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="followers">New followers</FieldLabel>
                   <Input id="followers" name="followers" type="number" min={0} step="1" className="tabular-nums" />
+                </Field>
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="totalSpent">Total spent on all ads so far ($)</FieldLabel>
+                  <Input id="totalSpent" name="totalSpent" type="number" min={0} step="0.01" className="tabular-nums" />
+                  <FieldDescription>Ads Manager, date range Maximum, your campaign&apos;s Amount spent. Blank is fine: we add up the ads you&apos;ve reviewed this week.</FieldDescription>
                 </Field>
                 <Field className="sm:col-span-2">
                   <FieldLabel htmlFor="goal">Your goal</FieldLabel>
@@ -329,6 +334,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
                 <>
                   {" "}
                   Cost per visit: <b className="font-semibold text-foreground tabular-nums">{usd(weekCounted.costPerVisit)}</b> ({usd(weekCounted.totalSpend)} spent ÷ {weekCounted.adVisits.toLocaleString()} visits). Early verdicts: five days at $5 is thin data.
+                  {weekCounted.spendTyped ? null : " Only reviewed some of your ads? This reads low. Use Ads Manager's total ÷ your meta-ad clicks."}
                 </>
               ) : null}
             </p>

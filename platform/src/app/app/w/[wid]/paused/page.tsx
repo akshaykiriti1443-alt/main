@@ -84,6 +84,17 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
     );
   }
 
+  // Their list is theirs, whatever happened to the membership.
+  const takeLeads = (
+    <p className="text-center text-sm text-muted-foreground">
+      Want your leads?{" "}
+      <a href={`/app/w/${wid}/leads/export`} download>
+        Download them as a CSV
+      </a>
+      .
+    </p>
+  );
+
   const head = (
     <Head
       art={<EmptyArt icon={neverActive ? LockKeyholeIcon : PauseCircleIcon} tone={neverActive ? "primary" : "warning"} />}
@@ -112,14 +123,15 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
             </p>
           </CardContent>
         </Card>
+        {takeLeads}
       </div>
     );
   }
 
   // Two doors in. The community is the main one; buying directly is the shortcut, when it's on.
   const skoolTiming = env.skoolWebhookSecret
-    ? "Paid members show up here within about 15 minutes. Trials appear at the next weekly member update."
-    : "We update the member list about once a week. Joined in the last few days? You switch on at the next update.";
+    ? "Paid members show up here within about 15 minutes. Trials appear at the next member update."
+    : "We update the member list every few days when new members are joining. Joined recently? You switch on at the next update.";
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 md:py-6">
@@ -179,6 +191,7 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
           </p>
         </form>
       </div>
+      {takeLeads}
     </div>
   );
 }

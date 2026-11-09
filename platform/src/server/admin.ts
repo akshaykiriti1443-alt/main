@@ -1,9 +1,11 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { activities, agencies, jobs, subscriptions, users, walletTransactions, webhookEvents, workspaces } from "@/lib/db/schema";
+import { activities, agencies, aiGenerations, jobs, sites, skoolCheckins, subscriptions, users, walletTransactions, webhookEvents, workspaces } from "@/lib/db/schema";
 import { addDays } from "@/lib/util";
 import { creditWallet, getOrCreateWallet } from "./wallet";
 import { GRACE_DAYS } from "./access";
+import { isAdSource } from "./growth";
+import { launchDay } from "./path";
 
 /** Members who clicked "Get a domain" (your affiliate link) in the last N days. */
 export async function domainClicks(days: number) {
@@ -108,4 +110,35 @@ export async function retryJob(jobId: string) {
 export async function recentWebhooks() {
   const db = await getDb();
   return db.select().from(webhookEvents).orderBy(desc(webhookEvents.createdAt)).limit(30);
+}
+
+/**
+ * Members in their first 8 app days, oldest first, with what the app can see of each. For the owner
+ * to help in public, in that member's thread. Never a DM list, never a sales list.
+ */
+export async function firstEightDayMembers(limit = 100) {
+  const db = await getDb();
+  const generated = (kind: "launch_kit" | "ad_studio") => sql<boolean>`exists(select 1 from ${aiGenerations} where ${aiGenerations.workspaceId} = ${workspaces.id} and ${aiGenerations.kind} = ${kind})`;
+  const rows = await db
+    .select({
+      id: workspaces.id,
+      createdAt: workspaces.createdAt,
+      owner: sql<string | null>`(select u.email from workspace_members wm join users u on u.id = wm.user_id where wm.workspace_id = "workspaces"."id" and wm.role = 'owner' limit 1)`,
+      kit: generated("launch_kit"),
+      statics: generated("ad_studio"),
+      funnel: sql<boolean>`exists(select 1 from ${sites} where ${sites.workspaceId} = ${workspaces.id} and ${sites.published})`,
+      checkin: sql<boolean>`exists(select 1 from ${skoolCheckins} where ${skoolCheckins.workspaceId} = ${workspaces.id})`,
+    })
+    .from(workspaces)
+    .innerJoin(agencies, eq(agencies.id, workspaces.agencyId))
+    .where(and(eq(agencies.isPlatform, true), eq(workspaces.accessSource, "member"), gte(workspaces.createdAt, new Date(Date.now() - 8 * 86_400_000))))
+    .orderBy(asc(workspaces.createdAt))
+    .limit(limit);
+  if (rows.length === 0) return [];
+  const sources = await db
+    .selectDistinct({ workspaceId: activities.workspaceId, source: sql<string>`${activities.data}->>'source'` })
+    .from(activities)
+    .where(and(inArray(activities.workspaceId, rows.map((r) => r.id)), eq(activities.type, "skool_visit"), sql`${activities.data}->>'source' is not null`));
+  const clicked = new Set(sources.filter((s) => isAdSource(s.source)).map((s) => s.workspaceId));
+  return rows.map(({ createdAt, ...r }) => ({ ...r, day: launchDay(createdAt), adClick: clicked.has(r.id) }));
 }

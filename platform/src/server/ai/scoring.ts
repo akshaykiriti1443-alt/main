@@ -111,7 +111,7 @@ export async function scoreContact(contactId: string): Promise<ScoreResult | nul
         system:
           "You score sales leads for a coach who sells a paid Skool community. Score 0-100 for how likely the lead is to join soon. hot = 65+, warm = 35-64, cold = under 35. Give a one-sentence reason a busy owner can act on. Judge only from the evidence given.",
         prompt: `Business: ${ws.settings.businessName || ws.name} (${ws.settings.niche || "coaching"}).
-Offer: ${ws.settings.offer || "paid Skool community with a free trial"}.
+Offer: ${ws.settings.offer || "paid Skool community"}.
 Lead source: ${contact.source}. Tags: ${contact.tags.join(", ") || "none"}. Stage: ${contact.stage}.
 Recent activity: ${acts.map((a) => a.type).join(", ") || "none"}.
 Conversation:

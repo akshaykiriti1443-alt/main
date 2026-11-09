@@ -25,8 +25,8 @@ export default async function PathPage({ params, searchParams }: { params: Promi
     { label: "New customers", value: path.loop.customers, sub: "from your Monday check-in", href: `/app/w/${wid}/growth` },
   ];
   const loopEmpty = loop.every((n) => n.value === 0);
-  const currentStage = path.today ? "launch" : path.stages.find((st) => st.steps.some((s) => s.key === path.next?.key))?.key;
-  // Days 2 to 6: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
+  const currentStage = path.today ? path.today.stage : path.stages.find((st) => st.steps.some((s) => s.key === path.next?.key))?.key;
+  // Days 2 to 8: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
   const up = path.today
     ? { eyebrow: path.today.eyebrow, title: path.today.title, body: path.today.body, href: path.today.href, icon: CalendarRangeIcon }
     : path.next

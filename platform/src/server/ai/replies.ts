@@ -7,7 +7,7 @@ import { VOICE_RULES, chargeAi, generateText, refundAi } from "./client";
 export function fallbackReply(input: { firstName: string; businessName: string; skoolUrl: string; lastInbound: string }) {
   const hi = input.firstName ? `Hey ${input.firstName}!` : "Hey!";
   if (/price|cost|how much/i.test(input.lastInbound)) {
-    return `${hi} Great question. You can try ${input.businessName} free for 7 days first. Here's the link: ${input.skoolUrl || "[your Skool link]"}. Want me to tell you what's inside?`;
+    return `${hi} Great question. It's all on the ${input.businessName} page: ${input.skoolUrl || "[your Skool link]"}. Want me to tell you what's inside?`;
   }
   return `${hi} Thanks for reaching out. What's your #1 goal right now? I'll point you to the best place to start.`;
 }
@@ -28,6 +28,10 @@ export async function draftReply(conversationId: string): Promise<string | null>
     .limit(30);
   const lastInbound = [...history].reverse().find((m) => m.direction === "in")?.body ?? "";
   const businessName = ws.settings.businessName || ws.name;
+  // A free trial on a member's own group is optional (lesson 1.2), so only their own words can claim one.
+  const offerRule = ws.settings.offer
+    ? `The offer: ${ws.settings.offer}. Mention a free trial, a price or cancelling only if this says so.`
+    : "No offer details were given, so do not mention a free trial, a price or cancelling.";
 
   let reply = fallbackReply({ firstName: contact.firstName, businessName, skoolUrl: ws.settings.skoolUrl ?? "", lastInbound });
   const charge = await chargeAi(ws.id, "ai_assist", "AI reply draft");
@@ -41,7 +45,8 @@ export async function draftReply(conversationId: string): Promise<string | null>
         system: `You draft direct-message replies for ${businessName}, a coach who runs a paid Skool community${
           ws.settings.niche ? ` about ${ws.settings.niche}` : ""
         }. The owner reviews every draft before it is sent.
-Goal: help the lead and, when it fits, invite them to start the free trial at ${ws.settings.skoolUrl || "the Skool group link"}.
+Goal: help the lead and, when it fits, invite them to join at ${ws.settings.skoolUrl || "the Skool group link"}.
+${offerRule}
 Reply in the lead's language. Keep it to 1-3 short sentences that sound like a real person texting. Ask at most one question.
 ${VOICE_RULES}
 Return only the message text.`,

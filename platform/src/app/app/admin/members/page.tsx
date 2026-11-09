@@ -1,5 +1,6 @@
 import { requirePlatformAdmin } from "@/server/auth";
 import { lastRosterImport, listMemberAccess, memberStats } from "@/server/access";
+import { firstEightDayMembers } from "@/server/admin";
 import { grantMemberAction, revokeMemberAction } from "@/actions/admin";
 import { saveEntryTicketAction } from "@/actions/unlocks";
 import { getEntryTicket } from "@/server/unlocks";
@@ -18,7 +19,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RosterUpload } from "./roster";
-import { CloudUploadIcon, GraduationCapIcon, KeyRoundIcon, RefreshCwIcon, ShoppingBagIcon, TicketIcon, UsersIcon, ZapIcon } from "lucide-react";
+import { CheckIcon, CloudUploadIcon, GraduationCapIcon, HandHelpingIcon, KeyRoundIcon, RefreshCwIcon, ShoppingBagIcon, TicketIcon, UsersIcon, ZapIcon } from "lucide-react";
 import { Avatar, EdgeTable } from "@/components/crm-ui";
 import { SkoolInviteCard } from "@/components/skool-invite-card";
 import { platformInviteHint } from "@/server/skoolInvite";
@@ -41,7 +42,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
       .innerJoin(workspacesTable, eq(workspacesTable.id, unlocks.workspaceId))
       .where(eq(workspaceMembers.userId, admin.id)),
   ]);
-  const [stats, last, rows] = await Promise.all([memberStats(), lastRosterImport(), listMemberAccess({ q: sp.q })]);
+  const [stats, last, rows, firstDays] = await Promise.all([memberStats(), lastRosterImport(), listMemberAccess({ q: sp.q }), firstEightDayMembers()]);
   const staleDays = last ? Math.floor((Date.now() - last.createdAt.getTime()) / 86_400_000) : null;
   const zapUrl = `${env.appUrl}/api/webhooks/skool?secret=${env.skoolWebhookSecret || "<SKOOL_WEBHOOK_SECRET>"}`;
   const now = Date.now();
@@ -66,6 +67,37 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
         <Callout tone="warn" title={staleDays === null ? "Upload your first Skool export" : `Your last Skool sync was ${staleDays} days ago`}>
           The export is the only safe way to learn who left Skool. Do it weekly. Members on the export stay active for 35 days, so a missed week never locks anyone out.
         </Callout>
+      ) : null}
+
+      {firstDays.length ? (
+        <Panel icon={HandHelpingIcon} title="In their first 8 days" sub="App days, from sign-up, so not their Skool trial. Use this to help in public, in their thread. Never a DM, never a sale.">
+          <EdgeTable>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Email</TableHead>
+                  <TableHead>App day</TableHead>
+                  {["Kit", "Funnel", "Statics", "Ad click", "Check-in"].map((h) => (
+                    <TableHead key={h} className="text-center">{h}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {firstDays.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="max-w-56 truncate">{m.owner ?? "No owner"}</TableCell>
+                    <TableCell className="tabular-nums">{m.day}</TableCell>
+                    {[m.kit, m.funnel, m.statics, m.adClick, m.checkin].map((yes, i) => (
+                      <TableCell key={i} className="text-center">
+                        {yes ? <CheckIcon className="mx-auto size-4 text-primary dark:text-violet-300" aria-label="Yes" /> : <span className="sr-only">No</span>}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </EdgeTable>
+        </Panel>
       ) : null}
 
       <Panel icon={CloudUploadIcon} title="Sync from Skool" sub="Skool › your group › Members › Export. Upload the full, unfiltered file. Everyone on it gets access. Anyone who dropped off is removed after you confirm.">

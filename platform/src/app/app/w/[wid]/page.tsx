@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import {
+  ArchiveIcon,
   ArrowRightIcon,
   BotIcon,
   CalendarRangeIcon,
   ChartNoAxesColumnIcon,
+  CheckIcon,
   EyeIcon,
   FlameIcon,
   GiftIcon,
@@ -77,7 +79,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const base = `/app/w/${wid}`;
   const steps = path.stages.flatMap((st) => st.steps.map((step) => ({ ...step, tag: st.tag })));
   const next = path.next;
-  // Days 2 to 6: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
+  // Days 2 to 8: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
   const today = path.today;
   // Numbers only mean something once there are some. Until then the page is a "Start here".
   const hasData = stats.views > 0 || stats.contactsTotal > 0 || stats.emailsSent > 0 || recent.length > 0;
@@ -86,7 +88,10 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const isLive = steps.some((s) => s.key === "publish" && s.done);
 
   // A short window of the path: the last ticked step (so you see progress), then what's next.
-  const nextIndex = next ? steps.findIndex((s) => s.key === next.key) : steps.length;
+  // On a Today card, show that day's own steps too (Day 8's are optional, so they're never Up next).
+  const nextAt = next ? steps.findIndex((s) => s.key === next.key) : steps.length;
+  const todayAt = today ? steps.findIndex((s) => s.tag === today.stageTag) : -1;
+  const nextIndex = todayAt >= 0 ? Math.min(nextAt, todayAt) : nextAt;
   const from = Math.max(0, nextIndex - 1);
   const peek = steps.slice(from, from + 5);
 
@@ -101,6 +106,26 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
       cta="Do it now"
       icon={STEP_ICON[next.key] ?? RouteIcon}
     />
+  ) : null;
+
+  // Days 6 to 8: only what the app can really see of the week. Lesson 2.6 has the full count.
+  const shelfCard = path.shelf ? (
+    <Panel icon={ArchiveIcon} title="Your shelf" sub="What the app can see of your week. Your texts, your replies and your group are on your Day 7 list.">
+      {path.shelf.empty ? <p className="text-sm text-muted-foreground">Nothing on here yet. That&apos;s next week&apos;s list, nothing more.</p> : null}
+      <ul className="flex flex-col gap-2.5">
+        {path.shelf.items.map((item) => (
+          <li key={item.key} className="flex items-start gap-3 text-sm">
+            <span className={cn("mt-0.5 grid size-5 shrink-0 place-items-center rounded-full", item.have ? "bg-accent text-primary dark:text-violet-300" : "bg-muted")} aria-hidden>
+              {item.have ? <CheckIcon className="size-3" strokeWidth={3} /> : null}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3">
+              <span className="font-medium">{item.label}</span>
+              <span className="text-muted-foreground tabular-nums">{item.note}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   ) : null;
 
   const pathList = (
@@ -162,6 +187,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
         />
         <Flash searchParams={await searchParams} />
         {nextCard}
+        {shelfCard}
 
         <div className="grid gap-6 @3xl/main:grid-cols-5">
           <Panel
@@ -240,6 +266,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
       <PageHead eyebrow={workspace.name} title={firstName ? `Welcome back, ${firstName}` : "Dashboard"} sub="How your funnel did over the last 14 days." />
       <Flash searchParams={await searchParams} />
       {nextCard}
+      {shelfCard}
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 @2xl/main:grid-cols-4">
         <Stat icon={EyeIcon} label="Page views" value={stats.views.toLocaleString()} hint="Last 14 days" />
@@ -317,10 +344,10 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
             pathList
           ) : (
             <p className="text-sm text-muted-foreground">
-              {path.done >= path.total ? "Every step done." : "Your to-dos are done. The rest tick themselves as your Skool numbers grow."} Keep the weekly rhythm going.
+              {path.done >= path.total ? "Every step done." : steps.some((s) => !s.done && s.locked?.startsWith("Opens")) ? "Today's to-dos are done. The next ones open as the course does." : "Your to-dos are done. The rest tick themselves as your Skool numbers grow."} Keep the weekly rhythm going.
             </p>
           )}
-          {today ? <LessonTag lesson={today.lesson} stage="Days 2–7" className="self-start" /> : next ? <LessonTag lesson={next.lesson} stage={steps[nextIndex]?.tag} className="self-start" /> : null}
+          {today ? <LessonTag lesson={today.lesson} stage={today.stageTag} className="self-start" /> : next ? <LessonTag lesson={next.lesson} stage={steps[nextIndex]?.tag} className="self-start" /> : null}
         </Panel>
       </div>
 

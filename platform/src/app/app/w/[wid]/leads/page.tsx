@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, GlobeIcon, SearchIcon, SearchXIcon, UploadIcon, UserPlusIcon, UsersIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon, DownloadIcon, FlameIcon, GlobeIcon, SearchIcon, SearchXIcon, UploadIcon, UserPlusIcon, UsersIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
@@ -97,12 +97,22 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
         sub="Everyone who opted in on your pages or messaged you. Hot leads are the ones most likely to join soon."
         first={nobodyYet ? "Share your funnel link. Sign-ups land here by themselves, already scored." : "Open a hot lead and send them a friendly, personal note."}
         actions={
-          <Button variant="outline" asChild>
-            <Link href={`/app/w/${wid}/leads/import`}>
-              <UploadIcon data-icon="inline-start" />
-              Import contacts
-            </Link>
-          </Button>
+          <>
+            {nobodyYet ? null : (
+              <Button variant="outline" asChild>
+                <a href={`/app/w/${wid}/leads/export`} download>
+                  <DownloadIcon data-icon="inline-start" />
+                  Download CSV
+                </a>
+              </Button>
+            )}
+            <Button variant="outline" asChild>
+              <Link href={`/app/w/${wid}/leads/import`}>
+                <UploadIcon data-icon="inline-start" />
+                Import contacts
+              </Link>
+            </Button>
+          </>
         }
       />
       <Flash searchParams={sp} />

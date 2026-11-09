@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
-import { ArrowRightIcon, Building2Icon, BuildingIcon, CheckIcon, CircleDollarSignIcon, GaugeIcon, LayersIcon, LightbulbIcon, ReceiptIcon, RocketIcon, WalletIcon } from "lucide-react";
+import { ArrowRightIcon, Building2Icon, BuildingIcon, CheckIcon, CircleDollarSignIcon, DownloadIcon, GaugeIcon, LayersIcon, LightbulbIcon, LogOutIcon, ReceiptIcon, RocketIcon, WalletIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { walletTransactions } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
@@ -9,6 +9,7 @@ import { PLANS } from "@/server/plans";
 import { TOPUP_OPTIONS_USD, UNIT_PRICES, type UsageUnit } from "@/server/pricing";
 import { stripeConfigured } from "@/server/billing/stripe";
 import { topupAction, upgradeAction } from "@/actions/account";
+import { IF_YOU_CANCEL } from "@/lib/leaving";
 import { formatMoney, relativeTime } from "@/lib/util";
 import { cn } from "@/lib/utils";
 import { Callout, Empty, Flash, IconTile, MoreOptions, PageHead, Panel } from "@/components/ui";
@@ -79,6 +80,7 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
       : workspace.status === "grace"
         ? { label: "Membership ending", variant: "gold" as const }
         : { label: "Paused", variant: "warning" as const };
+  const checkedUntil = Boolean(workspace.accessVerifiedUntil && workspace.accessVerifiedUntil.getFullYear() < 2900);
   const accessLine = workspace.accessVerifiedUntil
     ? workspace.accessVerifiedUntil.getFullYear() < 2900
       ? `Access confirmed to ${workspace.accessVerifiedUntil.toDateString()}`
@@ -275,6 +277,25 @@ export default async function BillingPage({ params, searchParams }: { params: Pr
           </div>
         )}
       </Panel>
+
+      {workspace.accessSource === "member" && !agencyPays ? (
+        <Panel icon={LogOutIcon} title="If you cancel" sub="Skool runs the membership. Here's what happens on this side.">
+          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-muted-foreground marker:text-subtle-foreground">
+            {checkedUntil ? <li>“Access confirmed to” is how far your last membership check reaches. It isn&apos;t your Skool bill.</li> : null}
+            <li>{IF_YOU_CANCEL.bill}</li>
+            <li>{IF_YOU_CANCEL.how}</li>
+            <li>{IF_YOU_CANCEL.app}</li>
+            <li>{IF_YOU_CANCEL.kept}</li>
+            <li>{IF_YOU_CANCEL.others}</li>
+          </ul>
+          <Button variant="outline" asChild className="self-start">
+            <a href={`/app/w/${wid}/leads/export`} download>
+              <DownloadIcon data-icon="inline-start" />
+              Download your leads (CSV)
+            </a>
+          </Button>
+        </Panel>
+      ) : null}
 
       {!agencyPays ? (
         <>

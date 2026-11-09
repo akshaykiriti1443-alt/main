@@ -18,7 +18,7 @@ Tomorrow I'll send you the mistake that keeps most people stuck.
 
 {{owner_name}}
 
-P.S. The full plan lives inside {{business_name}}. Try it free: {{skool_url}}`,
+P.S. The full plan lives inside {{business_name}}: {{skool_url}}`,
     },
     {
       position: 1,
@@ -39,14 +39,14 @@ Want help? Join us inside {{business_name}}: {{skool_url}}
     {
       position: 2,
       delayMinutes: 60 * 24 * 3,
-      subject: "Your 7 free days are waiting",
+      subject: "Still thinking about it?",
       body: `Hey {{first_name}},
 
 Inside {{business_name}} you get the full system, live help and a group that keeps you going.
 
-Start your free trial here: {{skool_url}}
+Come and have a look: {{skool_url}}
 
-The founding price goes up soon. Lock it in today.
+Not for you? No hard feelings.
 
 {{owner_name}}`,
     },

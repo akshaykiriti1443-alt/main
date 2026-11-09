@@ -33,7 +33,8 @@ describe("Penny, the step-by-step guide", () => {
   });
 
   it("walks past a step locked to another plan, like Up next does", async () => {
-    const { ws, user } = await makeWorkspace(); // Member plan: lead follow-ups need the Growth plan
+    const { ws: fresh, user } = await makeWorkspace(); // Member plan: lead follow-ups need the Growth plan
+    const ws = { ...fresh, createdAt: new Date(Date.now() - 19.5 * 86_400_000) }; // past every Opens Day
     const snap = await companionSnapshot(ws, user.id);
     const follow = snap.steps.find((s) => s.key === "automations");
     expect(follow).toMatchObject({ locked: "Growth plan", done: false, stage: "Rhythm" });

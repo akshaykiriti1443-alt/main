@@ -31,6 +31,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { env } from "@/lib/env";
+import { IF_YOU_CANCEL } from "@/lib/leaving";
 import { cn } from "@/lib/utils";
 import { PENNY_POINT, PENNY_WAVE } from "@/components/penny-art";
 import { Reveal, REVEAL_BOOT } from "@/components/reveal";
@@ -69,7 +70,7 @@ const TIERS: { name: string; price: string; per?: string; note: string; badge?: 
     name: "Membership",
     price: "$9",
     per: "/month",
-    note: "After a 7-day free trial. The founding price for the first 100 members, kept for as long as you stay. After that, $27/month.",
+    note: "After a 7-day free trial, Skool bills you automatically unless you cancel. The founding price is for the first 100 members, kept for as long as you stay. After that, $27/month.",
     badge: "Founding price",
     featured: true,
     features: ["The Skool Growth Ladder course and the community on Skool", "The OneX app, included", "AI launch kit: page, lead magnet, emails, ads", "Landing pages with Meta Pixel + Conversions API", "Lead list and 3-email follow-up", "Custom ad review"],
@@ -97,11 +98,15 @@ const TIERS: { name: string; price: string; per?: string; note: string; badge?: 
 const FAQ: { q: string; a: ReactNode }[] = [
   {
     q: "What do I get?",
-    a: "The Skool Growth Ladder course and the OneX app. The course starts with Launch Week, seven days that fit your free trial. From day 8, the next modules unlock: Keep, Fix or Kill and the Teardown Room, Level 2, Talk, Rhythm, Season 2 (Levels 3 and 4) and reselling. The app does the work each lesson asks for.",
+    a: "The Skool Growth Ladder course and the OneX app. The course starts with Launch Week, seven days that fit your free trial. From day 8, the next modules unlock one at a time: Keep, Fix or Kill and the Teardown Room, Level 2, Talk, Rhythm, Season 2 (Levels 3 and 4) and reselling. The app does the work each lesson asks for.",
   },
   {
     q: "What does it cost?",
     a: "$9 a month after a 7-day free trial, for the first 100 founding members, who keep $9 for as long as they stay. After the 100 founding spots, membership is $27 a month. The app is included either way. Growth is an optional upgrade inside the app, and the Agency plan is priced individually.",
+  },
+  {
+    q: "What happens when the free week ends?",
+    a: `Seven days after you join, Skool charges you automatically: $9 a month if you're one of the first 100 founding members, kept while you stay, or $27 a month once those seats are gone. Day 7 of the course is there to help you decide, and cancelling is a fine answer. Want no risk at all? Cancel on Skool by the evening of your Day 6, though that may end your week early. ${IF_YOU_CANCEL.how} ${IF_YOU_CANCEL.app} ${IF_YOU_CANCEL.kept}`,
   },
   {
     q: "How do I get access?",
@@ -528,7 +533,7 @@ const STEPS: { n: string; icon: LucideIcon; title: string; body: string; art: Re
     n: "01",
     icon: MegaphoneIcon,
     title: "Run an ad",
-    body: "Start from angles already working in your niche. Your ad points at your own page, so every click is counted.",
+    body: "Start from angles already working in your niche. Your ad points at your Skool link, so every click is counted.",
     art: (
       <div className="w-full rounded-xl bg-card p-3 shadow-card ring-1 ring-ink/[0.05] dark:ring-white/[0.07]">
         <div className="flex items-center gap-2">
@@ -551,7 +556,7 @@ const STEPS: { n: string; icon: LucideIcon; title: string; body: string; art: Re
     n: "02",
     icon: GlobeIcon,
     title: "Land on your page",
-    body: "A landing page written for your community, with your Meta Pixel and Conversions API already wired in.",
+    body: "Ready people land on your Skool About page. The not-yets get a landing page written for your community, with your Meta Pixel and Conversions API already wired in.",
     art: (
       <div className="w-full overflow-hidden rounded-xl shadow-card ring-1 ring-ink/[0.05] dark:ring-white/[0.07]">
         <MiniLanding />
@@ -705,7 +710,7 @@ const LAUNCH_WEEK = [
   { day: "Day 1", title: "Open the shop and put 5 ads live" },
   { day: "Days 2–3", title: "Polish your About page, text five people" },
   { day: "Days 4–6", title: "Real conversations, a welcome for your members, your first Ask" },
-  { day: "Day 7", title: "Weigh in: a verdict on every ad" },
+  { day: "Day 7", title: "Count your shelf, do one sum, decide if you're staying" },
 ];
 const UNLOCKS = [
   { name: "Day 8: Keep, Fix or Kill", body: "And the Teardown Room: real ads, taken apart" },

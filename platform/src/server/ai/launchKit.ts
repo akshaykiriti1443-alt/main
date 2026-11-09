@@ -74,7 +74,7 @@ Formatting rules:
 - The Skool About page uses plain text with emojis as bullets. Skool has no bold, so keep structure with line breaks.
 - Ad plan: start at $5 to $10 a day if money is tight, $30 to $50 a day is the sweet spot. The main campaign is Traffic to the Skool About page (the owner\'s Skool link), optimised for landing page views. No follower campaigns.`;
 
-function buildPrompt(input: LaunchKitInput) {
+export function buildPrompt(input: LaunchKitInput) {
   return `Write the launch kit for this community.
 
 Community name: ${input.businessName}
@@ -83,7 +83,8 @@ Niche: ${input.niche}
 Who it serves: ${input.audience}
 Main outcome members want: ${input.outcome}
 Lead magnet idea: ${input.leadMagnetIdea || "(pick the best quick-win lead magnet for this niche)"}
-Offer inside the Skool group: ${input.offer || "(a paid Skool membership with a 7-day free trial)"}
+Offer inside the Skool group: ${input.offer || "(a paid Skool membership, no details given)"}
+Mention a free trial, a price or cancelling only if the offer line above states it. Never invent one, on any page or in any email.
 Tone: ${input.tone}
 
 Counts: exactly 3 bullets, 3 benefits, 3 steps, 4 FAQ items, 3 emails (day 0, day 1, day 3), 3 ads (the 3-Pack: angle pain, dream and lesson, in that order), 10 hooks, 3 campaigns in the ad plan and 7 first-week actions (one per day).
@@ -167,8 +168,8 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
         body: `Hey {{first_name}},\n\nMost people try to change everything at once. They stop by day 3.\n\nPick one small action. Do it every day this week.\n\nWant help? Join us inside ${input.businessName}: {{skool_url}}\n\n${first}`,
       },
       {
-        subject: "Your 7 free days are waiting",
-        body: `Hey {{first_name}},\n\nInside ${input.businessName} you get the full plan, live calls and a group that keeps you going.\n\nStart your free trial here: {{skool_url}}\n\n${first}`,
+        subject: "Still thinking about it?",
+        body: `Hey {{first_name}},\n\nInside ${input.businessName} you get the full plan, live calls and a group that keeps you going.\n\nCome and have a look: {{skool_url}}\n\nNot for you? No hard feelings.\n\n${first}`,
       },
     ],
     ads: [
@@ -209,7 +210,7 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
       'Comment "PLAN" and I\'ll send you my checklist.',
       "Read this before you quit.",
     ],
-    skoolAboutPage: `🚀 ${input.businessName}\n\n${capitalize(input.outcome)} with a simple plan and real support.\n\n💎 WHAT YOU GET:\n🔹 Step-by-step plan\n🔹 Weekly live calls with ${first}\n🔹 A group that keeps you on track\n\n${input.offer || "Start your 7-day free trial today."}`,
+    skoolAboutPage: `🚀 ${input.businessName}\n\n${capitalize(input.outcome)} with a simple plan and real support.\n\n💎 WHAT YOU GET:\n🔹 Step-by-step plan\n🔹 Weekly live calls with ${first}\n🔹 A group that keeps you on track\n\n${input.offer || "Tap Join and come say hi."}`,
     adPlan: {
       dailyBudgetUsd: 15,
       audience: `People in your country, age 25 to 55, who are interested in ${input.niche}.`,
@@ -219,13 +220,13 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
         { name: "Retargeting", objective: "Traffic to your Skool link", budgetUsd: 2, why: "Brings warm visitors back to the About page to join." },
       ],
       firstWeek: [
-        "Day 1: Publish your landing page and polish your Skool About page and cover.",
-        "Day 2: Run Ad research and pick the long-running ads to learn from.",
-        "Day 3: Launch the 3-Pack to your Skool link at your budget tier.",
-        "Day 4: Hands off. The 72-hour rule.",
-        "Day 5: Message your hot leads and invite the ones who reply.",
-        "Day 6: Ad review. Fix one part only: Hook, Turn or Door.",
-        "Day 7: Monday check-in on the Growth ladder. Raise the winner by 20%.",
+        "Day 1: Publish your landing page, then launch your 5 statics to your Skool link.",
+        "Day 2: Rewrite the first line of your Skool About page so it sounds like you.",
+        "Day 3: Hands off the ads. Text five people who have the problem you solve.",
+        "Day 4: Pin a Start here post with one question anyone can answer in a line.",
+        "Day 5: Set up your welcome: one membership question and a first job.",
+        "Day 6: Send your Ask by hand to everyone who replied. No link, no price.",
+        "Day 7: Save your check-in and read your Ad review. Change nothing until Day 9.",
       ],
     },
   };

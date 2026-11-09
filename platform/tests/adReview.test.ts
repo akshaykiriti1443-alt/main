@@ -79,14 +79,22 @@ describe("Ad review: Skool-link mode", () => {
     expect(ruleReview(ad({ spend: 6, impressions: 1500, linkClicks: 18, days: 6 }), counted({ adVisits: 0 })).call).toBe("keep");
   });
 
-  it("Fix: About page: visits but no joins, fix the shopfront, not the ad", () => {
-    const r = ruleReview(ad({ ...healthy, members: "0" }), counted({ adVisits: 34 }));
+  it("Fix: About page: 100 or more visits and no joins, fix the shopfront, not the ad", () => {
+    const r = ruleReview(ad({ ...healthy, members: "0" }), counted({ adVisits: 120 }));
     expect(r).toMatchObject({ call: "fix_about", verdict: "Fix: About page" });
-    expect(r.why).toBe("Your ads sent 34 people to your About page and nobody joined, so fix the shopfront, not the ad.");
+    expect(r.why).toBe("Your ads sent 120 people to your About page and nobody joined, so fix the shopfront, not the ad.");
+    expect(ruleReview(ad({ ...healthy, members: "0" }), counted({ adVisits: 100 })).call).toBe("fix_about");
     // Blank joins means "not sure": the About page isn't judged, and the plan asks for them next time.
-    const blank = ruleReview(ad({ ...healthy, members: "" }), counted({ adVisits: 34 }));
+    const blank = ruleReview(ad({ ...healthy, members: "" }), counted({ adVisits: 120 }));
     expect(blank.call).toBe("keep");
     expect(blank.actions.at(-1)?.title).toBe("Add your joins next time");
+  });
+
+  it("doesn't judge an About page on a Day 7's handful of visits", () => {
+    const r = ruleReview(ad({ ...healthy, members: "0" }), counted({ adVisits: 34 }));
+    expect(r.call).toBe("keep");
+    expect(r.metrics.find((m) => m.name === "New members")?.status).not.toBe("fix");
+    expect(ruleReview(ad({ ...healthy, members: "0" }), counted({ adVisits: 99 })).call).toBe("keep");
   });
 
   it("Kill: fixed twice and still the worst", () => {

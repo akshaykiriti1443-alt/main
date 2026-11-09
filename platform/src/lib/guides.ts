@@ -102,8 +102,9 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
     target: "ad-review",
     how: [
       "First round: wait for Day 7, hands off till then. After that, weekly.",
-      "Copy each ad's spend, impressions and link clicks from Ads Manager.",
-      "Paste them here, one ad at a time. You get keep, fix or kill, and the one room to fix. First round: make the changes on Day 9, all at once.",
+      "Only ads with 1,000+ impressions. None over? Review your biggest spender once.",
+      "Copy each ad's spend, impressions and link clicks from Ads Manager, date range Maximum.",
+      "Paste them here, one ad at a time. You get keep, fix or kill, and the one room to fix. Too early is a normal answer on Day 7. First round: make the changes on Day 9, all at once.",
     ],
   },
   customer: {
@@ -116,6 +117,7 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   checkin: {
     target: "checkin",
     how: [
+      "First one: Day 7, whatever the weekday. Zeros count.",
       "In Skool, open Settings › Growth.",
       "Copy your level, About-page visitors, new customers and Skool Network sign-ups.",
       "Type them into the Monday check-in here and save.",
@@ -322,6 +324,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     tips: [
       "Fix one room at a time: Hook, Door or About page.",
       "First round: verdicts on Day 7, edits on Day 9.",
+      "Too early isn't a bad verdict. Nobody's opened that ad yet.",
     ],
   },
   automations: {

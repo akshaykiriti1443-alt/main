@@ -171,7 +171,9 @@ describe("Your path: the course as a guided flow", () => {
   });
 
   it("Up next walks past the optional Pixel and outcome steps, which still tick when they happen", async () => {
-    const { ws, user } = await makeWorkspace();
+    const { ws: fresh, user } = await makeWorkspace();
+    // Past Day 18, so no course lesson is still waiting to open.
+    const ws = { ...fresh, createdAt: new Date(Date.now() - 19.5 * 86_400_000) };
     const db = await getDb();
     const steps = async (w = ws) => {
       const p = await computePath(w, user.id);
@@ -216,7 +218,8 @@ describe("Your path: the course as a guided flow", () => {
   });
 
   it("a step locked to another plan never holds Up next, but stays listed with its lock", async () => {
-    const { ws, user } = await makeWorkspace(); // the $9 Member plan: no automations
+    const { ws: fresh, user } = await makeWorkspace(); // the $9 Member plan: no automations
+    const ws = { ...fresh, createdAt: new Date(Date.now() - 19.5 * 86_400_000) }; // past every Opens Day
     const db = await getDb();
     const gen = (kind: "launch_kit" | "ad_research" | "ad_studio" | "ad_review") => db.insert(aiGenerations).values({ workspaceId: ws.id, kind, model: "rules" });
     // Every to-do up to "Create your first Unlock" done.
