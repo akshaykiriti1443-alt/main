@@ -57,14 +57,14 @@ function Scene({ variant = "member" }: { variant?: "member" | "agency" }) {
       ) : (
         <>
           <div className={`${CARD} top-0 left-0 w-[82%] -rotate-[3deg] p-4`}>
-            <div className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Lesson 1.2</div>
+            <div className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Lesson 1.4</div>
             <div className="mt-1.5 font-display text-[24px] leading-[1.05]">Publish your funnel</div>
             <div className="mt-1 text-[13px] text-muted-foreground">Edit three lines, then press the scary button.</div>
             <div className="mt-3.5 flex items-center gap-2">
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <span className="block h-full w-[22%] rounded-full bg-[linear-gradient(90deg,var(--violet-500),var(--pink-400))]" />
               </span>
-              <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">3 of 23</span>
+              <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">3 of 26</span>
             </div>
           </div>
           <div className={`${CARD} right-0 bottom-3 w-[80%] rotate-[2.5deg] p-3.5`}>

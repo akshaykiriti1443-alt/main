@@ -100,8 +100,8 @@ export function computeLadder(c: CheckinInput | null): Ladder {
     const perDay = Math.ceil(missingVisitors / 30);
     moves.push(`Add about ${missingVisitors.toLocaleString()} About-page visitors this month. At ~$1 a visit that's about $${perDay}/day more in ads pointed at your Skool link, or the same from organic posts.`);
   }
-  if (next?.req.paidPricing && v.newPaid < 1) moves.push("Turn on subscription or tiers pricing in Skool, then get one new customer: message your hot leads today and invite the ones who replied.");
-  else if (next?.req.newPaid && v.newPaid < next.req.newPaid) moves.push("Get one new customer: message your hot leads today and invite the ones who replied.");
+  if (next?.req.paidPricing && v.newPaid < 1) moves.push("Turn on subscription or tiers pricing in Skool, then get one new customer: send your Invite to everyone who answered your Ask (Leads › Stage › Engaged).");
+  else if (next?.req.newPaid && v.newPaid < next.req.newPaid) moves.push("Get one new customer: send your Invite to everyone who answered your Ask (Leads › Stage › Engaged).");
   if (next?.req.linkInBio && !v.linkInBio) moves.push("Put your plain skool.com link in your bio (Instagram, TikTok or YouTube). Skool checks this one directly.");
   else if (next && next.level >= 3 && !v.linkInBio) moves.push("Tip: put your plain skool.com link in your bio (Instagram, TikTok or YouTube). It sends more people to your About page.");
   if (next?.req.organic && !organic) moves.push("Post at least 3 times a week, or keep your own ad running. Both count as consistent organic promo.");
@@ -213,7 +213,7 @@ export async function skoolVisits(workspaceId: string, days = 30) {
 
 /**
  * Is this Skool-link source a click on an ad? Meta's click id ("meta-ad"), a Facebook or Instagram
- * referrer ("meta": bios use the plain skool.com link, lesson 5.1), or a tag like ?src=ads / fb-ad.
+ * referrer ("meta": bios use the plain skool.com link, lesson 7.1), or a tag like ?src=ads / fb-ad.
  */
 export function isAdSource(source: string): boolean {
   const s = source.toLowerCase();

@@ -91,7 +91,7 @@ export async function analyzeCompetitorAds(workspaceId: string, input: { ads: Re
   let warning: string | undefined;
 
   const charge = await chargeAi(workspaceId, "ai_generation", "AI competitor ad research");
-  if (!charge && env.aiEnabled) warning = "You've used this month's AI generations, so this is the quick read. Add your own AI key in Settings to go unlimited.";
+  if (!charge && env.aiEnabled) warning = "You've used this month's AI generations, so this is the quick read. Add your own AI key in Your AI to go unlimited.";
   if (charge) {
     try {
       const res = await generateStructured({

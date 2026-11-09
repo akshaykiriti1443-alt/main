@@ -18,7 +18,7 @@
 //   this window when someone books, which fires the Meta Pixel "Schedule" event (via __siaQ).
 
 export const GHL_LEAD_WEBHOOK_URL = "https://services.leadconnectorhq.com/hooks/MZy9LUdfAB1KoJXc5Nfe/webhook-trigger/ccff24aa-bc1c-4d15-b4c9-81906bc1838a";
-export const GHL_CALENDAR_URL = "https://link.scaleitads.com/widget/booking/7R3CkgkWmW8DNYUQco7S";
+export const GHL_CALENDAR_URL = "https://api.leadconnectorhq.com/widget/booking/7R3CkgkWmW8DNYUQco7S";
 
 /** Where /apply posts leads when it runs on our own stack (same origin as the page). */
 export const APPLY_LEAD_PATH = "/api/scaleitads/apply";

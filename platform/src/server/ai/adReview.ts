@@ -9,7 +9,7 @@ import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } 
 // Ad review (lesson 2.6, then every Monday): one ad's numbers in, a verdict out.
 //
 // Two modes:
-//   "skool"   The course's way (v5). The ad's Website URL is the Skool link (/go/<slug>), so every
+//   "skool"   The course's way. The ad's Website URL is the Skool link (/go/<slug>), so every
 //             click opens the Skool About page and there are no leads to count ("Leads: 0 is fine").
 //             Judged on link CTR, cost per click (= cost per About-page visit), how much Meta spent,
 //             the days running (the 72-hour rule) and the ad visits the Skool link counted.
@@ -28,7 +28,7 @@ export const adReviewInputSchema = z.object({
     .string()
     .default("")
     .transform((s) => s.trim().slice(0, 80)),
-  /** Where the ad sends people. The course (v5) points every ad at the Skool link. */
+  /** Where the ad sends people. The course points every ad at the Skool link. */
   destination: z.enum(AD_DESTINATIONS).catch("skool"),
   spend: z.coerce.number().min(0),
   impressions: z.coerce.number().int().min(0),

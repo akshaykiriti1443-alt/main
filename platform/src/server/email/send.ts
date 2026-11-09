@@ -127,7 +127,7 @@ export async function processEmailSend(emailMessageId: string) {
     await db.update(emailMessages).set({ billedMicros: billed }).where(eq(emailMessages.id, msg.id));
   }
 
-  const replyTo = ws.settings.replyToEmail || (await workspaceOwnerEmail(ws.id)) || undefined;
+  const replyTo = ws.settings.replyToEmail || (await workspaceOwnerEmail(ws.id)) || env.emailReplyTo;
   const businessName = (ws.settings.businessName || ws.name).replace(/["<>]/g, "");
   const headers: Record<string, string> = msg.contactId
     ? { "List-Unsubscribe": `<${unsubscribeUrl(msg.contactId)}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
@@ -172,5 +172,5 @@ export async function sendSystemEmail(input: { to: string; subject: string; body
   // Footer: "OneX by ScaleitAds" for the platform's own emails; an agency's emails carry only its name.
   const footer = input.brandName || !env.platformBy ? brand : `${env.platformName} by ${env.platformBy}`;
   const r = renderEmail({ subject: input.subject, body: input.body, vars: {}, businessName: footer });
-  return sendEmail({ from: `"${brand.replace(/["<>]/g, "")}" <${env.emailFrom}>`, to: input.to, subject: r.subject, html: r.html, text: r.text });
+  return sendEmail({ from: `"${brand.replace(/["<>]/g, "")}" <${env.emailFrom}>`, to: input.to, replyTo: env.emailReplyTo, subject: r.subject, html: r.html, text: r.text });
 }

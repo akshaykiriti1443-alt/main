@@ -133,7 +133,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
     return (
       <>
         <PageHead
-          lesson="1.2"
+          lesson="1.4"
           stage="Day 1"
           title="Funnels & pages"
           sub="Your funnel is where your ads send people: a page that collects their email, then points them at your Skool group."
@@ -141,7 +141,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
         />
         <Flash searchParams={await searchParams} />
         <NextStep
-          eyebrow="Fastest start · Lesson 1.2"
+          eyebrow="Fastest start · Lesson 1.3"
           title="Let AI build your whole funnel"
           body="Answer 6 questions. You get a landing page, a free guide, 3 follow-up emails and a thank-you page that points at Skool."
           href={`${base}/launch`}
@@ -157,7 +157,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
   return (
     <>
       <PageHead
-        lesson="1.2"
+        lesson="1.4"
         stage="Day 1"
         title="Funnels & pages"
         sub="Your funnels: the pages your ads send people to. Open one to edit its pages or publish it."
@@ -175,7 +175,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
 
       {!anyLive && firstDraft ? (
         <NextStep
-          eyebrow="Up next · Lesson 1.2"
+          eyebrow="Up next · Lesson 1.4"
           title="Publish your funnel"
           body="Edit three lines, then press the scary button. You can change anything later and publish again."
           href={`${base}/sites/${firstDraft.id}`}

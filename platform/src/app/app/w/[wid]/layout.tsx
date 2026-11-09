@@ -294,7 +294,7 @@ export default async function WorkspaceLayout({
         .split(",")
         .filter(Boolean)
         .slice(0, 40)}
-      initial={guide ?? { steps: [], done: 0, total: 0, level: 1 }}
+      initial={guide ?? { steps: [], done: 0, total: 0, level: 1, today: null }}
     />
   ) : null;
 

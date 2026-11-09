@@ -578,7 +578,7 @@ export function inviteFor(booking: Booking, calendar: Calendar, host: string, ow
     title: `${calendar.name} · ${host} & ${booking.name}`,
     description: `${calendar.name} with ${host}.\n${locationText(calendar, booking)}\nReschedule or cancel: ${manageUrl(tokenOf(booking))}`,
     location: calendar.locationValue || LOCATION_LABELS[calendar.locationType],
-    organizer: { name: host, email: ownerEmail || env.emailFrom },
+    organizer: { name: host, email: ownerEmail || env.emailReplyTo },
     attendee: { name: booking.name, email: booking.email },
     method,
   });

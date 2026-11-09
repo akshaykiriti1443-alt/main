@@ -77,7 +77,7 @@ export const PLAYBOOKS: Playbook[] = [
   },
 ];
 
-// Earlier names, so chats that saved them still work. The 3-Pack is retired: course v5 makes ads
+// Earlier names, so chats that saved them still work. The 3-Pack is retired: the course makes ads
 // with Make my 5 statics.
 const ALIASES: Record<string, string> = { monday_review: "monday_check_in", engagement_drop: "plan_this_weeks_unlock", write_my_3_pack: "make_my_5_statics" };
 

@@ -9,7 +9,7 @@ import type { ResearchAd } from "./adResearch";
 import { latestCheckins, skoolLinkFor } from "../growth";
 
 // The Ad studio: a beginner's first ads, the same day. Statics first (the safest bet); the video is
-// recorded on Day 5 and goes live on Day 8 with fresh statics. Four parts, in the course's words:
+// recorded on Day 8 and goes live on Day 9 with fresh statics. Four parts, in the course's words:
 //   Your numbers           budget → About-page visits → days to Skool's Level 2 (100 visitors).
 //   Your 5 statics         five genuinely different image ads. Meta's Andromeda system groups
 //                          near-identical ads and treats them as one, so every pair differs in at
@@ -673,10 +673,10 @@ export function launchPlan(o: { budget: number; country: string; link: string; p
       { title: "Publish", detail: "Click Publish. Meta reviews new ads, usually within a day." },
     ],
     after: [
-      { title: "Hands off for 72 hours", detail: "Don't edit, pause or add anything for 3 days. Every change restarts Meta's learning." },
-      { title: "Check in Ad review", detail: "After 72 hours, copy spend, impressions and link clicks into Ad review. You get keep, fix or kill, and which part to fix." },
-      { title: "Refresh every 1–3 weeks", detail: "When clicks get dearer, come back here and make 5 new statics. Turn off the ones with no clicks after a week. Keep the winners." },
-      { title: "Add the video on Day 8", detail: "Record the video script on Day 5. On Day 8, add it to the same ad set alongside fresh statics for the ones you killed, so Meta relearns once instead of twice." },
+      { title: "Hands off till Day 9", detail: "Don't edit, pause or add anything yet. Every change restarts Meta's learning." },
+      { title: "Check in Ad review on Day 7", detail: "Copy spend, impressions and link clicks into Ad review. You get keep, fix or kill, and which part to fix. Read it and change nothing: edits wait for Day 9." },
+      { title: "Refresh every 1–3 weeks", detail: "When clicks get dearer, come back here and make 5 new statics. Keep the winners." },
+      { title: "Add the video on Day 9", detail: "Record the video script on Day 8. On Day 9, add it to the same ad set alongside fresh statics for the ones you killed, so Meta relearns once instead of twice." },
     ],
   };
 }
@@ -812,7 +812,7 @@ export async function makeAdStudioPack(
     model = "connected AI app";
   } else if (opts.useAi !== false) {
     const charge = await chargeAi(workspaceId, "ai_generation", "AI Ad studio pack");
-    if (!charge && env.aiEnabled) warning = "You've used this month's AI generations, so this is the quick pack. Connect your own AI in Your AI to go unlimited.";
+    if (!charge && env.aiEnabled) warning = "You've used this month's AI generations, so this is the quick pack. Add a free AI key in Your AI to go unlimited.";
     if (charge) {
       try {
         const res = await generateStructured({

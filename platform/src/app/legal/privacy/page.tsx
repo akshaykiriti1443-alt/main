@@ -28,7 +28,7 @@ export default function Privacy() {
       <h2>Your choices</h2>
       <p>You can export or delete your data, disconnect channels at any time in Settings, and ask us to delete your account. See our data deletion page for steps.</p>
       <h2>Contact</h2>
-      <p>Email us at {env.emailFrom} with any privacy question.</p>
+      <p>Email us at {env.emailReplyTo} with any privacy question.</p>
     </LegalPage>
   );
 }

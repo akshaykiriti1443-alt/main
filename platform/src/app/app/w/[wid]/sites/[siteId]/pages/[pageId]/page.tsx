@@ -23,7 +23,7 @@ export default async function EditPage({ params }: { params: Promise<{ wid: stri
         <span className="truncate">Back to {site.name}</span>
       </Link>
       <PageHead
-        lesson="1.2"
+        lesson="1.4"
         stage="Day 1"
         title={`Edit: ${page.title}`}
         sub="Type on the left, watch the preview on the right. Save, then go back and publish the funnel to make it live."

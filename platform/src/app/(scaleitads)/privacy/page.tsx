@@ -41,7 +41,7 @@ export default async function PrivacyPage() {
 <section id="who" className="sec" style={{ paddingBottom: "40px", marginBottom: "40px", borderBottom: "1px solid #f4f4f5" }}>
 <h2 style={{ margin: "0", fontSize: "24px", fontWeight: "600", letterSpacing: "-0.02em" }}><span className="mono" style={{ fontSize: "14px", color: "#a1a1aa", marginRight: "10px" }}>01</span>Who we are</h2>
 <p>ScaleitAds (&#8220;we&#8221;, &#8220;us&#8221;) is a Meta ads optimization service run by Akshay Kolluru. This policy covers scaleitads.com, our booking flow, and the messages we send you.</p>
-<p>Legal business name: Akshay Kiriti Kolluru (sole proprietor, trading as ScaleitAds). Based in: Hyderabad, Telangana, India. Contact: akshay@scaleitads.com. We are the controller of the personal data described here.</p>
+<p>Legal business name: Akshay Kiriti Kolluru (sole proprietor, trading as ScaleitAds). Based in: Hyderabad, Telangana, India. Contact: hello@scaleitads.com. We are the controller of the personal data described here.</p>
 </section>
 <section id="collect" className="sec" style={{ paddingBottom: "40px", marginBottom: "40px", borderBottom: "1px solid #f4f4f5" }}>
 <h2 style={{ margin: "0", fontSize: "24px", fontWeight: "600", letterSpacing: "-0.02em" }}><span className="mono" style={{ fontSize: "14px", color: "#a1a1aa", marginRight: "10px" }}>02</span>What we collect</h2>
@@ -93,11 +93,11 @@ export default async function PrivacyPage() {
 <section id="changes" className="sec" style={{ paddingBottom: "40px", marginBottom: "40px", borderBottom: "1px solid #f4f4f5" }}>
 <h2 style={{ margin: "0", fontSize: "24px", fontWeight: "600", letterSpacing: "-0.02em" }}><span className="mono" style={{ fontSize: "14px", color: "#a1a1aa", marginRight: "10px" }}>12</span>Changes and contact</h2>
 <p>If we change this policy, we'll update the date at the top. For big changes, we'll tell clients directly.</p>
-<p>To use any of your rights, email akshay@scaleitads.com. We may need to confirm your identity first.</p>
+<p>To use any of your rights, email hello@scaleitads.com. We may need to confirm your identity first.</p>
 </section>
 <div style={{ padding: "22px", borderRadius: "16px", background: "#fafafa", border: "1px solid #e4e4e7" }}>
 <p style={{ margin: "0", fontSize: "15px", fontWeight: "600" }}>Questions about your data?</p>
-<p style={{ margin: "6px 0 0", fontSize: "15px", lineHeight: "1.6", color: "#52525b" }}>Email <a href="mailto:akshay@scaleitads.com" style={{ textDecoration: "underline" }}>akshay@scaleitads.com</a>. We reply within 30 days, usually much sooner.</p>
+<p style={{ margin: "6px 0 0", fontSize: "15px", lineHeight: "1.6", color: "#52525b" }}>Email <a href="mailto:hello@scaleitads.com" style={{ textDecoration: "underline" }}>hello@scaleitads.com</a>. We reply within 30 days, usually much sooner.</p>
 </div>
 </article>
     </LegalShell>

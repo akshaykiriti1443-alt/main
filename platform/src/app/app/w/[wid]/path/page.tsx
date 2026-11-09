@@ -25,7 +25,13 @@ export default async function PathPage({ params, searchParams }: { params: Promi
     { label: "New customers", value: path.loop.customers, sub: "from your Monday check-in", href: `/app/w/${wid}/growth` },
   ];
   const loopEmpty = loop.every((n) => n.value === 0);
-  const currentStage = path.stages.find((st) => st.steps.some((s) => s.key === path.next?.key))?.key;
+  const currentStage = path.today ? "launch" : path.stages.find((st) => st.steps.some((s) => s.key === path.next?.key))?.key;
+  // Days 2 to 6: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
+  const up = path.today
+    ? { eyebrow: path.today.eyebrow, title: path.today.title, body: path.today.body, href: path.today.href, icon: CalendarRangeIcon }
+    : path.next
+      ? { eyebrow: `Up next · Lesson ${path.next.lesson}`, title: path.next.title, body: path.next.why, href: path.next.href, icon: RouteIcon }
+      : null;
   let n = 0;
 
   return (
@@ -37,13 +43,13 @@ export default async function PathPage({ params, searchParams }: { params: Promi
       />
       <Flash searchParams={await searchParams} />
 
-      {path.next ? (
-        <NextStep eyebrow={`Up next · Lesson ${path.next.lesson}`} title={path.next.title} body={path.next.why} href={path.next.href} cta="Do it now" icon={RouteIcon}>
+      {up ? (
+        <NextStep eyebrow={up.eyebrow} title={up.title} body={up.body} href={up.href} cta="Do it now" icon={up.icon}>
           {/* How far along: a glass strip on the night panel. */}
           <div className="flex flex-col gap-2.5 rounded-2xl bg-white/[0.07] px-4 py-3.5 ring-1 ring-white/10 backdrop-blur-sm">
             <div className="flex items-baseline justify-between gap-3 text-sm text-white/80">
               <span>
-                <b className="font-semibold text-white">{path.done}</b> of {path.total} steps <span className="px-1 text-white/40">·</span> Skool level{" "}
+                <b className="font-semibold text-white">{path.done}</b> of {path.total} steps <span className="px-1 text-white/40">·</span> Growth Level{" "}
                 <b className="font-semibold text-white">{path.level}</b>
               </span>
               <span className="font-semibold text-white tabular-nums">{pct}%</span>
@@ -130,7 +136,7 @@ export default async function PathPage({ params, searchParams }: { params: Promi
                   <ul className="flex flex-col gap-1 border-t border-border/80 bg-background/40 px-2 py-2.5 md:px-3">
                     {stage.steps.map((step) => {
                       n += 1;
-                      const isNext = path.next?.key === step.key;
+                      const isNext = !path.today && path.next?.key === step.key;
                       return (
                         <li key={step.key}>
                           <Link

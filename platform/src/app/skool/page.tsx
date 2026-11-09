@@ -47,7 +47,7 @@ import { Button } from "@/components/ui/button";
 const SKOOL_URL = env.skoolGroupUrl || "https://www.skool.com/0-to-1x-academy-9129/about";
 /** Sign-up, log-in and the dashboard live on the app host (app.scaleitads.com). */
 const APP = env.appUrl;
-const CONTACT = "akshay@scaleitads.com";
+const CONTACT = "hello@scaleitads.com";
 const AGENCY_MAIL = `mailto:${CONTACT}?subject=${encodeURIComponent(`${env.platformName} Agency plan`)}`;
 
 const TITLE = "The Skool Growth Program by ScaleitAds";
@@ -97,7 +97,7 @@ const TIERS: { name: string; price: string; per?: string; note: string; badge?: 
 const FAQ: { q: string; a: ReactNode }[] = [
   {
     q: "What do I get?",
-    a: "The Skool Growth Ladder course and the OneX app. The course starts with Launch Week, seven days that fit your free trial. From day 8, the next modules unlock: Level 2, Level 3, Growth Boost, Leads, a weekly rhythm and reselling. The app does the work each lesson asks for.",
+    a: "The Skool Growth Ladder course and the OneX app. The course starts with Launch Week, seven days that fit your free trial. From day 8, the next modules unlock: Keep, Fix or Kill and the Teardown Room, Level 2, Talk, Rhythm, Season 2 (Levels 3 and 4) and reselling. The app does the work each lesson asks for.",
   },
   {
     q: "What does it cost?",
@@ -475,7 +475,7 @@ function HeroMock() {
         <div className="flex items-start gap-3">
           <Penny size={44} className="shrink-0 drop-shadow-[0_4px_8px_rgb(201_138_18/0.3)]" />
           <div className="grid min-w-0 gap-1">
-            <span className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Lesson 1.2</span>
+            <span className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Lesson 1.4</span>
             <span className="text-[15px] leading-snug font-semibold">Publish your funnel</span>
             <span className="text-[12px] leading-snug text-muted-foreground">Edit three lines, then press the scary button.</span>
           </div>
@@ -703,17 +703,17 @@ function Loop() {
 /* Mirrors the course modules and the app's "Your path" (src/server/path.ts). Keep them in step. */
 const LAUNCH_WEEK = [
   { day: "Day 1", title: "Open the shop and put 5 ads live" },
-  { day: "Days 2–3", title: "Polish your About page, text 20 people" },
-  { day: "Days 4–6", title: "Real conversations, a video, your first Ask" },
+  { day: "Days 2–3", title: "Polish your About page, text five people" },
+  { day: "Days 4–6", title: "Real conversations, a welcome for your members, your first Ask" },
   { day: "Day 7", title: "Weigh in: a verdict on every ad" },
 ];
 const UNLOCKS = [
-  { name: "Level 2", body: "Skool starts running ads for your group" },
-  { name: "Level 3", body: "Upload your own ads to Skool's ad program" },
-  { name: "Growth Boost", body: "Partnership ads at Level 4" },
-  { name: "Leads", body: "Follow-ups that plug the leaky bucket" },
-  { name: "Weekly rhythm", body: "Half a boring hour a week" },
-  { name: "Agency or software", body: "Optional: grow into your own" },
+  { name: "Day 8: Keep, Fix or Kill", body: "And the Teardown Room: real ads, taken apart" },
+  { name: "Level 2", body: "Skool can start running ads for your group" },
+  { name: "Talk", body: "Give your members a reason to post" },
+  { name: "Rhythm", body: "Half a boring hour a week" },
+  { name: "Season 2", body: "Levels 3 and 4: the upper rungs" },
+  { name: "Reselling", body: "Optional: your own agency or software" },
 ];
 const APP_POINTS = ["Penny, your guide, shows the one next step", "AI writes your page, free guide, emails and ads", "Every lead in one list, sorted hot, warm and cold", "Tracks your Skool Growth level, week by week"];
 
@@ -728,7 +728,7 @@ function Program() {
               A course that shows you. <em className="italic text-primary dark:text-violet-300">An app that does it.</em>
             </>
           }
-          sub="Ads first, then Skool growth, then lead growth. Every lesson ends with one thing to do, and the app has the button for it."
+          sub="Open the shop, put five ads live, then give people a reason to stay and talk. Every lesson ends with one thing to do, and the app has the button for it."
         />
 
         <div className="mt-16 grid gap-4 lg:grid-cols-[1.25fr_1fr] lg:gap-5">
@@ -758,6 +758,7 @@ function Program() {
                   </li>
                 ))}
               </ol>
+              <p className="mt-3.5 text-[13.5px] leading-snug text-muted-foreground">A Crew that starts the same week, a buddy, and an owner who answers every intro and every Stuck.</p>
             </div>
 
             <div className="mt-5">
@@ -799,7 +800,7 @@ function Program() {
             {/* What the app shows you: the next step, with the lesson it belongs to. */}
             <div aria-hidden className="mt-8 rounded-2xl bg-[radial-gradient(120%_100%_at_50%_0%,var(--accent),var(--background))] p-5 ring-1 ring-ink/[0.04] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgb(118_85_245/0.14),transparent)] dark:ring-white/[0.05]">
               <div className="rounded-xl bg-card p-4 shadow-card ring-1 ring-ink/[0.05] dark:ring-white/[0.07]">
-                <div className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Launch Week, day 2</div>
+                <div className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Day 1 · Lesson 1.4</div>
                 <div className="mt-1.5 font-display text-[24px] leading-[1.05]">Publish your funnel</div>
                 <div className="mt-1 text-[13px] text-muted-foreground">Edit three lines, then press the scary button.</div>
                 <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -807,7 +808,7 @@ function Program() {
                 </div>
               </div>
               <div className="mt-2.5 flex flex-col gap-2">
-                {["Connect your AI", "Build your launch kit"].map((t) => (
+                {["Say hi in the community", "Build your launch kit"].map((t) => (
                   <div key={t} className="flex items-center gap-2.5 rounded-xl bg-card/70 px-3 py-2 text-[12.5px] ring-1 ring-ink/[0.04] dark:ring-white/[0.06]">
                     <span className="grid size-5 shrink-0 place-items-center rounded-full bg-success text-white dark:text-background">
                       <CheckIcon className="size-3" strokeWidth={3} />

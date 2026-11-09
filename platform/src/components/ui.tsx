@@ -131,7 +131,7 @@ export function NextStep({
         </div>
         {href && cta ? (
           <Button variant="cta" size="lg" asChild className="shrink-0">
-            <Link href={href}>
+            <Link href={href} {...(/^https?:/.test(href) ? { target: "_blank", rel: "noreferrer" } : {})}>
               {cta}
               <ArrowRightIcon data-icon="inline-end" />
             </Link>

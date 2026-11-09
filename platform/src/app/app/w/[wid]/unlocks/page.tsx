@@ -63,8 +63,8 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
   return (
     <>
       <PageHead
-        lesson="7.2"
-        stage="Leads"
+        lesson="5.2"
+        stage="Talk"
         eyebrow="Engagement"
         title="Unlocks"
         sub="Give members a small reward for posting or commenting in your Skool group. Skool ranks groups on engagement, and members who talk stay longer."

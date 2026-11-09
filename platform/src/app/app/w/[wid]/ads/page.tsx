@@ -138,7 +138,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
 
       <div className="grid items-start gap-6 @4xl/main:grid-cols-2">
         <form action={adReviewAction.bind(null, wid)} data-guide="ad-review">
-          <Panel step={1} title="One ad's numbers" sub="Wait 72 hours after launch, then copy one ad at a time. Leads: 0 is fine.">
+          <Panel step={1} title="One ad's numbers" sub="First round: Day 7, then weekly. Copy one ad at a time. Leads: 0 is fine.">
             <Callout tone="tip">
               Where to look: <b className="font-semibold">Ads Manager › Ads</b>, date range <b className="font-semibold">Maximum</b>. Spend is the Amount spent column.
             </Callout>
@@ -219,6 +219,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
           </Panel>
         ) : (
           <Panel step={2} title="Your verdict" sub={`Reviewed ${row?.createdAt.toDateString()} · ${row?.model === "rules" ? "rule-based" : "AI"}`}>
+            <Callout tone="tip">First round? Read this on Day 7 and change nothing yet. Make all your edits together on Day 9 (lesson 3.2).</Callout>
             {review.mode === "skool" && review.call ? (
               <SkoolVerdict review={review} />
             ) : (

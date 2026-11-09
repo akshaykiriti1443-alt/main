@@ -27,11 +27,10 @@ export type StepHowTo = {
 
 export const STEP_HOWTO: Record<string, StepHowTo> = {
   ai: {
-    target: "ai-connect",
+    target: "ai-key",
     how: [
-      "Pay for Claude or ChatGPT? Give it a name, press Create connector URL, then paste that link into your AI app's connectors. Your app's card shows exactly where.",
-      "Claude's free plan works too (one connector).",
-      "No subscription? Use a free Google Gemini key in the API key section instead.",
+      "Get a free Google Gemini key (I want it free › Get a free Gemini key), paste it into API key and press Save key. Only a key lifts the 3-run cap.",
+      "Pay for Claude or ChatGPT? A connector lets that app work on your account from its own chat. Give it a name, press Create connector URL and paste the link into your AI app's connectors.",
     ],
   },
   hello: {
@@ -42,22 +41,22 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   kit: {
     target: "kit-build",
     how: [
-      "Answer the questions. Unsure? Guess: Make another kit redoes it.",
-      "Paste your Skool group link (skool.com/your-group).",
+      "Answer the questions. Unsure? Guess: you can edit every word once it's built.",
+      "Paste your Skool group link (skool.com/your-group/about).",
       "Press Build my launch kit, once. It takes about a minute.",
     ],
   },
   skool: {
     target: "skool-link",
     how: [
-      "Paste your Skool group link (skool.com/your-group) and save. Every Join button and your Skool link use it.",
+      "Paste your Skool group link (skool.com/your-group/about) and save. Every Join button and your Skool link use it.",
     ],
   },
   publish: {
     target: "site-publish",
     how: [
       "Open your opt-in page (the one asking for an email).",
-      "Change three lines: the headline, the free guide's name and the button.",
+      "Change three lines: the headline, who it's for and the button.",
       "Press Publish, then open the live link on your phone and sign up yourself.",
     ],
   },
@@ -72,14 +71,14 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
     target: "research-analyse",
     how: [
       'Search a keyword from your niche, like "fat loss for dads".',
-      "🔥 means the ad has run 30+ days. Those are the ones that make money.",
+      "🔥 means the ad has run 30+ days. Not proof, but the best free clue going.",
       "Press Analyse with AI, once. Read What's working in your niche and Gaps nobody uses yet.",
     ],
   },
   pixel: {
     target: "pixel",
     how: [
-      "Optional: your Day 1 ads don't need a Pixel (lesson 1.4).",
+      "Optional: your Day 1 ads don't need a Pixel (lesson 1.7).",
       "In Meta Events Manager, copy your Dataset ID and generate a Conversions API token.",
       "Paste both into Meta Pixel & Conversions API here and save.",
     ],
@@ -96,21 +95,21 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
     how: [
       "Copy your Skool link from this page.",
       "In Meta Ads Manager, launch your 5 statics (Ad studio's launch plan) with that link.",
-      "This ticks off at the first click from an ad, a bio or a post.",
+      "This ticks off at the first real ad click, not your own test.",
     ],
   },
   review: {
     target: "ad-review",
     how: [
-      "Wait 72 hours after launch. Hands off.",
+      "First round: wait for Day 7, hands off till then. After that, weekly.",
       "Copy each ad's spend, impressions and link clicks from Ads Manager.",
-      "Paste them here, one ad at a time. You get keep, fix or kill, and the one room to fix.",
+      "Paste them here, one ad at a time. You get keep, fix or kill, and the one room to fix. First round: make the changes on Day 9, all at once.",
     ],
   },
   customer: {
     how: [
-      "Text 20 people who already know you (lesson 2.2). One question, no pitch.",
-      "Send the Ask to everyone who replies, and to Leads › Hot (lesson 2.5).",
+      "List 20 people who have the problem you solve, or know someone who does, then text five (lesson 2.2).",
+      "Send your Invite to everyone who answered your Ask: Leads › Stage › Engaged.",
       "Ticks off when your Monday check-in says 1 new customer.",
     ],
   },
@@ -151,13 +150,36 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   l3: {
     target: "checkin",
     how: [
-      "Visitors, bio, regular posts and 10 Network sign-ups. Your check-in shows what's still missing.",
+      "Visitors, bio, steady promo (your own ads count) and 10 Network sign-ups. Your check-in shows what's still missing.",
     ],
   },
   l4: {
     target: "checkin",
     how: [
       "10,000 visitors and 30 Network sign-ups. Keep your best ads running and your members happy.",
+    ],
+  },
+  refresh: {
+    target: "ad-studio-make",
+    how: [
+      "Read your Day 7 verdicts first. No Kill and no Fix: Hook? No new statics, just the video.",
+      "Otherwise press Make my 5 statics again, or use a spare set in Your saved packs.",
+      "Open Video script (for later), press Copy script and film it by a window.",
+      "Optional: this ticks at your second pack.",
+    ],
+  },
+  claim1: {
+    how: [
+      "Press Copy Skool post on your Unlock, publish it in your group and pin it.",
+      "Someone posts or comments, then pastes that link on your claim page. It lands in Recent claims.",
+      "Thank them by name, in your group, where everyone can read it.",
+    ],
+  },
+  email4: {
+    how: [
+      "Open Emails › Sequences, then your kit's sequence.",
+      'In the "Add another email" slot, set Send on day to 7.',
+      "Answer \"Is it worth it?\" and end with your Skool link. Then press Save sequence.",
     ],
   },
   automations: {
@@ -171,9 +193,9 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   unlock: {
     target: "unlock-create",
     how: [
-      "Name a small reward members would comment for, and add its link.",
-      "Copy the claim link and post it in your Skool group.",
-      "Members comment, paste their link and get the reward by email.",
+      "Name a small reward and add its link. Pick what they have to do: Comment on a post, or Make their own post.",
+      "Press Create unlock, then Copy Skool post. Publish it in your group and pin it.",
+      "Members do it, paste their link and get the reward by email.",
     ],
   },
   agency: {
@@ -239,7 +261,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     tips: [
       "Sign up on your own page first: you're lead #1.",
       "Open a lead to see their whole story.",
-      "AI writes the follow-up, you send it.",
+      "On the Growth plan, AI drafts your replies in Inbox.",
     ],
   },
   pipeline: {
@@ -272,7 +294,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     title: "Unlocks",
     what: "Small rewards members earn by posting or commenting in your Skool group.",
     tips: [
-      "Engagement is what Skool ranks you on.",
+      "Skool ranks groups on who joins, who talks and who stays.",
       "One new Unlock a week is plenty.",
     ],
   },
@@ -280,14 +302,14 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     title: "Ad studio",
     what: "Your first ads, same day: your numbers, 5 statics ready to make, and the exact clicks to launch them.",
     tips: [
-      "Statics first. Record the video on Day 5, add it on Day 8.",
+      "Statics first. Record the video on Day 8, add it on Day 9.",
       "Five different looks, so Meta tests five real ideas.",
       "Hands off for 72 hours after you publish.",
     ],
   },
   "ads/research": {
     title: "Ad research",
-    what: "Spy on ads your competitors have run for weeks (the ones that make money).",
+    what: "Spy on ads your competitors have run for weeks (the best free clue going).",
     tips: [
       "🔥 = 30+ days running.",
       "Analyse with AI shows what's working and the gaps nobody uses yet.",
@@ -296,10 +318,10 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   },
   ads: {
     title: "Ad review",
-    what: "Paste your ad numbers after 72 hours and get keep, fix or kill.",
+    what: "Paste your ad numbers on Day 7, then weekly, and get keep, fix or kill.",
     tips: [
       "Fix one room at a time: Hook, Door or About page.",
-      "Hands off for the first 72 hours.",
+      "First round: verdicts on Day 7, edits on Day 9.",
     ],
   },
   automations: {

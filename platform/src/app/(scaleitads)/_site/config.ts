@@ -3,7 +3,7 @@
 
 export const SITE_URL = "https://scaleitads.com";
 export const SITE_NAME = "ScaleitAds";
-export const CONTACT_EMAIL = "akshay@scaleitads.com";
+export const CONTACT_EMAIL = "hello@scaleitads.com";
 
 /**
  * Where every "book a call" points: /apply, the qualifying form + the booking calendar in one card,

@@ -182,9 +182,9 @@ describe("Ad studio: launch plan and video", () => {
     const all = JSON.stringify(plan);
     expect(all).toContain("Pixel");
     expect(plan.steps.length).toBeGreaterThanOrEqual(8);
-    expect(plan.after.map((s) => s.title)).toEqual(["Hands off for 72 hours", "Check in Ad review", "Refresh every 1–3 weeks", "Add the video on Day 8"]);
-    // The course records the video on Day 5 and puts it live on Day 8 with fresh statics.
-    expect(plan.after[3].detail).toMatch(/Day 5.*Day 8/);
+    expect(plan.after.map((s) => s.title)).toEqual(["Hands off till Day 9", "Check in Ad review on Day 7", "Refresh every 1–3 weeks", "Add the video on Day 9"]);
+    // The course records the video on Day 8 and puts it live on Day 9 with fresh statics.
+    expect(plan.after[3].detail).toMatch(/Day 8.*Day 9/);
   });
 
   it("builds a 20–30 second Hook · Turn · Door selfie script on a static", () => {
@@ -208,9 +208,9 @@ describe("Ad studio: saving, Your path, Penny and the connector", () => {
     const before = await computePath(ws, user.id);
     const steps = before.stages.flatMap((s) => s.steps);
     const at = steps.findIndex((s) => s.key === "statics");
-    expect(steps[at]).toMatchObject({ title: "Make your 5 statics", lesson: "1.4", href: `/app/w/${ws.id}/ads/studio`, done: false });
+    expect(steps[at]).toMatchObject({ title: "Make your 5 statics", lesson: "1.6", href: `/app/w/${ws.id}/ads/studio`, done: false });
     expect(steps[at + 1].key).toBe("clicks");
-    expect(steps[at - 1]).toMatchObject({ key: "research", title: "Find ads that already work", lesson: "1.3" });
+    expect(steps[at - 1]).toMatchObject({ key: "research", title: "Find ads that already work", lesson: "1.5" });
 
     const res = await makeAdStudioPack(ws.id, { audience: "busy dads over 40", promise: "Feel fit again", budget: 10, country: "GB", competitorAds: [{ page: "Rival", text: "Tired of starting over? Here's what works.", daysRunning: 62 }] });
     expect(res.ok).toBe(true);

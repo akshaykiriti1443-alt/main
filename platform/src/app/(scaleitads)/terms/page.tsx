@@ -83,11 +83,11 @@ export default function TermsPage() {
 <section id="changes" className="sec" style={{ paddingBottom: "40px", marginBottom: "40px", borderBottom: "1px solid #f4f4f5" }}>
 <h2 style={{ margin: "0", fontSize: "24px", fontWeight: "600", letterSpacing: "-0.02em" }}><span className="mono" style={{ fontSize: "14px", color: "#a1a1aa", marginRight: "10px" }}>12</span>Changes and contact</h2>
 <p>We may update these terms. The date at the top shows the latest version. Changes don't affect a month you've already paid for.</p>
-<p>Questions? Email akshay@scaleitads.com.</p>
+<p>Questions? Email hello@scaleitads.com.</p>
 </section>
 <div style={{ padding: "22px", borderRadius: "16px", background: "#fafafa", border: "1px solid #e4e4e7" }}>
 <p style={{ margin: "0", fontSize: "15px", fontWeight: "600" }}>Questions about these terms?</p>
-<p style={{ margin: "6px 0 0", fontSize: "15px", lineHeight: "1.6", color: "#52525b" }}>Email <a href="mailto:akshay@scaleitads.com" style={{ textDecoration: "underline" }}>akshay@scaleitads.com</a>. We're happy to explain anything before you sign up.</p>
+<p style={{ margin: "6px 0 0", fontSize: "15px", lineHeight: "1.6", color: "#52525b" }}>Email <a href="mailto:hello@scaleitads.com" style={{ textDecoration: "underline" }}>hello@scaleitads.com</a>. We're happy to explain anything before you sign up.</p>
 </div>
 </article>
     </LegalShell>

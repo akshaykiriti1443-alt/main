@@ -75,7 +75,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
     return (
       <>
         <PageHead
-          lesson="1.2"
+          lesson="1.3"
           stage="Day 1"
           title="AI launch kit"
           sub="Answer a few questions and AI writes your whole starter funnel in about a minute: landing page, free guide, emails and your Skool About page."
@@ -115,7 +115,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                   </div>
                 </Step>
 
-                <Step n={2} title="Who you help" hint="Unsure? Guess. Make another kit redoes it any time.">
+                <Step n={2} title="Who you help" hint="Unsure? Guess. You can edit every word once it's built.">
                   <div className="grid gap-5 @2xl/main:grid-cols-2">
                     <Field className="@2xl/main:col-span-2">
                       <FieldLabel htmlFor="niche">What do you help with?</FieldLabel>
@@ -214,7 +214,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
-        lesson="1.2"
+        lesson="1.3"
         stage="Day 1"
         eyebrow={`Made ${result.createdAt.toDateString()} · ${result.model === "template" ? "template" : "AI"}`}
         title="Your launch kit"
@@ -232,9 +232,9 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
 
       {site ? (
         <NextStep
-          eyebrow="Up next · Lesson 1.2"
+          eyebrow="Up next · Lesson 1.4"
           title="Review and publish your funnel"
-          body="Your pages are written. Change three lines (headline, free guide name, button), then press Publish."
+          body="Your pages are written. Change three lines (headline, who it's for, button), then press Publish."
           href={`/app/w/${wid}/sites/${site.id}`}
           cta="Review & publish funnel"
           icon={RocketIcon}
@@ -269,7 +269,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
           icon={ImageIcon}
           tone="success"
           title="Your ads come from Ad studio"
-          sub="Not from this kit. Tonight's five ads are made in lessons 1.3 and 1.4."
+          sub="Not from this kit. Tonight's five ads are made in lessons 1.5 and 1.6."
         >
           <ol className="flex flex-col gap-2.5">
             {[

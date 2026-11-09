@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import {
   ArrowRightIcon,
   BotIcon,
+  CalendarRangeIcon,
   ChartNoAxesColumnIcon,
   EyeIcon,
   FlameIcon,
@@ -53,6 +54,7 @@ const STEP_ICON: Record<string, LucideIcon> = {
   review: MegaphoneIcon,
   automations: WorkflowIcon,
   unlock: GiftIcon,
+  email4: MailIcon,
 };
 
 /** Initials for a lead's avatar. */
@@ -75,6 +77,8 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const base = `/app/w/${wid}`;
   const steps = path.stages.flatMap((st) => st.steps.map((step) => ({ ...step, tag: st.tag })));
   const next = path.next;
+  // Days 2 to 6: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
+  const today = path.today;
   // Numbers only mean something once there are some. Until then the page is a "Start here".
   const hasData = stats.views > 0 || stats.contactsTotal > 0 || stats.emailsSent > 0 || recent.length > 0;
   const firstName = (user.name ?? "").trim().split(/\s+/)[0];
@@ -86,7 +90,9 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const from = Math.max(0, nextIndex - 1);
   const peek = steps.slice(from, from + 5);
 
-  const nextCard = next ? (
+  const nextCard = today ? (
+    <NextStep eyebrow={today.eyebrow} title={today.title} body={today.body} href={today.href} cta="Do it now" icon={CalendarRangeIcon} />
+  ) : next ? (
     <NextStep
       eyebrow={`Up next · Lesson ${next.lesson}`}
       title={next.title}
@@ -100,7 +106,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const pathList = (
     <ol className="flex flex-col gap-1">
       {peek.map((step, i) => {
-        const isNext = step.key === next?.key;
+        const isNext = !today && step.key === next?.key;
         return (
           <li key={step.key}>
             <Link
@@ -297,7 +303,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
           className="@3xl/main:col-span-2"
           icon={RouteIcon}
           title="Your path"
-          sub={`${path.done} of ${path.total} steps · Skool level ${path.level}`}
+          sub={`${path.done} of ${path.total} steps · Growth Level ${path.level}`}
           action={
             <Button variant="ghost" size="sm" asChild>
               <Link href={`${base}/path`}>
@@ -307,14 +313,14 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
           }
         >
           {pathProgress}
-          {next ? (
+          {next || today ? (
             pathList
           ) : (
             <p className="text-sm text-muted-foreground">
               {path.done >= path.total ? "Every step done." : "Your to-dos are done. The rest tick themselves as your Skool numbers grow."} Keep the weekly rhythm going.
             </p>
           )}
-          {next ? <LessonTag lesson={next.lesson} stage={steps[nextIndex]?.tag} className="self-start" /> : null}
+          {today ? <LessonTag lesson={today.lesson} stage="Days 2–7" className="self-start" /> : next ? <LessonTag lesson={next.lesson} stage={steps[nextIndex]?.tag} className="self-start" /> : null}
         </Panel>
       </div>
 

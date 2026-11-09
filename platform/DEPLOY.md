@@ -54,6 +54,7 @@ Required ones are marked ●. Everything else is optional and switches a feature
 | ● `CRON_SECRET` | Random string (`openssl rand -hex 24`). See "Background jobs" below. |
 | ● `EMAIL_PROVIDER` | `postmark` or `resend` (`console` only logs). |
 | ● `EMAIL_FROM_ADDRESS` | e.g. `hello@scaleitads.com`. Must be a verified sender in Postmark/Resend (add their DNS records). |
+| `EMAIL_REPLY_TO` | Optional. A real inbox (e.g. `hello@scaleitads.com`) for replies and the legal-page contact, so the From address needs no mailbox. Defaults to `EMAIL_FROM_ADDRESS`. |
 | `POSTMARK_SERVER_TOKEN` / `POSTMARK_BROADCAST_STREAM` | Postmark › Server › API Tokens; the broadcast stream ID (default `broadcast`). |
 | `RESEND_API_KEY` | resend.com › API Keys. |
 | `PLATFORM_NAME` | `OneX` (default). |

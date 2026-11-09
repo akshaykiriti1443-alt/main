@@ -259,7 +259,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
   return (
     <>
       <PageHead
-        lesson="1.4"
+        lesson="1.6"
         stage="Day 1"
         eyebrow="Get members"
         title="Ad studio"
@@ -343,7 +343,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
               icon={ClapperboardIcon}
               tone="gold"
               title="Video script (for later)"
-              sub="Statics first. Record this on Day 5, then add it on Day 8 alongside your fresh statics: 20–30 seconds, selfie, captions on."
+              sub="Statics first. Record this on Day 8, then add it on Day 9 alongside your fresh statics: 20–30 seconds, selfie, captions on."
               action={<CopyButton text={videoText(video)} label="Copy script" />}
             >
               <p className="text-sm text-muted-foreground">

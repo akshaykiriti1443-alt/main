@@ -46,6 +46,8 @@ export const env = {
   postmarkToken: process.env.POSTMARK_SERVER_TOKEN ?? "",
   resendKey: process.env.RESEND_API_KEY ?? "",
   emailFrom: process.env.EMAIL_FROM_ADDRESS ?? "hello@example.com",
+  // A real inbox for replies and the contact address on legal pages; the From address can be send-only.
+  emailReplyTo: process.env.EMAIL_REPLY_TO || process.env.EMAIL_FROM_ADDRESS || "hello@example.com",
 
   metaAppId: process.env.META_APP_ID ?? "",
   metaAppSecret: process.env.META_APP_SECRET ?? "",

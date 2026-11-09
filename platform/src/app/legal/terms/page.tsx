@@ -16,7 +16,7 @@ export default function Terms() {
       <h2>Acceptable use</h2>
       <p>Only email and message people who gave you permission. Follow anti-spam laws and Meta, WhatsApp and carrier rules. We can suspend accounts that send spam or break these rules.</p>
       <h2>Contact</h2>
-      <p>{env.emailFrom}</p>
+      <p>{env.emailReplyTo}</p>
     </LegalPage>
   );
 }

@@ -167,11 +167,15 @@ export function Companion({
     };
   }, [mode, snap.total, wid]);
 
+  // Days 2 to 6: today's lesson comes first, so Penny doesn't jump a Day 2 member to Day 7.
+  const today = snap.today;
   // Same rule as Up next (src/server/path.ts): optional steps, outcomes and steps locked to
   // another plan never hold you up.
-  const next =
-    snap.steps.find((s) => canBeUpNext(s) && !skipped.includes(s.key)) ??
-    null;
+  const next = today
+    ? null
+    : (snap.steps.find((s) => canBeUpNext(s) && !skipped.includes(s.key)) ??
+      null);
+  const nextTitle = today?.title ?? next?.title;
   const onStep = next ? isOnStepPage(pathname, next) : false;
   const how = next ? STEP_HOWTO[next.key] : undefined;
   const guide = pageGuideFor(pathname, wid);
@@ -264,14 +268,14 @@ export function Companion({
       className={className}
       onClick={onOpen}
       aria-label={
-        next ? `Open your guide. Next: ${next.title}` : "Open your guide"
+        nextTitle ? `Open your guide. Next: ${nextTitle}` : "Open your guide"
       }
     >
       <PennyFace size={44} className="guide-fab-face" />
-      {next ? (
+      {nextTitle ? (
         <span className="guide-fab-label">
           <span className="guide-fab-kicker">Next</span>
-          <span className="guide-fab-title">{next.title}</span>
+          <span className="guide-fab-title">{nextTitle}</span>
         </span>
       ) : null}
     </button>
@@ -286,14 +290,14 @@ export function Companion({
         className="guide-fab"
         onClick={() => setMode("open")}
         aria-label={
-          next ? `Open your guide. Next: ${next.title}` : "Open your guide"
+          nextTitle ? `Open your guide. Next: ${nextTitle}` : "Open your guide"
         }
       >
         <PennyFace size={44} className="guide-fab-face" />
-        {next ? (
+        {nextTitle ? (
           <span className="guide-fab-label">
             <span className="guide-fab-kicker">Next</span>
-            <span className="guide-fab-title">{next.title}</span>
+            <span className="guide-fab-title">{nextTitle}</span>
           </span>
         ) : null}
       </button>
@@ -368,7 +372,27 @@ export function Companion({
             </div>
           ) : null}
 
-          {next ? (
+          {today ? (
+            <section className="guide-step">
+              <span className="guide-kicker">{today.eyebrow}</span>
+              <h3>{today.title}</h3>
+              <p className="guide-why">{today.body}</p>
+              <Link
+                href={today.href}
+                className="guide-go"
+                {...(/^https?:/.test(today.href)
+                  ? { target: "_blank", rel: "noreferrer" }
+                  : {})}
+              >
+                Take me there <ArrowRightIcon aria-hidden="true" />
+              </Link>
+              <div className="guide-row">
+                <Link href={`/app/w/${wid}/path`} className="guide-link">
+                  <RouteIcon aria-hidden="true" /> All steps
+                </Link>
+              </div>
+            </section>
+          ) : next ? (
             <section className="guide-step">
               <span className="guide-kicker">
                 Step {position} of {snap.total} · Lesson {next.lesson}

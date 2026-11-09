@@ -1,4 +1,4 @@
-import { computePath } from "./path";
+import { computePath, type TodayCard } from "./path";
 import { getEntryTicket } from "./unlocks";
 
 // The companion ("Penny"): a step-by-step guide on every page that a member can turn on and off.
@@ -28,6 +28,8 @@ export type CompanionSnapshot = {
   done: number;
   total: number;
   level: number;
+  /** Days 2 to 6: today's lesson. Read-only, never counted (see path.ts). */
+  today: TodayCard | null;
 };
 
 export async function companionSnapshot(
@@ -44,5 +46,6 @@ export async function companionSnapshot(
     done: path.done,
     total: path.total,
     level: path.level,
+    today: path.today,
   };
 }
