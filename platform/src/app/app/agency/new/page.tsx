@@ -19,7 +19,7 @@ export default async function NewAgencyPage({ searchParams }: { searchParams: Pr
   await requireUser();
   return (
     <AuthShell
-      lesson="B.1"
+      lesson="Bonus"
       stage="Bonus"
       title="Start your agency"
       sub="Grow into an agency or software of your own on this stack. One name to start; logo, domain and prices come after."

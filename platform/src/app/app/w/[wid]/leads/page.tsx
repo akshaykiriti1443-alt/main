@@ -90,8 +90,7 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
   return (
     <>
       <PageHead
-        lesson="2.5"
-        stage="Day 6"
+        lesson="Day 5"
         eyebrow="Leads CRM"
         title="Leads"
         sub="Everyone who opted in on your pages or messaged you. Hot leads are the ones most likely to join soon."

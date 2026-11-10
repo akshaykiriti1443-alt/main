@@ -9,11 +9,14 @@ import {
   Clock3Icon,
   FlameIcon,
   GaugeIcon,
+  GlobeIcon,
   HistoryIcon,
   ImageIcon,
   LayersIcon,
   LightbulbIcon,
+  LinkIcon,
   PaletteIcon,
+  PowerOffIcon,
   RefreshCwIcon,
   RocketIcon,
   SearchIcon,
@@ -37,11 +40,14 @@ import { AI_PROVIDERS, aiCredsFor } from "@/server/ai/client";
 import { ANGLE_LABEL, type AdAngle } from "@/server/ai/adFramework";
 import {
   adStudioDefaults,
+  afterLaunch,
+  DESTINATION_LABEL,
   FORMAT_LABEL,
   getAdStudioPack,
   latestResearchAds,
   listAdStudioPacks,
   numbersLines,
+  publishedFunnelUrl,
   staticText,
   STUDIO_COUNTRIES,
   videoFromConcept,
@@ -50,6 +56,7 @@ import {
   type NumbersLine,
   type StaticConcept,
   type StaticFormat,
+  type StudioDestination,
   type StudioNumbers,
   type StudioTone,
 } from "@/server/ai/adStudio";
@@ -87,7 +94,10 @@ const LINE_ICON: Record<NumbersLine["key"], LucideIcon> = {
   social: UsersRoundIcon,
 };
 
-const AFTER_ICON: LucideIcon[] = [Clock3Icon, StethoscopeIcon, RefreshCwIcon, VideoIcon];
+const AFTER_ICON: LucideIcon[] = [Clock3Icon, StethoscopeIcon, PowerOffIcon, RefreshCwIcon];
+
+const CHOICE =
+  "flex cursor-pointer items-center gap-3 rounded-xl border border-border-strong bg-card px-3.5 py-3 text-sm shadow-xs transition-colors duration-150 select-none hover:border-violet-200 hover:bg-accent/60 has-checked:border-primary has-checked:bg-accent has-checked:ring-1 has-checked:ring-primary has-focus-visible:ring-3 has-focus-visible:ring-ring/40 has-disabled:cursor-not-allowed has-disabled:opacity-60 dark:bg-white/[0.03] dark:hover:border-white/20";
 
 const money = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
 const statRange = (a: number, b: number) => {
@@ -100,12 +110,13 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
   const { wid } = await params;
   const sp = await searchParams;
   const { workspace } = await requireWorkspace(wid);
-  const [packs, defaults, research, creds, skoolTarget] = await Promise.all([
+  const [packs, defaults, research, creds, skoolTarget, funnelUrl] = await Promise.all([
     listAdStudioPacks(wid, 8),
     adStudioDefaults(workspace),
     latestResearchAds(wid),
     aiCredsFor(wid),
     skoolTargetFor(wid, workspace.settings.skoolUrl),
+    publishedFunnelUrl(wid),
   ]);
   const chosen = isUuid(sp.pack) ? (packs.find((p) => p.id === sp.pack) ?? (await getAdStudioPack(wid, sp.pack))) : (packs[0] ?? null);
   const pack = chosen?.pack ?? null;
@@ -126,6 +137,39 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
 
   const form = (
     <form action={adStudioAction.bind(null, wid)} className="flex flex-col gap-6">
+      <fieldset className="flex flex-col">
+        <legend className="mb-2.5 text-[13.5px] font-medium">Where do these ads go?</legend>
+        <div className="grid gap-2 @md/main:grid-cols-2">
+          <label className={CHOICE}>
+            <input type="radio" name="destination" value="website" defaultChecked={defaults.destination === "website"} disabled={!funnelUrl} className="sr-only" />
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-primary ring-1 ring-violet-200/70 ring-inset dark:text-violet-300 dark:ring-white/[0.06]">
+              <GlobeIcon className="size-4" aria-hidden />
+            </span>
+            <span className="grid min-w-0 gap-0.5">
+              <span className="font-semibold">{DESTINATION_LABEL.website}</span>
+              <span className="truncate text-xs text-muted-foreground">{funnelUrl ? `Leads · ${funnelUrl.replace(/^https?:\/\//, "")}` : "Publish your funnel first"}</span>
+            </span>
+          </label>
+          <label className={CHOICE}>
+            <input type="radio" name="destination" value="skool" defaultChecked={defaults.destination !== "website"} className="sr-only" />
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground ring-1 ring-ink/[0.04] ring-inset dark:ring-white/[0.05]">
+              <LinkIcon className="size-4" aria-hidden />
+            </span>
+            <span className="grid min-w-0 gap-0.5">
+              <span className="font-semibold">{DESTINATION_LABEL.skool}</span>
+              <span className="truncate font-mono text-[11.5px] text-muted-foreground">Traffic · {link.replace(/^https?:\/\//, "")}</span>
+            </span>
+          </label>
+        </div>
+        <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
+          Day 1&apos;s ads go to your website. Day 2&apos;s go to your Skool link, in their own campaign.{" "}
+          {funnelUrl ? null : (
+            <>
+              <Link href={`${base}/sites`}>Publish your funnel</Link> to send ads to your website.
+            </>
+          )}
+        </p>
+      </fieldset>
       <BudgetPicker initial={defaults.budget} />
       <div className="grid gap-5 @2xl/main:grid-cols-2">
         <Field>
@@ -145,13 +189,13 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
             <div className="flex h-10 items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 text-sm">
               <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">{link}</span>
             </div>
-            <FieldDescription>Every ad points here. It counts the visit, then opens your Skool About page.</FieldDescription>
+            <FieldDescription>Skool-link ads point here. It counts the visit, then opens your Skool About page.</FieldDescription>
           </Field>
         ) : (
           <Field>
             <FieldLabel htmlFor="skoolUrl">Your Skool group link</FieldLabel>
             <Input id="skoolUrl" name="skoolUrl" type="url" placeholder="https://www.skool.com/your-group" />
-            <FieldDescription>Your ads send people here, through your tracked Skool link.</FieldDescription>
+            <FieldDescription>Your Skool-link ads and your Join button send people here.</FieldDescription>
           </Field>
         )}
         <Field>
@@ -176,7 +220,8 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
           </Field>
           <Field>
             <FieldLabel htmlFor="offer">Your offer</FieldLabel>
-            <Input id="offer" name="offer" defaultValue={defaults.offer} placeholder="A Skool group with weekly calls" />
+            <Input id="offer" name="offer" defaultValue={defaults.offer} placeholder="Free checklist: The 7-Day Dad Reset" />
+            <FieldDescription>What these ads sell. Website ads: Free checklist: its name. Skool-link ads: 7-day free trial of your group.</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="price">Your Skool price a month</FieldLabel>
@@ -259,8 +304,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
   return (
     <>
       <PageHead
-        lesson="1.6"
-        stage="Day 1"
+        lesson="Days 1 and 2"
         eyebrow="Get members"
         title="Ad studio"
         sub="Answer a few quick questions. Get your numbers, 5 statics ready to make, and the exact clicks to launch them today."
@@ -270,7 +314,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
 
       {!skoolTarget ? (
         <Callout tone="warn" title="Your Skool link has nowhere to go yet">
-          Add your Skool group link below (or in <Link href={`${base}/settings#business`}>Settings</Link>) so every ad lands on your Skool About page.
+          Add your Skool group link below (or in <Link href={`${base}/settings#business`}>Settings</Link>) so your Skool-link ads and your Join button land on your Skool About page.
         </Callout>
       ) : null}
 
@@ -279,7 +323,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
           <MoreOptions
             icon={PaletteIcon}
             title="Your answers"
-            sub={`${money(pack.numbers.budget)} a day · ${pack.country}${chosen.input.audience ? ` · ${truncate(String(chosen.input.audience), 60)}` : ""}. Change anything and make a new pack.`}
+            sub={`${money(pack.numbers.budget)} a day · ${DESTINATION_LABEL[pack.destination ?? "skool"]} · ${pack.country}${chosen.input.audience ? ` · ${truncate(String(chosen.input.audience), 60)}` : ""}. Change anything and make a new pack.`}
           >
             {form}
           </MoreOptions>
@@ -300,7 +344,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
             ))}
           </nav>
 
-          <NumbersPanel n={pack.numbers} lines={numbersLines(pack.numbers, { price: Number(chosen.input.price) || 0, country: pack.country, formats: pack.statics.map((x) => x.format) })} />
+          <NumbersPanel n={pack.numbers} destination={pack.destination ?? "skool"} lines={numbersLines(pack.numbers, { price: Number(chosen.input.price) || 0, country: pack.country, formats: pack.statics.map((x) => x.format), destination: pack.destination ?? "skool" })} />
 
           <Panel
             id="statics"
@@ -334,6 +378,12 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
             </ol>
           </Panel>
 
+          {pack.destination === "website" && !workspace.settings.metaPixelId ? (
+            <Callout tone="warn" title="Connect your Pixel before you launch">
+              This plan picks your Pixel under Dataset. Add it in <Link href={`${base}/settings#tracking`}>Settings › Meta Pixel &amp; Conversions API</Link> first.
+            </Callout>
+          ) : null}
+
           <PlanPanel plan={pack.plan} wid={wid} />
 
           {video ? (
@@ -343,7 +393,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
               icon={ClapperboardIcon}
               tone="gold"
               title="Video script (for later)"
-              sub="Statics first. Record this on Day 8, then add it on Day 9 alongside your fresh statics: 20–30 seconds, selfie, captions on."
+              sub="Statics first. Keep this for after your free week, once Day 6 has told you which static won: 20–30 seconds, selfie, captions on."
               action={<CopyButton text={videoText(video)} label="Copy script" />}
             >
               <p className="text-sm text-muted-foreground">
@@ -408,7 +458,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
                     >
                       <span className="grid min-w-0 gap-0.5">
                         <span className="font-medium">
-                          {money(p.pack.numbers.budget)} a day · {p.pack.country}
+                          {money(p.pack.numbers.budget)} a day · {DESTINATION_LABEL[p.pack.destination ?? "skool"]} · {p.pack.country}
                         </span>
                         <span className="truncate text-xs text-muted-foreground">
                           {p.pack.statics.map((s) => s.name).join(" · ")}
@@ -437,14 +487,16 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
   );
 }
 
-function NumbersPanel({ n, lines }: { n: StudioNumbers; lines: NumbersLine[] }) {
+function NumbersPanel({ n, lines, destination }: { n: StudioNumbers; lines: NumbersLine[]; destination: StudioDestination }) {
   const days = n.daysTo100.fast === n.daysTo100.slow ? String(n.daysTo100.fast) : `${n.daysTo100.fast}–${n.daysTo100.slow}`;
+  const website = destination === "website";
+  const guess = n.cpvSource === "assumption" ? "Our guess, to " : "To ";
   return (
-    <Panel id="numbers" className="scroll-mt-20" icon={GaugeIcon} title="Your numbers" sub={`At ${money(n.budget)} a day. Honest maths: visitors, never promises.`}>
+    <Panel id="numbers" className="scroll-mt-20" icon={GaugeIcon} title="Your numbers" sub={`At ${money(n.budget)} a day. Honest maths: visitors, never promises.${n.cpvSource === "assumption" ? " Cost per visit is a guess until Day 6." : ""}`}>
       <div className="grid grid-cols-2 gap-3 @3xl/main:grid-cols-4">
-        <Stat label="Visits a day" value={statRange(n.visitsPerDay.low, n.visitsPerDay.high)} hint="To your Skool About page" />
+        <Stat label="Visits a day" value={statRange(n.visitsPerDay.low, n.visitsPerDay.high)} hint={`${guess}${website ? "your website" : "your Skool About page"}`} />
         <Stat label="Visits a month" value={statRange(n.visitsPerMonth.low, n.visitsPerMonth.high)} hint={`${money(n.monthlySpend)} a month in ads`} />
-        <Stat label="Days to 100 visitors" value={days} hint="Skool's Level 2 visitor bar" />
+        {website ? <Stat label="Your second campaign" value="$5" hint="A day, to your Skool link, on Day 2" /> : <Stat label="Days to 100 visitors" value={days} hint="Skool's Level 2 visitor bar" />}
         <Stat label="Statics to run" value={n.statics} hint="All in one ad set" />
       </div>
       <ul className="grid gap-x-6 gap-y-4 pt-1 @3xl/main:grid-cols-2">
@@ -469,8 +521,11 @@ function NumbersPanel({ n, lines }: { n: StudioNumbers; lines: NumbersLine[] }) 
 
 function PlanPanel({ plan, wid }: { plan: LaunchPlan; wid: string }) {
   const url = plan.settings.find((s) => s.label === "Website URL")?.value ?? "";
+  // From the rules, not the saved pack, so an older pack shows the course's current week.
+  const after = afterLaunch();
+  const sub = plan.destination === "website" ? "A Leads campaign to your website: one ad set, all 5 statics. About 15 minutes in Meta Ads Manager." : "A Traffic campaign to your Skool link: one ad set, all 5 statics. Got website ads running? This one is separate, so leave those alone.";
   return (
-    <Panel id="plan" className="scroll-mt-20" icon={RocketIcon} title="Your launch plan" sub="One campaign, one ad set, all 5 statics. About 15 minutes in Meta Ads Manager.">
+    <Panel id="plan" className="scroll-mt-20" icon={RocketIcon} title="Your launch plan" sub={sub}>
       <dl className="grid overflow-hidden rounded-xl bg-background/60 ring-1 ring-ink/[0.06] ring-inset @2xl/main:grid-cols-2 dark:bg-white/[0.02] dark:ring-white/[0.07]">
         {plan.settings.map((s) => (
           <div key={s.label} className={cn("grid content-start gap-0.5 border-b border-border/70 px-4 py-3 text-sm", (s.label === "Website URL" || s.label === "Ads") && "@2xl/main:col-span-2", s.label === "Website URL" && "border-b-0")}>
@@ -496,7 +551,7 @@ function PlanPanel({ plan, wid }: { plan: LaunchPlan; wid: string }) {
       <div className="flex flex-col gap-3 border-t border-border/80 pt-5">
         <span className="text-[15px] font-semibold tracking-[-0.011em]">After you press Publish</span>
         <ul className="grid gap-3 @2xl/main:grid-cols-2">
-          {plan.after.map((s, i) => {
+          {after.map((s, i) => {
             const Icon = AFTER_ICON[i] ?? CheckIcon;
             return (
               <li key={s.title} className={cn(CARD, "flex gap-3 p-4 text-sm leading-relaxed")}>

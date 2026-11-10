@@ -6,7 +6,7 @@ import { isSkoolUrl } from "@/server/growth";
 import { safeUrl } from "@/lib/html";
 import { isUuid } from "@/lib/util";
 import { parsePastedAds, type ResearchAd } from "@/server/ai/adResearch";
-import { latestResearchAds, makeAdStudioPack } from "@/server/ai/adStudio";
+import { latestResearchAds, makeAdStudioPack, STUDIO_DESTINATIONS, type StudioDestination } from "@/server/ai/adStudio";
 import { field, go } from "./helpers";
 
 /** "Make my 5 statics": the Ad studio form. */
@@ -42,6 +42,7 @@ export async function adStudioAction(wid: string, fd: FormData) {
     budget,
     country: field(fd, "country", 2) || "US",
     tone: field(fd, "tone", 10) || "friendly",
+    destination: STUDIO_DESTINATIONS.find((d): d is StudioDestination => d === field(fd, "destination", 10)),
     competitorAds,
   };
 

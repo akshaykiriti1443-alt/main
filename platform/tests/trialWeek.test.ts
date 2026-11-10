@@ -9,7 +9,7 @@ import { canBeUpNext } from "@/lib/guides";
 import { CANCEL_ROUTE, IF_YOU_CANCEL } from "@/lib/leaving";
 import { firstEightDayMembers } from "@/server/admin";
 import { runAdReview } from "@/server/ai/adReview";
-import { buildPrompt, fallbackKit } from "@/server/ai/launchKit";
+import { buildPrompt, fallbackKit, funnelPagesFromKit, trialInOffer, withTrialTerms } from "@/server/ai/launchKit";
 import { fallbackReply } from "@/server/ai/replies";
 import { DEFAULT_SEQUENCE } from "@/server/defaults";
 import { leadsCsv } from "@/server/contacts";
@@ -18,7 +18,7 @@ import { buildShelf, computePath } from "@/server/path";
 import { makeWorkspace } from "./helpers";
 
 // The free week. The app can't see a Skool trial, a charge or a cancel, so it may only say what's
-// true whichever way those went. Lesson numbers and days match the course.
+// true whichever way those went. The days match the course.
 
 const DAY = 86_400_000;
 const onDay = <T extends { createdAt: Date }>(ws: T, n: number) => ({ ...ws, createdAt: new Date(Date.now() - (n - 0.5) * DAY) });
@@ -32,45 +32,51 @@ async function finishDay1(workspaceId: string) {
   await db.insert(activities).values({ workspaceId, type: "lead", data: {} });
 }
 
-describe("lessons Skool hasn't opened can't be Up next", () => {
+describe("days Skool hasn't opened can't be Up next", () => {
   const stepsOn = async (n: number) => {
     const { ws, user } = await makeWorkspace();
     await finishDay1(ws.id);
     await (await getDb()).insert(activities).values({ workspaceId: ws.id, type: "skool_visit", data: { source: "meta-ad" } });
     await saveCheckin(ws.id, { aboutVisitors: 30, newPaid: 0, networkSignups: 0, linkInBio: false, skoolLevel: 1 });
     await (await getDb()).insert(aiGenerations).values({ workspaceId: ws.id, kind: "ad_review", model: "rules" });
-    const p = await computePath(onDay(ws, n), user.id);
+    const p = await computePath({ ...onDay(ws, n), settings: { ...ws.settings, metaPixelId: "1234567890", aiKeyEnc: "x" } }, user.id);
     return { p, step: (k: string) => p.stages.flatMap((s) => s.steps).find((s) => s.key === k) };
   };
 
-  it("Day 8 points at the Teardown Room, never at lesson 5.2", async () => {
-    const { p, step } = await stepsOn(8);
-    expect(p.today?.lesson).toBe("3.1");
-    expect(step("unlock")).toMatchObject({ locked: "Opens Day 12", done: false });
-    expect(step("email4")?.locked).toBe("Opens Day 15");
-    expect(step("weeks")?.locked).toBe("Opens Day 15");
-    expect(step("bio")?.locked).toBe("Opens Day 18");
-    expect(p.next).toBeNull();
+  it("locks each day until the course opens it", async () => {
+    const { p, step } = await stepsOn(2);
+    expect(p.today?.lesson).toBe("Day 2");
+    expect(step("tracking")?.locked).toBe("Opens Day 3");
+    expect(step("unlock")).toMatchObject({ locked: "Opens Day 4", done: false });
+    expect(step("warm")?.locked).toBe("Opens Day 5");
+    expect(step("review")?.locked).toBe("Opens Day 6");
+    expect(step("checkin")?.locked).toBe("Opens Day 7");
+    expect(step("email4")?.locked).toBe("Opens Day 8");
+    expect(step("weeks")?.locked).toBe("Opens Day 8");
+    expect(step("bio")?.locked).toBe("Opens Day 8");
+    expect(p.next?.key).toBe("refresh");
     expect(canBeUpNext(step("unlock")!)).toBe(false);
   });
 
   it("opens each one on the course's own day", async () => {
-    expect((await stepsOn(11)).step("unlock")?.locked).toBe("Opens Day 12");
-    const twelve = await stepsOn(12);
-    expect(twelve.step("unlock")?.locked).toBeUndefined();
-    expect(twelve.p.next?.key).toBe("unlock");
+    expect((await stepsOn(3)).step("unlock")?.locked).toBe("Opens Day 4");
+    expect((await stepsOn(4)).step("unlock")?.locked).toBeUndefined();
+    expect((await stepsOn(7)).step("email4")?.locked).toBe("Opens Day 8");
+    const eight = await stepsOn(8);
+    expect(eight.step("email4")?.locked).toBeUndefined();
+    expect(eight.step("bio")?.locked).toBeUndefined();
   });
 
   it("still ticks a locked step when someone does it early", async () => {
     const { ws, user } = await makeWorkspace();
     await saveCheckin(ws.id, { aboutVisitors: 30, newPaid: 0, networkSignups: 0, linkInBio: true, skoolLevel: 1 });
-    const p = await computePath(onDay(ws, 8), user.id);
-    expect(p.stages.flatMap((s) => s.steps).find((s) => s.key === "bio")).toMatchObject({ done: true, locked: "Opens Day 18" });
+    const p = await computePath(onDay(ws, 7), user.id);
+    expect(p.stages.flatMap((s) => s.steps).find((s) => s.key === "bio")).toMatchObject({ done: true, locked: "Opens Day 8" });
   });
 });
 
 describe("Your shelf, Days 6 to 8", () => {
-  const blank = { kit: false, funnel: false, research: false, statics: false, adClicks: 0, verdicts: 0, aboutVisitors: null };
+  const blank = { kit: false, funnel: false, pixel: false, research: false, statics: false, adLeads: 0, adClicks: 0, verdicts: 0, aboutVisitors: null };
 
   it("only shows up on Days 6 to 8", async () => {
     const { ws, user } = await makeWorkspace();
@@ -90,6 +96,16 @@ describe("Your shelf, Days 6 to 8", () => {
     const after = await computePath(onDay(ws, 7), user.id);
     expect(after.shelf?.items.find((x) => x.key === "clicks")).toMatchObject({ have: true, note: "1" });
     expect(after.shelf?.items.find((x) => x.key === "kit")).toMatchObject({ have: true, note: "Built" });
+  });
+
+  it("counts a lead from an ad, not your own test sign-up", async () => {
+    const { ws, user } = await makeWorkspace();
+    const db = await getDb();
+    await finishDay1(ws.id); // includes your own sign-up, with no ad click id
+    const leadsLine = async () => (await computePath(onDay(ws, 7), user.id)).shelf?.items.find((x) => x.key === "leads");
+    expect(await leadsLine()).toMatchObject({ have: false });
+    await db.insert(activities).values({ workspaceId: ws.id, type: "lead", data: { utm: { fbclid: "abc" } } });
+    expect(await leadsLine()).toMatchObject({ have: true, note: "1" });
   });
 
   it("says written, not live, and labels what the member typed", () => {
@@ -200,11 +216,11 @@ describe("honest about money, across the app", () => {
     expect(page).toContain("IF_YOU_CANCEL.how");
     expect(page).toContain("first 100 founding members");
     expect(page).not.toMatch(NO_PRESSURE);
-    expect(page).toContain("Count your shelf, do one sum");
-    expect(page).not.toContain("a verdict on every ad");
+    expect(page).toContain("The scoreboard, and your decision");
+    expect(page).not.toMatch(/Launch Week|Teardown|Lesson \d\.\d|Day 9|No Pixel needed/);
   });
 
-  describe("a free trial on a member's own group is optional (lesson 1.2)", () => {
+  describe("a free trial on a member's own group is only ever in their own words", () => {
     const CLAIMS_TRIAL = /free trial|free days|7 free|try it free|free for \d|cancel before/i;
     const input = { businessName: "Fit Dads", ownerName: "Sam Owner", niche: "fitness for dads", audience: "busy dads", outcome: "lose the dad belly", leadMagnetIdea: "", offer: "", skoolUrl: "", tone: "friendly" as const, brandColor: "#2A44EE" };
 
@@ -228,6 +244,43 @@ describe("honest about money, across the app", () => {
 
     it("the template About page keeps an offer the member typed", () => {
       expect(fallbackKit({ ...input, offer: "$19/month with a 3-day free trial" }).skoolAboutPage).toContain("$19/month with a 3-day free trial");
+    });
+
+    it("reads the trial from the member's offer and invents nothing", () => {
+      expect(trialInOffer("$29/month with a 7-day free trial")).toEqual({ days: 7, price: "$29" });
+      expect(trialInOffer("£19 a month, 14 days free")).toEqual({ days: 14, price: "£19" });
+      expect(trialInOffer("29 dollars a month with a free trial")).toEqual({ days: null, price: "29 dollars" });
+      expect(trialInOffer("$29 a month with weekly calls")).toBeNull();
+      expect(trialInOffer("")).toBeNull();
+    });
+
+    it("a trial in the offer puts the deal on the thank-you page, in the AI prompt and the template", () => {
+      const offer = "$29/month with a 7-day free trial";
+      const kit = fallbackKit({ ...input, offer });
+      expect(kit.thankYouBody).toContain("7 days free, then $29 a month. Cancel before it bills");
+      expect(kit.thankYouButton).toBe("Start my free trial");
+      const prompt = buildPrompt({ ...input, offer });
+      expect(prompt).toContain("thankYouBody must state the deal in plain words");
+      expect(prompt).toContain("7 days free, then $29 a month");
+      // The button still goes to the Skool group, and nothing redirects by itself.
+      const cta = funnelPagesFromKit(kit, input).thankyou.sections[0] as { buttonUrl?: string };
+      expect(cta.buttonUrl).toBe("{{skool_url}}");
+    });
+
+    it("no trial in the offer, no deal on the thank-you page", () => {
+      const kit = fallbackKit({ ...input, offer: "$29 a month" });
+      expect(kit.thankYouBody).not.toMatch(CLAIMS_TRIAL);
+      expect(kit.thankYouButton).toBe("Join the group");
+      expect(buildPrompt({ ...input, offer: "$29 a month" })).not.toContain("thankYouBody must state");
+    });
+
+    it("adds the deal if the AI left any of it out, and leaves a complete one alone", () => {
+      const kit = fallbackKit(input);
+      const offer = "$29/month with a 7-day free trial";
+      expect(withTrialTerms({ ...kit, thankYouBody: "Come and join us." }, offer).thankYouBody).toBe("Come and join us. 7 days free, then $29 a month. Cancel before it bills and you pay nothing.");
+      const full = "Join us: 7 days free, then $29 a month. Cancel any time before it bills.";
+      expect(withTrialTerms({ ...kit, thankYouBody: full }, offer).thankYouBody).toBe(full);
+      expect(withTrialTerms({ ...kit, thankYouBody: "Come and join us." }, "").thankYouBody).toBe("Come and join us.");
     });
 
     it("the reply and scoring prompts only state a trial from the member's own offer", () => {

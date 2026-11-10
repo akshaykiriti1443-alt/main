@@ -52,7 +52,7 @@ const CONTACT = "hello@scaleitads.com";
 const AGENCY_MAIL = `mailto:${CONTACT}?subject=${encodeURIComponent(`${env.platformName} Agency plan`)}`;
 
 const TITLE = "The Skool Growth Program by ScaleitAds";
-const DESCRIPTION = "Grow your Skool community with ads, not endless posting. The Skool Growth Ladder course and the OneX app, by ScaleitAds. $9/month after a 7-day free trial for the first 100 founding members.";
+const DESCRIPTION = "Grow your Skool community with ads, not endless posting. The Anti-Pete Week course and the OneX app, by ScaleitAds. $9/month after a 7-day free trial for the first 100 founding members.";
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -73,7 +73,7 @@ const TIERS: { name: string; price: string; per?: string; note: string; badge?: 
     note: "After a 7-day free trial, Skool bills you automatically unless you cancel. The founding price is for the first 100 members, kept for as long as you stay. After that, $27/month.",
     badge: "Founding price",
     featured: true,
-    features: ["The Skool Growth Ladder course and the community on Skool", "The OneX app, included", "AI launch kit: page, lead magnet, emails, ads", "Landing pages with Meta Pixel + Conversions API", "Lead list and 3-email follow-up", "Custom ad review"],
+    features: ["The Anti-Pete Week course and the community on Skool", "The OneX app, included", "AI launch kit: page, lead magnet, emails, ads", "Landing pages with Meta Pixel + Conversions API", "Lead list and 3-email follow-up", "Custom ad review"],
     cta: { href: SKOOL_URL, label: "Start your 7-day free trial" },
     variant: "cta",
   },
@@ -98,7 +98,7 @@ const TIERS: { name: string; price: string; per?: string; note: string; badge?: 
 const FAQ: { q: string; a: ReactNode }[] = [
   {
     q: "What do I get?",
-    a: "The Skool Growth Ladder course and the OneX app. The course starts with Launch Week, seven days that fit your free trial. From day 8, the next modules unlock one at a time: Keep, Fix or Kill and the Teardown Room, Level 2, Talk, Rhythm, Season 2 (Levels 3 and 4) and reselling. The app does the work each lesson asks for.",
+    a: "The Anti-Pete Week course and the OneX app. Seven days that fit your free trial, one lesson a day. Day 1 builds your website, free checklist, Meta Pixel and first 5 ads, then it's one small job a day until you know your real numbers. After the free week, the Season 2 courses open for paying members: Scale the Winner, Your Own Domain and Email, Instagram Growth, Instagram Funnels, Follower Ads, DM Ads and AI Content Studio. The app does the work each lesson asks for.",
   },
   {
     q: "What does it cost?",
@@ -114,7 +114,7 @@ const FAQ: { q: string; a: ReactNode }[] = [
   },
   {
     q: "Do I need to know how to run ads?",
-    a: "No. Ad research shows you the ads already working in your niche, and Ad studio writes your first 5 static ads with the exact clicks to launch them in Meta Ads Manager. No Pixel needed to start. Penny walks you through it, one step at a time.",
+    a: "No. Ad research shows you the ads already working in your niche, and Ad studio writes your first 5 static ads with the exact clicks to launch them in Meta Ads Manager. You connect your Meta Pixel on Day 1, with every click spelled out. Penny walks you through it, one step at a time.",
   },
   {
     q: "Do I have to pay for AI?",
@@ -299,7 +299,7 @@ function Hero({ join }: { join: Cta }) {
         </h1>
 
         <p className="reveal mt-6 max-w-[58ch] text-[17px] leading-relaxed text-pretty text-muted-foreground [transition-delay:120ms] md:text-[18.5px]">
-          A course and an app that work as one. The Skool Growth Ladder shows you each step: ads first, then Skool growth, then lead growth. OneX does the work, from the page your ads point at to the follow-up emails that send every lead to your Skool group.
+          A course and an app that work as one. The Anti-Pete Week shows you each step: ads first, then Skool growth, then lead growth. OneX does the work, from the page your ads point at to the follow-up emails that send every lead to your Skool group.
         </p>
 
         <div className="reveal mt-8 flex w-full flex-col items-center justify-center gap-3 [transition-delay:180ms] sm:w-auto sm:flex-row">
@@ -480,7 +480,7 @@ function HeroMock() {
         <div className="flex items-start gap-3">
           <Penny size={44} className="shrink-0 drop-shadow-[0_4px_8px_rgb(201_138_18/0.3)]" />
           <div className="grid min-w-0 gap-1">
-            <span className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Lesson 1.4</span>
+            <span className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Day 1</span>
             <span className="text-[15px] leading-snug font-semibold">Publish your funnel</span>
             <span className="text-[12px] leading-snug text-muted-foreground">Edit three lines, then press the scary button.</span>
           </div>
@@ -707,18 +707,22 @@ function Loop() {
 
 /* Mirrors the course modules and the app's "Your path" (src/server/path.ts). Keep them in step. */
 const LAUNCH_WEEK = [
-  { day: "Day 1", title: "Open the shop and put 5 ads live" },
-  { day: "Days 2–3", title: "Polish your About page, text five people" },
-  { day: "Days 4–6", title: "Real conversations, a welcome for your members, your first Ask" },
-  { day: "Day 7", title: "Count your shelf, do one sum, decide if you're staying" },
+  { day: "Day 1", title: "Your website, free checklist, Meta Pixel and first 5 ads" },
+  { day: "Day 2", title: "A free AI key, and 5 more ads straight to Skool" },
+  { day: "Day 3", title: "Walk through your own machine" },
+  { day: "Day 4", title: "Furnish the room before guests arrive" },
+  { day: "Day 5", title: "Text the people who already know you" },
+  { day: "Day 6", title: "Your real numbers, and which ads go off" },
+  { day: "Day 7", title: "The scoreboard, and your decision" },
 ];
 const UNLOCKS = [
-  { name: "Day 8: Keep, Fix or Kill", body: "And the Teardown Room: real ads, taken apart" },
-  { name: "Level 2", body: "Skool can start running ads for your group" },
-  { name: "Talk", body: "Give your members a reason to post" },
-  { name: "Rhythm", body: "Half a boring hour a week" },
-  { name: "Season 2", body: "Levels 3 and 4: the upper rungs" },
-  { name: "Reselling", body: "Optional: your own agency or software" },
+  { name: "Scale the Winner", body: "Grow past $15 a day, one step at a time" },
+  { name: "Your Own Domain and Email", body: "Your own name on your website and email" },
+  { name: "Instagram Growth, the Non-Pete Way", body: "Posting that backs up your ads" },
+  { name: "Instagram Funnels", body: "From your bio to your About page" },
+  { name: "Follower Ads", body: "Build an audience with paid ads" },
+  { name: "DM Ads", body: "Ads that get people to message you first" },
+  { name: "AI Content Studio", body: "Outlines and video scripts from Reels that work" },
 ];
 const APP_POINTS = ["Penny, your guide, shows the one next step", "AI writes your page, free guide, emails and ads", "Every lead in one list, sorted hot, warm and cold", "Tracks your Skool Growth level, week by week"];
 
@@ -733,7 +737,7 @@ function Program() {
               A course that shows you. <em className="italic text-primary dark:text-violet-300">An app that does it.</em>
             </>
           }
-          sub="Open the shop, put five ads live, then give people a reason to stay and talk. Every lesson ends with one thing to do, and the app has the button for it."
+          sub="Your website and first ads on Day 1, then one small job a day until you know your real numbers. Every lesson ends with one thing to do, and the app has the button for it."
         />
 
         <div className="mt-16 grid gap-4 lg:grid-cols-[1.25fr_1fr] lg:gap-5">
@@ -745,14 +749,14 @@ function Program() {
               </span>
               <div className="grid leading-tight">
                 <span className="text-[12px] font-semibold tracking-[0.12em] text-subtle-foreground uppercase">The course</span>
-                <h3 className="text-[19px] font-semibold tracking-[-0.015em]">The Skool Growth Ladder</h3>
+                <h3 className="text-[19px] font-semibold tracking-[-0.015em]">The Anti-Pete Week</h3>
               </div>
             </div>
-            <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">In the Skool classroom. It starts with Launch Week, seven days that fit your free trial, and the rest unlocks one module at a time.</p>
+            <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">In the Skool classroom. Seven days that fit your free trial, one lesson a day. Season 2 opens for paying members after that.</p>
 
             <div className="mt-7 rounded-2xl bg-[radial-gradient(120%_100%_at_50%_0%,var(--accent),var(--background))] p-5 ring-1 ring-ink/[0.04] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgb(118_85_245/0.14),transparent)] dark:ring-white/[0.05]">
               <div className="flex items-center justify-between gap-3">
-                <span className="eyebrow">Launch Week</span>
+                <span className="eyebrow">Your free week</span>
                 <span className="text-[12px] font-medium text-muted-foreground">Days 1–7 · your free trial</span>
               </div>
               <ol className="mt-4 flex flex-col gap-2">
@@ -763,12 +767,12 @@ function Program() {
                   </li>
                 ))}
               </ol>
-              <p className="mt-3.5 text-[13.5px] leading-snug text-muted-foreground">A Crew that starts the same week, a buddy, and an owner who answers every intro and every Stuck.</p>
+              <p className="mt-3.5 text-[13.5px] leading-snug text-muted-foreground">One pinned thread a day: post your work, review the person above you, and the owner reads along.</p>
             </div>
 
             <div className="mt-5">
               <div className="flex items-center justify-between gap-3">
-                <span className="eyebrow">Unlocks from day 8</span>
+                <span className="eyebrow">Season 2 · opens after the free week</span>
                 <LockIcon className="size-3.5 text-subtle-foreground" aria-hidden />
               </div>
               <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -805,7 +809,7 @@ function Program() {
             {/* What the app shows you: the next step, with the lesson it belongs to. */}
             <div aria-hidden className="mt-8 rounded-2xl bg-[radial-gradient(120%_100%_at_50%_0%,var(--accent),var(--background))] p-5 ring-1 ring-ink/[0.04] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgb(118_85_245/0.14),transparent)] dark:ring-white/[0.05]">
               <div className="rounded-xl bg-card p-4 shadow-card ring-1 ring-ink/[0.05] dark:ring-white/[0.07]">
-                <div className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Day 1 · Lesson 1.4</div>
+                <div className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Day 1</div>
                 <div className="mt-1.5 font-display text-[24px] leading-[1.05]">Publish your funnel</div>
                 <div className="mt-1 text-[13px] text-muted-foreground">Edit three lines, then press the scary button.</div>
                 <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -847,7 +851,7 @@ function Program() {
    --------------------------------------------------------------------------------------------- */
 
 const WHO: { icon: LucideIcon; title: string; body: string }[] = [
-  { icon: SproutIcon, title: "You're starting out", body: "You have a Skool group, or you're about to, and you need your first paying members. Launch Week is built for exactly that." },
+  { icon: SproutIcon, title: "You're starting out", body: "You have a Skool group, or you're about to, and you need your first paying members. The free week is built for exactly that." },
   { icon: RocketIcon, title: "You're growing", body: "Members trickle in from posting. You want a steady flow from ads, and Skool's own Growth levels working for you too." },
   { icon: Building2Icon, title: "You run ads for others", body: "You look after Skool communities for clients. The Agency plan lets you resell the app under your own brand." },
 ];
@@ -1257,7 +1261,7 @@ function Footer({ name }: { name: string }) {
             <Wordmark name={name} />
             <span className="text-[12.5px] font-medium text-muted-foreground">by ScaleitAds</span>
           </span>
-          <p className="text-[14px] leading-relaxed text-muted-foreground">The Skool Growth Program: The Skool Growth Ladder course and the {name} app, by ScaleitAds.</p>
+          <p className="text-[14px] leading-relaxed text-muted-foreground">The Skool Growth Program: The Anti-Pete Week course and the {name} app, by ScaleitAds.</p>
         </div>
         <div className="flex flex-wrap gap-x-14 gap-y-6 text-[14px]">
           <div className="flex flex-col gap-2.5">

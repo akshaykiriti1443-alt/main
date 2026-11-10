@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FlashToast } from "./client";
 
-/** "Lesson 1.2 · Stage 1": ties a page to the classroom, so the course and the app line up. */
+/** "Day 1": ties a page to the classroom, so the course and the app line up. */
 export function LessonTag({ lesson, stage, className }: { lesson: string; stage?: string; className?: string }) {
   return (
     <span
@@ -33,8 +33,8 @@ export function LessonTag({ lesson, stage, className }: { lesson: string; stage?
       )}
     >
       <GraduationCapIcon className="size-3.5" aria-hidden />
-      Lesson {lesson}
-      {stage ? <span className="font-medium opacity-70">· {stage}</span> : null}
+      {lesson}
+      {stage && stage !== lesson ? <span className="font-medium opacity-70">· {stage}</span> : null}
     </span>
   );
 }

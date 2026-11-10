@@ -86,8 +86,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
         All funnels
       </Link>
       <PageHead
-        lesson="1.4"
-        stage="Day 1"
+        lesson="Day 1"
         title={site.name}
         sub={site.published ? "Live and taking sign-ups. Edit any page, then publish the changes." : "A draft, so nobody can see it yet. Check your pages, then publish."}
         first={site.published ? undefined : "Open the opt-in page, make the headline sound like you, then press Publish."}
@@ -137,7 +136,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
         </Card>
       ) : (
         <NextStep
-          eyebrow="Lesson 1.4 · The scary button"
+          eyebrow="Day 1 · The scary button"
           title="Publish your funnel"
           body="It goes online the moment you press it. Nothing is permanent: change anything later and publish again."
           icon={RocketIcon}

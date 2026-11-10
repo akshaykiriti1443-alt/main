@@ -58,7 +58,7 @@ export default async function AutomationsPage({ params, searchParams }: { params
   if (!hasFeature(workspace.plan, "automations")) {
     return (
       <>
-        <PageHead lesson="6.1" stage="Rhythm" eyebrow="Keep members" title="Automations" sub="When something happens, do something. Tag, email, DM, score and alert on autopilot." />
+        <PageHead lesson="Season 2" eyebrow="Keep members" title="Automations" sub="When something happens, do something. Tag, email, DM, score and alert on autopilot." />
         <Locked feature="Automations" wid={wid} />
       </>
     );
@@ -70,8 +70,7 @@ export default async function AutomationsPage({ params, searchParams }: { params
   return (
     <>
       <PageHead
-        lesson="6.1"
-        stage="Rhythm"
+        lesson="Season 2"
         eyebrow="Keep members"
         title="Automations"
         sub="Little helpers that work 24/7: when something happens, they do something. Follow up new leads and flag hot ones while you sleep."

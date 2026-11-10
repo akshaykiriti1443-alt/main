@@ -92,7 +92,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
           step={1}
           title="Business details"
           sub="Every Join button on your pages points at your Skool group link."
-          action={<LessonTag lesson="1.3" stage="Day 1" />}
+          action={<LessonTag lesson="Day 1" />}
         >
           <div className="grid gap-5 @2xl/main:grid-cols-2">
             <Field data-guide="skool-link" className="@2xl/main:col-span-2">
@@ -144,8 +144,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         <Panel
           step={2}
           title="Meta Pixel & Conversions API"
-          sub="Optional: your Day 1 ads don't need it. Add it later so your ads learn who actually lands on your pages. Works on Skool's $9 plan too."
-          action={<LessonTag lesson="1.7" stage="Optional" />}
+          sub="A Day 1 step, right after you publish. Your website ads need it, so Meta can see who gave you their email and find more people like them. Works on Skool's $9 plan too."
+          action={<LessonTag lesson="Day 1" />}
         >
           <div className="flex flex-col gap-5">
             <FieldStep n={1}>

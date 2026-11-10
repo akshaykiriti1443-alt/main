@@ -6,15 +6,16 @@ import { env } from "@/lib/env";
 import { latestCheckins, skoolAdVisits, skoolTargetFor } from "../growth";
 import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 
-// Ad review (lesson 2.6, then every Monday): one ad's numbers in, a verdict out.
+// Ad review (Day 6, then every Monday): one ad's numbers in, a verdict out. Ads marked Kill go off
+// on Day 6, and nothing else changes that day.
 //
-// Two modes:
-//   "skool"   The course's way. The ad's Website URL is the Skool link (/go/<slug>), so every
-//             click opens the Skool About page and there are no leads to count ("Leads: 0 is fine").
-//             Judged on link CTR, cost per click (= cost per About-page visit), how much Meta spent,
-//             the days running (the 72-hour rule) and the ad visits the Skool link counted.
-//             On when leads are 0 or blank, or when the member says the ad points at their Skool link.
-//   "funnel"  An ad that points at an opt-in page and has leads: opt-in rate and cost per lead.
+// Two modes, both normal:
+//   "skool"   The ad's Website URL is the Skool link (/go/<slug>), so every click opens the Skool
+//             About page and there are no leads to count ("Leads: 0 is fine"). Judged on link CTR,
+//             cost per click (= cost per About-page visit), how much Meta spent, the days running
+//             (the 72-hour rule) and the ad visits the Skool link counted.
+//   "funnel"  The ad points at an opt-in page (the member's website). Judged on the same clicks,
+//             plus opt-in rate and cost per lead.
 //
 // Every number here is a rule of thumb, never a promise. Don't add benchmarks that aren't below.
 
@@ -28,7 +29,7 @@ export const adReviewInputSchema = z.object({
     .string()
     .default("")
     .transform((s) => s.trim().slice(0, 80)),
-  /** Where the ad sends people. The course points every ad at the Skool link. */
+  /** Where the ad sends people: their Skool link, or an opt-in page (their website). */
   destination: z.enum(AD_DESTINATIONS).catch("skool"),
   spend: z.coerce.number().min(0),
   impressions: z.coerce.number().int().min(0),
@@ -96,7 +97,7 @@ const funnelSchema = z.object({
 const skoolAiSchema = z.object({ why: z.string(), actions: z.array(z.object({ title: z.string(), detail: z.string() })) });
 
 /**
- * Rules of thumb, in the course's order. Sources: the 72-hour rule; "$5 to $10 a day to start";
+ * Rules of thumb, in the course's order. Sources: the 72-hour rule; "$5 to $10 a day a campaign to start";
  * link CTR 1%+ good and under 0.8% means a new hook; cost per click $1 good, $2 OK; "clicks are
  * coming in" past 20; 10 clicks is the least that says anything (so 1,000 impressions, at 1%);
  * 100 visits is the least that can judge an About page (the same 100 Growth Level 2 asks for);
@@ -132,8 +133,8 @@ export type SkoolLinkCounts = {
 };
 export type AdReviewContext = { link?: SkoolLinkCounts | null; budgetPerDay?: number | null };
 
-export function reviewMode(i: Pick<AdReviewInput, "destination" | "leads">): AdReviewMode {
-  return i.destination === "optin" && i.leads > 0 ? "funnel" : "skool";
+export function reviewMode(i: Pick<AdReviewInput, "destination">): AdReviewMode {
+  return i.destination === "optin" ? "funnel" : "skool";
 }
 
 export function computeMetrics(i: Pick<AdReviewInput, "spend" | "impressions" | "linkClicks" | "leads" | "followers">) {
@@ -151,11 +152,17 @@ const pct = (n: number) => `${n.toFixed(2)}%`;
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Under 72 hours, or Meta has barely spent on it: true for any ad, wherever it points. */
+function earlyCheck(i: AdReviewInput) {
+  const learning = i.days < RULES.learnDays;
+  const barely = i.impressions < RULES.minImpressions || (i.spend < RULES.minSpend && i.linkClicks < RULES.noiseClicks);
+  return { learning, barely };
+}
+
 /** The keep-fix-kill call for an ad pointed at the Skool link. "The first no picks the room." */
 export function skoolLinkCall(i: AdReviewInput, link?: SkoolLinkCounts | null): { call: AdCall; learning: boolean; barely: boolean } {
   const m = computeMetrics(i);
-  const learning = i.days < RULES.learnDays;
-  const barely = i.impressions < RULES.minImpressions || (i.spend < RULES.minSpend && i.linkClicks < RULES.noiseClicks);
+  const { learning, barely } = earlyCheck(i);
   if (learning || barely) return { call: "too_early", learning, barely };
   // 1. Getting clicks? Few (low CTR) or dear ones: the Hook. Fixed twice and still failing: kill.
   if (m.ctr < RULES.hookCtr || m.cpc > RULES.okCpc) return { call: i.fixes >= RULES.killAfterFixes ? "kill" : "fix_hook", learning, barely };
@@ -167,7 +174,7 @@ export function skoolLinkCall(i: AdReviewInput, link?: SkoolLinkCounts | null): 
   return { call: "keep", learning, barely };
 }
 
-/** Ad review for an ad that points at the Skool link (the course's way). */
+/** Ad review for an ad that points at the Skool link. */
 export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): AdReview {
   const m = computeMetrics(i);
   const link = ctx.link ?? null;
@@ -205,7 +212,7 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
       name: "Days running",
       value: plural(i.days, "day"),
       status: learning ? "wait" : "good",
-      note: "The 72-hour rule: no edits till your alarm rings.",
+      note: "The 72-hour rule: no edits before then.",
     },
   ];
   if (link) {
@@ -243,7 +250,7 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
   const hookWhy = m.ctr < RULES.hookCtr ? ctrWords : `each click costs ${usd(m.cpc)}`;
   const why: Record<AdCall, string> = {
     too_early: learning
-      ? "It's been under 72 hours and new ads are toddlers learning to walk, so hands off till your alarm rings."
+      ? "It's been under 72 hours and new ads are toddlers learning to walk, so hands off for now."
       : `Meta barely spent on it (${usd(i.spend)}, ${plural(i.impressions, "impression")}), so it hasn't lost yet: leave it on.`,
     fix_hook: `${hookWhy[0].toUpperCase()}${hookWhy.slice(1)}, so give it new on-image text and a new first line, same picture.`,
     kill: `You've fixed it twice and ${hookWhy}, so switch it off and give its slot to a fresh static.`,
@@ -255,7 +262,7 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
     keep: `${pct(m.ctr)} of people clicked and each visit costs ${usd(m.cpc)}, so keep it and feed it slowly.`,
   };
 
-  const handsOff = { title: "Hands off for 72 hours", detail: "A change restarts Meta's learning. Judge it again when the alarm rings." };
+  const handsOff = { title: "Hands off for 72 hours", detail: "A change restarts Meta's learning. Judge it again after that." };
   const actions: Record<AdCall, AdReview["actions"]> = {
     too_early: learning
       ? [
@@ -318,35 +325,82 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
   };
 }
 
-/** Ad review for an ad that points at an opt-in page and has leads. */
+/** The verdict for an ad that points at an opt-in page. Same rooms, and the Door is the page. */
+function optinCall(i: AdReviewInput): { call: AdCall; learning: boolean; barely: boolean } {
+  const m = computeMetrics(i);
+  const { learning, barely } = earlyCheck(i);
+  if (learning || barely) return { call: "too_early", learning, barely };
+  if (m.ctr < RULES.hookCtr || m.cpc > RULES.okCpc) return { call: i.fixes >= RULES.killAfterFixes ? "kill" : "fix_hook", learning, barely };
+  if (i.linkClicks > RULES.visitsComing && m.optIn < 15) return { call: "fix_door", learning, barely };
+  return { call: "keep", learning, barely };
+}
+
+/** Ad review for an ad that points at an opt-in page (0 leads is an answer too). */
 export function funnelReview(i: AdReviewInput): AdReview {
   const m = computeMetrics(i);
+  const { call, learning } = optinCall(i);
+  const early = call === "too_early";
+  const judged = (s: MetricStatus): MetricStatus => (early ? "wait" : s);
   const metrics: AdMetric[] = [
-    { name: "Link click-through", value: pct(m.ctr), status: m.ctr >= 1 ? "good" : m.ctr >= 0.8 ? "ok" : "fix", note: "Rule of thumb: 1% or more. Under 0.8% means a new hook." },
-    { name: "Cost per click", value: usd(m.cpc), status: m.cpc && m.cpc <= 1 ? "good" : m.cpc <= 2 ? "ok" : "fix", note: "Lower is better. New creatives bring it down." },
-    { name: "Page opt-in rate", value: `${m.optIn.toFixed(1)}%`, status: m.optIn >= 25 ? "good" : m.optIn >= 15 ? "ok" : "fix", note: "Rule of thumb: 25%+. Under 15% means a new headline." },
-    { name: "Cost per lead", value: i.leads ? usd(m.cpl) : "no leads yet", status: i.leads && m.cpl <= 5 ? "good" : i.leads && m.cpl <= 10 ? "ok" : "fix", note: "Rule of thumb: under $5 to start." },
+    { name: "Link click-through", value: pct(m.ctr), status: judged(m.ctr >= 1 ? "good" : m.ctr >= 0.8 ? "ok" : "fix"), note: "Rule of thumb: 1% or more. Under 0.8% means a new hook." },
+    { name: "Cost per click", value: i.linkClicks ? usd(m.cpc) : "no clicks yet", status: judged(i.linkClicks && m.cpc <= 1 ? "good" : i.linkClicks && m.cpc <= 2 ? "ok" : "fix"), note: "Lower is better. New creatives bring it down." },
+    { name: "Page opt-in rate", value: `${m.optIn.toFixed(1)}%`, status: judged(m.optIn >= 25 ? "good" : m.optIn >= 15 ? "ok" : "fix"), note: "Rule of thumb: 25%+. Under 15% means a new headline." },
+    { name: "Cost per lead", value: i.leads ? usd(m.cpl) : "no leads yet", status: judged(i.leads && m.cpl <= 5 ? "good" : i.leads && m.cpl <= 10 ? "ok" : "fix"), note: "Rule of thumb: under $5 to start." },
   ];
   if (i.followers) {
-    metrics.push({ name: "Cost per follower", value: usd(m.cpf), status: m.cpf <= 0.5 ? "good" : m.cpf <= 1 ? "ok" : "fix", note: "Rule of thumb: under $0.50." });
+    metrics.push({ name: "Cost per follower", value: usd(m.cpf), status: judged(m.cpf <= 0.5 ? "good" : m.cpf <= 1 ? "ok" : "fix"), note: "Rule of thumb: under $0.50." });
   }
-  const actions: AdReview["actions"] = [];
-  if (m.ctr < 0.8) actions.push({ title: "Fix the Hook", detail: "Few people stop to click. Keep the Turn and the Door. Test 3 new first lines (or first 2 seconds of video)." });
-  if (m.optIn < 15 && i.linkClicks > 20) actions.push({ title: "Fix the page's headline", detail: "Clicks come in but few people sign up. Make the headline the result, in your reader's words." });
-  if (i.leads && m.cpl <= 5) actions.push({ title: "Keep it and scale", detail: "This one works. Raise its budget by about 20% every 2-3 days. Don't touch the ad itself." });
-  if (!actions.length) actions.push({ title: "Hands off for 3 more days", detail: "The 72-hour rule: let it learn before you change anything. Then fix one thing only." });
+  const ctrWords = i.linkClicks ? `only ${pct(m.ctr)} of people who saw it clicked` : `nobody clicked in ${plural(i.impressions, "impression")}`;
+  const hookWhy = m.ctr < RULES.hookCtr ? ctrWords : `each click costs ${usd(m.cpc)}`;
+  const why: Record<AdCall, string> = {
+    too_early: learning
+      ? "It's been under 72 hours and new ads are toddlers learning to walk, so hands off for now."
+      : `Meta barely spent on it (${usd(i.spend)}, ${plural(i.impressions, "impression")}), so it hasn't lost yet: leave it on.`,
+    fix_hook: `${hookWhy[0].toUpperCase()}${hookWhy.slice(1)}, so give it new on-image text and a new first line, same picture.`,
+    kill: `You've fixed it twice and ${hookWhy}, so switch it off and give its slot to a fresh static.`,
+    fix_door: `${plural(i.linkClicks, "person", "people")} clicked and only ${m.optIn.toFixed(1)}% signed up, so the page's headline is the part to fix, not the ad.`,
+    // Not used for opt-in ads: the About page is judged on Skool-link ads only.
+    fix_about: "",
+    keep: i.leads ? `${pct(m.ctr)} of people clicked and each lead costs ${usd(m.cpl)}, so keep it.` : `${pct(m.ctr)} of people clicked, so keep it and let the sign-ups come.`,
+  };
+  const scale = i.leads > 0 && m.cpl <= 5;
+  const actions: Record<AdCall, AdReview["actions"]> = {
+    too_early: learning
+      ? [
+          { title: "Hands off till 72 hours", detail: "No edits, no pausing, no new ads. Every change restarts Meta's learning." },
+          { title: "Then come back", detail: "Paste this ad's numbers again after 72 hours (Ads Manager, date range Maximum)." },
+        ]
+      : [
+          { title: "Leave it on", detail: "Meta leans towards one ad first. This one hasn't had its turn yet, so it hasn't lost." },
+          { title: "Look again next Monday", detail: "Review it at your next check-in. Judge the ads Meta did spend on first." },
+        ],
+    fix_hook: [{ title: "Fix the Hook", detail: "Few people stop to click. Keep the picture, the Turn and the Door. Give it new on-image text and a new first line." }],
+    kill: [
+      { title: "Switch it off", detail: "In Ads Manager, turn this ad off. Leave the others alone." },
+      { title: "A fresh face in its slot", detail: "Ad studio › Make my 5 statics. Add the one that looks least like what's running to the same ad set." },
+    ],
+    fix_door: [{ title: "Fix the page's headline", detail: "Clicks come in but few people sign up. Make the headline the result, in your reader's words, then publish again." }],
+    fix_about: [],
+    keep: [
+      scale
+        ? { title: "Keep it and scale", detail: "This one works. Raise its budget by about 20% every 2-3 days. Don't touch the ad itself." }
+        : { title: "Keep it", detail: "Don't touch the ad itself. Look at your cost per lead again at your next check-in." },
+    ],
+  };
   const perDay = i.spend / i.days;
   return {
     mode: "funnel",
+    call,
+    verdict: CALL_WORD[call],
+    why: why[call],
     adName: i.adName || undefined,
-    verdict: i.leads && m.cpl <= 5 ? "Your funnel works. Scale it slowly." : "Fix the weakest number first, then scale.",
     metrics,
-    actions,
-    nextBudgetUsdPerDay: round2(i.leads && m.cpl <= 5 ? perDay * 1.2 : perDay),
+    actions: actions[call],
+    nextBudgetUsdPerDay: round2(call === "keep" && scale ? perDay * 1.2 : perDay),
   };
 }
 
-/** The rule-based review: Skool-link mode unless the ad points at an opt-in page and has leads. */
+/** The rule-based review: Skool-link mode unless the ad points at an opt-in page. */
 export function ruleReview(i: AdReviewInput, ctx: AdReviewContext = {}): AdReview {
   return reviewMode(i) === "skool" ? skoolLinkReview(i, ctx) : funnelReview(i);
 }
@@ -366,7 +420,7 @@ async function skoolLinkContext(workspaceId: string, input: AdReviewInput, skool
       .orderBy(desc(aiGenerations.createdAt))
       .limit(50),
   ]);
-  // Cost per visit = total spend ÷ the ad visits counted (lesson 2.6). Total spend: Ads Manager's
+  // Cost per visit = total spend ÷ the ad visits counted. Total spend: Ads Manager's
   // total if the member typed it, else this ad plus the latest review of every other ad reviewed
   // by name this week (which reads low when only some ads were reviewed).
   const key = (s: unknown) => String(s ?? "").trim().toLowerCase();
@@ -390,21 +444,23 @@ const SKOOL_SYSTEM = `You are a Meta ads coach for Skool community owners who gr
 This ad points at the owner's Skool link: every click opens their Skool About page. There is no opt-in page, so leads don't matter here. Never judge it on opt-in rate or cost per lead.
 Every ad has a Hook (on-image text and first line), a Turn (the "wait, what?" line) and a Door (one way in: the Skool link).
 The verdict comes from these rules, in this order. The first "no" picks the room:
-1. Under 72 hours running: Too early. Hands off till the alarm rings.
+1. Under 72 hours running: Too early. Hands off for now.
 2. Meta barely spent on it (under 1,000 impressions, or under $5 spent with under 10 link clicks): Too early. Leave it on. It hasn't lost.
 3. Getting clicks? Link CTR under 0.8%, or clicks dearer than $2: Fix: Hook. New on-image text and first line, same picture. Fixed twice already and still failing: Kill. Switch it off and put a fresh static in its slot.
 4. About-page visits? Over 20 link clicks but the Skool link counted no ad visits, or the Skool link has no group link yet: Fix: Door. The Website URL must be the Skool link.
 5. People joining? 100 or more visits and no new members: Fix: About page. Fix the shopfront, not the ad.
 6. Otherwise: Keep. Feed it slowly: about 20% more budget every 2 to 3 days.
 Rules of thumb, never promises: link CTR 1% or more is good. Cost per click is the cost per About-page visit: $1 or less is good, up to $2 is OK. Use no other benchmarks.
+On the first review, Day 6, an ad marked Kill goes off and nothing else changes that day.
 You are given the verdict. Don't change it. Write:
 - why: one plain sentence that explains the verdict with their own numbers.
 - actions: 2 to 4 short steps for that one room only (or for hands off, or for feeding the winner).
 ${VOICE_RULES}`;
 
 const FUNNEL_SYSTEM = `You are a Meta ads coach for Skool community owners who grow with small paid ads, not social media. This ad points at an opt-in page. Review a beginner's numbers and give a short, specific plan.
-Use the course's words: every ad has a Hook (first line or first 2 seconds), a Turn (the "wait, what?" line) and a Door (one way in). Say which ONE thing to fix: no clicks (low CTR) means the Hook; clicks but few sign-ups means the page's headline. Mention the 72-hour rule if the ad is under 3 days old. Budget tiers: $5-$10 a day to start, $30-$50 is the sweet spot.
+Use the course's words: every ad has a Hook (first line or first 2 seconds), a Turn (the "wait, what?" line) and a Door (one way in). Say which ONE thing to fix: no clicks (low CTR) means the Hook; clicks but few sign-ups means the page's headline. Mention the 72-hour rule if the ad is under 3 days old. Leads are the point of this ad, and 0 leads is an answer: never tell them to point it at their Skool link. On the first review, Day 6, an ad marked Kill goes off and nothing else changes that day. Budget tiers: $5 to $10 a day a campaign to start, up to $15 a day across two campaigns; $30-$50 is the sweet spot once members pay for it.
 Rules of thumb to judge against (never promises): link CTR 1%+ is good (under 0.8% needs a new hook); landing page opt-in 25%+ is good (under 15% needs a new headline); cost per lead under $5 is a good start; cost per follower under $0.50 is good. Scale winners by 20% every 2-3 days. Use no other benchmarks.
+You are given the verdict. Don't change it.
 ${VOICE_RULES}
 Give 3 to 5 actions.`;
 
@@ -457,9 +513,11 @@ ${owner}`,
           system: FUNNEL_SYSTEM,
           prompt: `${business}
 ${numbers} Opt-in ${m.optIn.toFixed(1)}%, cost per lead ${input.leads ? `$${m.cpl.toFixed(2)}` : "n/a"}, new followers ${input.followers}.
+Verdict (from the rules): ${review.verdict}. ${review.why}
 ${owner}`,
         });
-        review = { ...res.data, mode: "funnel", adName: input.adName || undefined };
+        // The rules pick the verdict here too, so a Kill on Day 6 can't be talked out of by the AI.
+        review = { ...res.data, mode: "funnel", adName: input.adName || undefined, call: review.call, verdict: review.verdict, why: review.why };
         model = res.usage.model;
       }
     } catch (err) {

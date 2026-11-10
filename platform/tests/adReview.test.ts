@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { activities, workspaces } from "@/lib/db/schema";
@@ -6,7 +8,7 @@ import { adReviewInputSchema, reviewMode, ruleReview, runAdReview, type AdReview
 import { isAdSource, saveCheckin } from "@/server/growth";
 import { makeWorkspace } from "./helpers";
 
-// Day 7 (lesson 2.6): ads point straight at the Skool link, so "Leads: 0 is fine". Each ad gets
+// Day 6. A Skool-link ad has no leads to count, so "Leads: 0 is fine" there. Each ad gets
 // Keep / Fix: Hook / Fix: Door / Fix: About page / Kill / Too early, in the course's order.
 const ad = (raw: Record<string, unknown>) => adReviewInputSchema.parse({ adName: "S1 Notes app", leads: "", ...raw });
 // A healthy ad: 6 days, $12, 2,400 impressions, 36 clicks (1.5% CTR, $0.33 a click).
@@ -14,14 +16,14 @@ const healthy = { spend: 12, impressions: 2400, linkClicks: 36, days: 6 };
 const counted = (c: Partial<SkoolLinkCounts> = {}): AdReviewContext => ({ link: { ready: true, adVisits: 30, days: 7, totalSpend: 12, ads: 1, ...c } });
 
 describe("Ad review: Skool-link mode", () => {
-  it("turns on when leads are 0 or blank, or when the ad points at the Skool link", () => {
+  it("turns on for an ad pointed at the Skool link, whatever the leads say", () => {
     expect(reviewMode(ad({ ...healthy }))).toBe("skool");
-    expect(reviewMode(ad({ ...healthy, destination: "optin", leads: "0" }))).toBe("skool");
+    expect(reviewMode(ad({ ...healthy, destination: "optin", leads: "0" }))).toBe("funnel");
     expect(reviewMode(ad({ ...healthy, destination: "skool", leads: "4" }))).toBe("skool");
     expect(reviewMode(ad({ ...healthy, destination: "optin", leads: "4" }))).toBe("funnel");
     // The choice defaults to the Skool link.
     expect(ad({ ...healthy }).destination).toBe("skool");
-    // Leads 0 never gives the funnel's opt-in or cost-per-lead "fix".
+    // A Skool-link ad never gets the funnel's opt-in or cost-per-lead "fix".
     const r = ruleReview(ad({ ...healthy, members: "2" }), counted());
     expect(r.metrics.map((m) => m.name).join(" ")).not.toMatch(/opt-in|per lead/i);
     expect(r.call).toBe("keep");
@@ -90,7 +92,7 @@ describe("Ad review: Skool-link mode", () => {
     expect(blank.actions.at(-1)?.title).toBe("Add your joins next time");
   });
 
-  it("doesn't judge an About page on a Day 7's handful of visits", () => {
+  it("doesn't judge an About page on a first week's handful of visits", () => {
     const r = ruleReview(ad({ ...healthy, members: "0" }), counted({ adVisits: 34 }));
     expect(r.call).toBe("keep");
     expect(r.metrics.find((m) => m.name === "New members")?.status).not.toBe("fix");
@@ -120,6 +122,28 @@ describe("Ad review: Skool-link mode", () => {
     expect(r.mode).toBe("funnel");
     expect(r.metrics.map((m) => m.name)).toContain("Page opt-in rate");
     expect(r.metrics[0].status).toBe("fix"); // 0.6% CTR
+  });
+
+  it("gives opt-in ads the same Day 6 verdicts, and never tells them to use the Skool link", () => {
+    const optin = (raw: Record<string, unknown>) => ruleReview(ad({ destination: "optin", days: 5, ...raw }));
+    expect(optin({ spend: 3, impressions: 600, linkClicks: 4 })).toMatchObject({ mode: "funnel", call: "too_early", verdict: "Too early" });
+    expect(optin({ spend: 12, impressions: 2400, linkClicks: 36, leads: "6" })).toMatchObject({ call: "keep", verdict: "Keep" });
+    expect(optin({ spend: 15, impressions: 5000, linkClicks: 20 })).toMatchObject({ call: "fix_hook" });
+    expect(optin({ spend: 15, impressions: 5000, linkClicks: 20, fixes: "2" })).toMatchObject({ call: "kill", verdict: "Kill" });
+    // Clicks and no sign-ups: the page, and 0 leads doesn't turn it into a Skool-link review.
+    const page = optin({ spend: 12, impressions: 2400, linkClicks: 36, leads: "0" });
+    expect(page).toMatchObject({ mode: "funnel", call: "fix_door" });
+    expect(page.why).toMatch(/headline/);
+    expect(JSON.stringify(page)).not.toMatch(/Skool link/);
+  });
+
+  it("says verdicts on Day 6 and Kill ads go off then, with no Day 7 or Day 9 edits", () => {
+    const page = readFileSync(path.join(process.cwd(), "src/app/app/w/[wid]/ads/page.tsx"), "utf8");
+    expect(page).toContain('lesson="Day 6"');
+    expect(page).toMatch(/First round\? Day 6 is verdict day\. Switch off any ad marked Kill/);
+    for (const text of [page, readFileSync(path.join(process.cwd(), "src/server/ai/adReview.ts"), "utf8")]) {
+      expect(text).not.toMatch(/Day 7|Day 9|your alarm|alarm rings|lesson \d\.\d/);
+    }
   });
 
   it("counts ad visits from ad sources only", () => {

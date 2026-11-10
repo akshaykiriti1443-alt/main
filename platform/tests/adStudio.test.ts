@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
-import { aiGenerations } from "@/lib/db/schema";
+import { aiGenerations, sites } from "@/lib/db/schema";
 import { pageGuideFor, STEP_HOWTO } from "@/lib/guides";
 import {
   adStudioDefaults,
@@ -17,6 +17,7 @@ import {
   numbersLines,
   packProblems,
   policyCheck,
+  publishedFunnelUrl,
   realCostPerVisit,
   studioNumbers,
   videoFromConcept,
@@ -69,6 +70,20 @@ describe("Ad studio: your numbers", () => {
     expect(images).not.toContain("before/after");
   });
 
+  it("labels a cost per visit as a guess until the member has their own, and allows $15 across two campaigns", () => {
+    const guess = numbersLines(studioNumbers(10), { destination: "website" });
+    expect(guess[0].text).toMatch(/Our guess is \$0\.50–\$1\.50 per website visit.*planning guess, not a promise.*Day 6/);
+    const real = numbersLines(studioNumbers(10, { cpv: 0.8, source: "ad_review", at: new Date().toISOString() }), { destination: "skool" });
+    expect(real[0].text).toMatch(/Your real cost per visit/);
+    expect(real[0].text).not.toMatch(/guess/i);
+    expect(guess.find((l) => l.key === "statics")?.text).toContain("up to $15 a day across your two");
+    expect(JSON.stringify(numbersLines(studioNumbers(5)))).not.toMatch(/\$5–\$10/);
+    // Skool counts About-page visitors, so a website pack makes no days-to-100 claim.
+    const level2 = guess.find((l) => l.key === "level2")?.text ?? "";
+    expect(level2).toMatch(/counts About-page visitors, not emails/);
+    expect(level2).not.toMatch(/takes \d/);
+  });
+
   it("uses the member's real cost per visit from Ad review, else the Monday check-in", async () => {
     const { ws } = await makeWorkspace();
     expect(await realCostPerVisit(ws.id)).toBeNull();
@@ -77,6 +92,11 @@ describe("Ad studio: your numbers", () => {
     const db = await getDb();
     await db.insert(aiGenerations).values({ workspaceId: ws.id, kind: "ad_review", input: { spend: 30, linkClicks: 40, impressions: 4000, leads: 2 }, output: {}, model: "rules" });
     expect(await realCostPerVisit(ws.id)).toMatchObject({ source: "ad_review", cpv: 0.75 });
+    // A website pack only uses a review of an opt-in ad, and a check-in says nothing about it.
+    expect(await realCostPerVisit(ws.id, "website")).toBeNull();
+    await db.insert(aiGenerations).values({ workspaceId: ws.id, kind: "ad_review", input: { spend: 20, linkClicks: 20, destination: "optin" }, output: {}, model: "rules" });
+    expect(await realCostPerVisit(ws.id, "website")).toMatchObject({ source: "ad_review", cpv: 1 });
+    expect(await realCostPerVisit(ws.id)).toMatchObject({ cpv: 0.75 });
   });
 });
 
@@ -182,9 +202,37 @@ describe("Ad studio: launch plan and video", () => {
     const all = JSON.stringify(plan);
     expect(all).toContain("Pixel");
     expect(plan.steps.length).toBeGreaterThanOrEqual(8);
-    expect(plan.after.map((s) => s.title)).toEqual(["Hands off till Day 9", "Check in Ad review on Day 7", "Refresh every 1–3 weeks", "Add the video on Day 9"]);
-    // The course records the video on Day 8 and puts it live on Day 9 with fresh statics.
-    expect(plan.after[3].detail).toMatch(/Day 8.*Day 9/);
+    expect(plan.destination).toBe("skool");
+    expect(plan.after.map((s) => s.title)).toEqual(["Hands off till Day 6", "Get your verdicts on Day 6", "Kill ads go off on Day 6", "Refresh every 1–3 weeks"]);
+    expect(all).not.toMatch(/Day 7|Day 8|Day 9/);
+  });
+
+  it("the website plan is Leads to the published funnel, with the Pixel and the Lead event", () => {
+    const statics = fallbackStatics(input({ destination: "website" }));
+    const plan = launchPlan({ budget: 10, country: "Canada", link: "https://app.example.com/go/fit-dads", pixel: true, statics, destination: "website", websiteUrl: "https://fit-dads.example.com" });
+    const settings = Object.fromEntries(plan.settings.map((s) => [s.label, s.value]));
+    expect(plan.destination).toBe("website");
+    expect(settings).toMatchObject({ "Campaign objective": "Leads", "Campaign name": "Website · Leads", "Conversion location": "Website", Dataset: "Your Meta Pixel", "Conversion event": "Lead", "Website URL": "https://fit-dads.example.com", "Daily budget": "$10" });
+    const steps = plan.steps.map((s) => `${s.title} ${s.detail}`).join(" ");
+    expect(steps).toContain("Choose Leads");
+    expect(steps).toContain("Website · Leads");
+    expect(steps).toContain("Under Dataset, pick your Pixel, then set Conversion event to Lead");
+    expect(steps).toContain("https://fit-dads.example.com");
+    expect(steps).not.toContain("https://app.example.com/go/fit-dads");
+    expect(steps).not.toContain("Traffic");
+    expect(steps).not.toContain("isn't connected");
+    expect(plan.after).toEqual(launchPlan({ budget: 5, country: "Canada", link: "x", pixel: true, statics }).after);
+    // No Pixel yet: the plan says so, so nobody hunts an empty Dataset box.
+    expect(JSON.stringify(launchPlan({ budget: 10, country: "Canada", link: "x", pixel: false, statics, destination: "website", websiteUrl: "https://a.example.com" }))).toContain("isn't connected yet");
+    // Nowhere to send them: the Traffic plan, not a website plan with a blank address.
+    expect(launchPlan({ budget: 10, country: "Canada", link: "x", pixel: true, statics, destination: "website" }).destination).toBe("skool");
+  });
+
+  it("website ads sell the free checklist; Skool-link ads invite people inside", () => {
+    expect(fallbackStatics(input({ destination: "website" })).every((s) => s.door.includes("free checklist"))).toBe(true);
+    const skool = fallbackStatics(input({ destination: "skool" }));
+    expect(skool.every((s) => s.door.includes("look inside"))).toBe(true);
+    for (const s of fallbackStatics(input({ destination: "website" }))) expect(s.policy, s.name).toEqual({ ok: true, flags: [] });
   });
 
   it("builds a 20–30 second Hook · Turn · Door selfie script on a static", () => {
@@ -208,9 +256,9 @@ describe("Ad studio: saving, Your path, Penny and the connector", () => {
     const before = await computePath(ws, user.id);
     const steps = before.stages.flatMap((s) => s.steps);
     const at = steps.findIndex((s) => s.key === "statics");
-    expect(steps[at]).toMatchObject({ title: "Make your 5 statics", lesson: "1.6", href: `/app/w/${ws.id}/ads/studio`, done: false });
+    expect(steps[at]).toMatchObject({ title: "Make your 5 statics", lesson: "Day 1", href: `/app/w/${ws.id}/ads/studio`, done: false });
     expect(steps[at + 1].key).toBe("clicks");
-    expect(steps[at - 1]).toMatchObject({ key: "research", title: "Find ads that already work", lesson: "1.5" });
+    expect(steps[at - 1]).toMatchObject({ key: "research", title: "Find ads that already work", lesson: "Day 1" });
 
     const res = await makeAdStudioPack(ws.id, { audience: "busy dads over 40", promise: "Feel fit again", budget: 10, country: "GB", competitorAds: [{ page: "Rival", text: "Tired of starting over? Here's what works.", daysRunning: 62 }] });
     expect(res.ok).toBe(true);
@@ -236,6 +284,41 @@ describe("Ad studio: saving, Your path, Penny and the connector", () => {
     expect(after.stages.flatMap((s) => s.steps).find((s) => s.key === "statics")?.done).toBe(true);
 
     expect((await makeAdStudioPack(ws.id, { budget: 0 })).ok).toBe(false);
+  });
+
+  it("defaults to the website when a funnel is published and no pack exists, then to the Skool link", async () => {
+    const { ws } = await makeWorkspace();
+    const db = await getDb();
+    expect(await adStudioDefaults(ws)).toMatchObject({ destination: "skool", budget: 5 });
+    expect((await makeAdStudioPack(ws.id, { destination: "website", budget: 10 })).ok).toBe(false); // nothing published yet
+    await db.insert(sites).values({ workspaceId: ws.id, name: "Funnel", slug: `funnel-web-${ws.id}`, theme: {} as never, published: true });
+    expect(await publishedFunnelUrl(ws.id)).toContain(`funnel-web-${ws.id}`);
+    expect(await adStudioDefaults(ws)).toMatchObject({ destination: "website", budget: 10 });
+
+    const first = await makeAdStudioPack(ws.id, { budget: 10, country: "GB" });
+    if (!first.ok) throw new Error(first.error);
+    expect(first.pack.destination).toBe("website");
+    expect(first.pack.websiteUrl).toContain(`funnel-web-${ws.id}`);
+    expect(first.pack.plan.settings[0]).toEqual({ label: "Campaign objective", value: "Leads" });
+    expect(first.pack.plan.settings.find((s) => s.label === "Website URL")?.value).toBe(first.pack.websiteUrl);
+
+    // Day 2: the Skool link, at the course's $5, not Day 1's $10.
+    expect(await adStudioDefaults(ws)).toMatchObject({ destination: "skool", budget: 5, country: "GB" });
+    const second = await makeAdStudioPack(ws.id, { budget: 5 });
+    if (!second.ok) throw new Error(second.error);
+    expect(second.pack.destination).toBe("skool");
+    expect(second.pack.websiteUrl).toBeUndefined();
+    expect(second.pack.plan.settings[0]).toEqual({ label: "Campaign objective", value: "Traffic" });
+
+    // The member can still choose.
+    const again = await makeAdStudioPack(ws.id, { budget: 7, destination: "website" });
+    if (!again.ok) throw new Error(again.error);
+    expect(again.pack.destination).toBe("website");
+  });
+
+  it("the step-by-step guide says where Day 1's ads go", () => {
+    expect(STEP_HOWTO.clicks.how.join(" ")).toMatch(/your website as a Leads campaign/);
+    expect(STEP_HOWTO.refresh.how.join(" ")).toMatch(/My Skool link and \$5 a day/);
   });
 
   it("Penny knows the page and points at the main button", () => {

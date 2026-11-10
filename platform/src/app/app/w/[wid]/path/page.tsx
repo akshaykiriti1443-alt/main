@@ -26,20 +26,20 @@ export default async function PathPage({ params, searchParams }: { params: Promi
   ];
   const loopEmpty = loop.every((n) => n.value === 0);
   const currentStage = path.today ? path.today.stage : path.stages.find((st) => st.steps.some((s) => s.key === path.next?.key))?.key;
-  // Days 2 to 8: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
+  // Days 2 to 7: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
   const up = path.today
     ? { eyebrow: path.today.eyebrow, title: path.today.title, body: path.today.body, href: path.today.href, icon: CalendarRangeIcon }
     : path.next
-      ? { eyebrow: `Up next · Lesson ${path.next.lesson}`, title: path.next.title, body: path.next.why, href: path.next.href, icon: RouteIcon }
+      ? { eyebrow: `Up next · ${path.next.lesson}`, title: path.next.title, body: path.next.why, href: path.next.href, icon: RouteIcon }
       : null;
   let n = 0;
 
   return (
     <>
       <PageHead
-        eyebrow="The Skool Growth Ladder, inside your app"
+        eyebrow="The Anti-Pete Week, inside your app"
         title="Your path"
-        sub="The course, step by step. Every step ticks itself off when you do it, so you always know the one next thing. Lesson numbers match the classroom."
+        sub="The course, step by step. Every step ticks itself off when you do it, so you always know the one next thing. The days match your classroom."
       />
       <Flash searchParams={await searchParams} />
 
@@ -169,7 +169,7 @@ export default async function PathPage({ params, searchParams }: { params: Promi
                                   isNext ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground",
                                 )}
                               >
-                                Lesson {step.lesson}
+                                {step.lesson}
                               </span>
                               {step.locked && !step.done ? (
                                 <span className="flex items-center gap-1 text-[11px] text-muted-foreground">

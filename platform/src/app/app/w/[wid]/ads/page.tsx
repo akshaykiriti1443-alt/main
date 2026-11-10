@@ -57,7 +57,7 @@ const MAIN: { name: string; label: string; step: string; required?: boolean; pla
   { name: "days", label: "Days running", step: "1", required: true },
   { name: "impressions", label: "Impressions", step: "1", required: true },
   { name: "linkClicks", label: "Link clicks", step: "1", required: true },
-  { name: "leads", label: "Leads", step: "1", placeholder: "0", hint: "0 is fine when it points at your Skool link." },
+  { name: "leads", label: "Leads", step: "1", placeholder: "0", hint: "0 is fine on a Skool-link ad. On an opt-in page, it's your Leads count." },
   { name: "members", label: "New members", step: "1", placeholder: "Not sure", hint: "Joins in Skool since your ads went live." },
 ];
 
@@ -91,10 +91,10 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
   const link = skoolLinkFor(workspace.slug);
   const destination = last?.destination === "optin" ? "optin" : "skool";
 
-  // This week's verdicts: the latest review of each ad (by name), so Day 7 ends with one per ad.
+  // This week's verdicts: the latest review of each ad (by name), so Day 6 ends with one per ad.
   const seen = new Set<string>();
   const week = recent
-    .filter((r) => (r.output as unknown as AdReview).mode === "skool")
+    .filter((r) => Boolean((r.output as unknown as AdReview).call))
     .filter((r) => {
       const key = String(r.input.adName ?? "").trim().toLowerCase();
       if (!key) return true;
@@ -103,7 +103,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
       return true;
     })
     .slice(0, 8);
-  const weekCounted = (week[0]?.output as unknown as AdReview | undefined)?.counted ?? null;
+  const weekCounted = week.map((r) => (r.output as unknown as AdReview).counted).find(Boolean) ?? null;
 
   const numberField = (f: (typeof MAIN)[number]) => (
     <Field key={f.name}>
@@ -127,8 +127,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
   return (
     <>
       <PageHead
-        lesson="2.6"
-        stage="Day 7"
+        lesson="Day 6"
         eyebrow="Get members"
         title="Ad review"
         sub="One ad at a time: its spend, impressions and link clicks in, keep, fix or kill out, with the one room to fix."
@@ -138,7 +137,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
 
       <div className="grid items-start gap-6 @4xl/main:grid-cols-2">
         <form action={adReviewAction.bind(null, wid)} data-guide="ad-review">
-          <Panel step={1} title="One ad's numbers" sub="First round: Day 7, then weekly. Copy one ad at a time. Leads: 0 is fine.">
+          <Panel step={1} title="One ad's numbers" sub="First round: Day 6, then weekly. Copy one ad at a time, for ads with 1,000 impressions or more.">
             <Callout tone="tip">
               Where to look: <b className="font-semibold">Ads Manager › Ads</b>, date range <b className="font-semibold">Maximum</b>. Spend is the Amount spent column.
             </Callout>
@@ -224,8 +223,8 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
           </Panel>
         ) : (
           <Panel step={2} title="Your verdict" sub={`Reviewed ${row?.createdAt.toDateString()} · ${row?.model === "rules" ? "rule-based" : "AI"}`}>
-            <Callout tone="tip">First round? Read this on Day 7 and change nothing yet. Make all your edits together on Day 9 (lesson 3.2).</Callout>
-            {review.mode === "skool" && review.call ? (
+            <Callout tone="tip">First round? Day 6 is verdict day. Switch off any ad marked Kill with the toggle next to it in Ads Manager, and change nothing else today. Too early hasn&apos;t lost anything, so leave those running.</Callout>
+            {review.call ? (
               <SkoolVerdict review={review} />
             ) : (
               <div className="relative isolate overflow-hidden rounded-2xl bg-accent px-5 py-5 ring-1 ring-violet-200/70 ring-inset dark:ring-white/[0.06]">

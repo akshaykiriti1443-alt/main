@@ -28,7 +28,7 @@ export async function draftReply(conversationId: string): Promise<string | null>
     .limit(30);
   const lastInbound = [...history].reverse().find((m) => m.direction === "in")?.body ?? "";
   const businessName = ws.settings.businessName || ws.name;
-  // A free trial on a member's own group is optional (lesson 1.2), so only their own words can claim one.
+  // Only the member's own words can claim a free trial on their own group.
   const offerRule = ws.settings.offer
     ? `The offer: ${ws.settings.offer}. Mention a free trial, a price or cancelling only if this says so.`
     : "No offer details were given, so do not mention a free trial, a price or cancelling.";

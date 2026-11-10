@@ -79,7 +79,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const base = `/app/w/${wid}`;
   const steps = path.stages.flatMap((st) => st.steps.map((step) => ({ ...step, tag: st.tag })));
   const next = path.next;
-  // Days 2 to 8: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
+  // Days 2 to 7: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
   const today = path.today;
   // Numbers only mean something once there are some. Until then the page is a "Start here".
   const hasData = stats.views > 0 || stats.contactsTotal > 0 || stats.emailsSent > 0 || recent.length > 0;
@@ -88,7 +88,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   const isLive = steps.some((s) => s.key === "publish" && s.done);
 
   // A short window of the path: the last ticked step (so you see progress), then what's next.
-  // On a Today card, show that day's own steps too (Day 8's are optional, so they're never Up next).
+  // On a Today card, show that day's own steps too.
   const nextAt = next ? steps.findIndex((s) => s.key === next.key) : steps.length;
   const todayAt = today ? steps.findIndex((s) => s.tag === today.stageTag) : -1;
   const nextIndex = todayAt >= 0 ? Math.min(nextAt, todayAt) : nextAt;
@@ -99,7 +99,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
     <NextStep eyebrow={today.eyebrow} title={today.title} body={today.body} href={today.href} cta="Do it now" icon={CalendarRangeIcon} />
   ) : next ? (
     <NextStep
-      eyebrow={`Up next · Lesson ${next.lesson}`}
+      eyebrow={`Up next · ${next.lesson}`}
       title={next.title}
       body={next.why}
       href={next.href}
@@ -108,7 +108,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
     />
   ) : null;
 
-  // Days 6 to 8: only what the app can really see of the week. Lesson 2.6 has the full count.
+  // Days 6 to 8: only what the app can really see of the week. Day 7's lesson has the full count.
   const shelfCard = path.shelf ? (
     <Panel icon={ArchiveIcon} title="Your shelf" sub="What the app can see of your week. Your texts, your replies and your group are on your Day 7 list.">
       {path.shelf.empty ? <p className="text-sm text-muted-foreground">Nothing on here yet. That&apos;s next week&apos;s list, nothing more.</p> : null}
@@ -159,7 +159,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
                     isNext ? "bg-card text-accent-foreground shadow-xs dark:bg-white/[0.06]" : "bg-muted text-muted-foreground",
                   )}
                 >
-                  Lesson {step.lesson}
+                  {step.lesson}
                 </span>
               )}
               {isNext ? <ArrowRightIcon className="size-4 shrink-0 text-primary transition-transform duration-150 group-hover:translate-x-0.5 dark:text-violet-300" aria-hidden /> : null}

@@ -167,7 +167,7 @@ export function Companion({
     };
   }, [mode, snap.total, wid]);
 
-  // Days 2 to 8: today's lesson comes first, so Penny doesn't jump a Day 2 member to Day 7.
+  // Days 2 to 7: today's lesson comes first, so Penny doesn't jump a Day 2 member to Day 7.
   const today = snap.today;
   // Same rule as Up next (src/server/path.ts): optional steps, outcomes and steps locked to
   // another plan never hold you up.
@@ -395,7 +395,7 @@ export function Companion({
           ) : next ? (
             <section className="guide-step">
               <span className="guide-kicker">
-                Step {position} of {snap.total} · Lesson {next.lesson}
+                Step {position} of {snap.total} · {next.lesson}
               </span>
               <h3>{next.title}</h3>
               <p className="guide-why">{next.why}</p>

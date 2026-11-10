@@ -133,15 +133,14 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
     return (
       <>
         <PageHead
-          lesson="1.4"
-          stage="Day 1"
+          lesson="Day 1"
           title="Funnels & pages"
           sub="Your funnel is where your ads send people: a page that collects their email, then points them at your Skool group."
           first="Let the AI launch kit build your first funnel. It takes about a minute."
         />
         <Flash searchParams={await searchParams} />
         <NextStep
-          eyebrow="Fastest start · Lesson 1.3"
+          eyebrow="Fastest start · Day 1"
           title="Let AI build your whole funnel"
           body="Answer 6 questions. You get a landing page, a free guide, 3 follow-up emails and a thank-you page that points at Skool."
           href={`${base}/launch`}
@@ -157,8 +156,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
   return (
     <>
       <PageHead
-        lesson="1.4"
-        stage="Day 1"
+        lesson="Day 1"
         title="Funnels & pages"
         sub="Your funnels: the pages your ads send people to. Open one to edit its pages or publish it."
         first={anyLive ? undefined : "Open your funnel, check the pages, then press Publish."}
@@ -175,7 +173,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
 
       {!anyLive && firstDraft ? (
         <NextStep
-          eyebrow="Up next · Lesson 1.4"
+          eyebrow="Up next · Day 1"
           title="Publish your funnel"
           body="Edit three lines, then press the scary button. You can change anything later and publish again."
           href={`${base}/sites/${firstDraft.id}`}

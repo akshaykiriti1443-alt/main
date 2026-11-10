@@ -15,8 +15,8 @@ describe("Penny, the step-by-step guide", () => {
     expect(STEP_HOWTO).not.toHaveProperty("sync");
     expect(PAGE_GUIDES).not.toHaveProperty("skool");
     expect(JSON.stringify({ STEP_HOWTO, PAGE_GUIDES })).not.toMatch(/four piles|member export|Hobby way/i);
-    // v6: no 3-Pack to launch, no Pixel lesson, and the lesson numbers Penny quotes are current.
-    expect(JSON.stringify({ STEP_HOWTO, PAGE_GUIDES })).not.toMatch(/3-Pack|Lesson 4\.2|lesson 5\.2|lesson 1\.3 covers|Hook, Turn or Door/);
+    // No 3-Pack to launch, and Penny quotes the course's days, never the old lesson numbers.
+    expect(JSON.stringify({ STEP_HOWTO, PAGE_GUIDES })).not.toMatch(/3-Pack|\b[Ll]esson \d\.\d|Hook, Turn or Door|Day 8|Day 9|Optional: your Day 1/);
     expect(STEP_HOWTO.lead1.how.join(" ")).toMatch(/own email/);
     expect(STEP_HOWTO.bio.how.join(" ")).toContain("(Instagram, TikTok or YouTube)");
   });
@@ -26,8 +26,8 @@ describe("Penny, the step-by-step guide", () => {
     const snap = await companionSnapshot(ws, user.id);
     // Penny's rule matches Up next: optional steps, outcomes and plan-locked steps never hold you up.
     const next = snap.steps.find(canBeUpNext);
-    expect(next).toMatchObject({ key: "kit", lesson: "1.3", href: `/app/w/${ws.id}/launch`, stage: "Day 1" });
-    expect(snap.steps.find((s) => s.key === "ai")).toMatchObject({ kind: "optional", done: false, stage: "Day 8" });
+    expect(next).toMatchObject({ key: "kit", lesson: "Day 1", href: `/app/w/${ws.id}/launch`, stage: "Day 1" });
+    expect(snap.steps.find((s) => s.key === "ai")).toMatchObject({ done: false, stage: "Day 2", locked: "Opens Day 2" });
     expect(snap.done).toBe(snap.steps.filter((s) => s.done).length); // "Open your app", plus the Skool link the helper sets
     expect(snap.total).toBe(snap.steps.length);
   });
@@ -37,7 +37,7 @@ describe("Penny, the step-by-step guide", () => {
     const ws = { ...fresh, createdAt: new Date(Date.now() - 19.5 * 86_400_000) }; // past every Opens Day
     const snap = await companionSnapshot(ws, user.id);
     const follow = snap.steps.find((s) => s.key === "automations");
-    expect(follow).toMatchObject({ locked: "Growth plan", done: false, stage: "Rhythm" });
+    expect(follow).toMatchObject({ locked: "Growth plan", done: false, stage: "Season 2" });
     expect(canBeUpNext(follow!)).toBe(false);
     // Everything before the follow-ups done: Penny walks past them to the check-ins.
     const at = snap.steps.findIndex((s) => s.key === "automations");

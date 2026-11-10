@@ -75,8 +75,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
     return (
       <>
         <PageHead
-          lesson="1.3"
-          stage="Day 1"
+          lesson="Day 1"
           title="AI launch kit"
           sub="Answer a few questions and AI writes your whole starter funnel in about a minute: landing page, free guide, emails and your Skool About page."
           first="Fill in the three short steps below, then press Build my launch kit."
@@ -153,7 +152,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                       <FieldLabel htmlFor="offer">
                         Your paid offer <span className="font-normal text-muted-foreground">(optional)</span>
                       </FieldLabel>
-                      <Input id="offer" name="offer" placeholder="$9/month Skool group with a 7-day free trial" defaultValue={s.offer ?? ""} />
+                      <Input id="offer" name="offer" placeholder="$29/month Skool group with a 7-day free trial" defaultValue={s.offer ?? ""} />
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="tone">Tone</FieldLabel>
@@ -214,8 +213,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
-        lesson="1.3"
-        stage="Day 1"
+        lesson="Day 1"
         eyebrow={`Made ${result.createdAt.toDateString()} · ${result.model === "template" ? "template" : "AI"}`}
         title="Your launch kit"
         sub="Your funnel is built from this kit. Everything below is yours to copy into Skool, your emails or your posts."
@@ -232,7 +230,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
 
       {site ? (
         <NextStep
-          eyebrow="Up next · Lesson 1.4"
+          eyebrow="Up next · Day 1"
           title="Review and publish your funnel"
           body="Your pages are written. Change three lines (headline, who it's for, button), then press Publish."
           href={`/app/w/${wid}/sites/${site.id}`}
@@ -269,7 +267,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
           icon={ImageIcon}
           tone="success"
           title="Your ads come from Ad studio"
-          sub="Not from this kit. Tonight's five ads are made in lessons 1.5 and 1.6."
+          sub="Not from this kit. Today's five ads are made in Ad research and Ad studio, right after your Pixel."
         >
           <ol className="flex flex-col gap-2.5">
             {[

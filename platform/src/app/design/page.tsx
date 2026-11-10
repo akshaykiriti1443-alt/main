@@ -116,7 +116,7 @@ export default function DesignPage() {
         }
       />
 
-      <NextStep eyebrow="Up next · Lesson 1.4" title="Publish your funnel" body="Your pages are written. Change three lines (headline, who it's for, button), then press Publish." href="/design" cta="Review & publish" icon={RocketIcon} />
+      <NextStep eyebrow="Up next · Day 1" title="Publish your funnel" body="Your pages are written. Change three lines (headline, who it's for, button), then press Publish." href="/design" cta="Review & publish" icon={RocketIcon} />
 
       <div className="grid gap-4 @3xl/main:grid-cols-3">
         <Stat label="New leads this week" value="12" hint="From 3 ads and your bio link" icon={UsersIcon} />
@@ -227,7 +227,7 @@ export default function DesignPage() {
               <Badge variant="destructive">Failed</Badge>
               <Badge variant="outline">Pain ad</Badge>
               <Badge variant="secondary">Cold</Badge>
-              <LessonTag lesson="1.4" stage="Day 1" />
+              <LessonTag lesson="Day 1" />
             </div>
             <div className="flex flex-wrap items-center gap-2.5">
               {(["primary", "pink", "success", "gold", "hot", "warning", "muted"] as Tone[]).map((t) => (
@@ -316,7 +316,7 @@ function GuideSample() {
         </div>
         <div className="guide-body">
           <section className="guide-step">
-            <span className="guide-kicker">Step 5 of 27 · Lesson 1.4</span>
+            <span className="guide-kicker">Step 5 of 27 · Day 1</span>
             <h3>Publish your funnel</h3>
             <p className="guide-why">It goes online the moment you press it. Nothing is permanent: change anything later and publish again.</p>
             <p className="guide-here">You&apos;re in the right place. Here&apos;s how:</p>

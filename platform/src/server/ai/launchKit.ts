@@ -62,7 +62,7 @@ export type LaunchKit = z.infer<typeof launchKitSchema>;
 
 const SYSTEM = `You are a direct-response marketer who builds lead funnels for Skool community owners, coaches and personal trainers.
 You write a complete "launch kit" for one community: a free lead magnet, a landing page, a thank-you page that sends people to the Skool group, three follow-up emails, Meta ad copy, hooks, a Skool About page and a first-week ad plan.
-The owner grows with small paid ads, not social media. Ads send people to the Skool About page.
+The owner grows with small paid ads, not social media. The first ads send people to the owner's website for the free lead magnet. The thank-you page then invites them into the Skool group.
 
 ${VOICE_RULES}
 
@@ -72,9 +72,23 @@ Formatting rules:
 - Email bodies and the lead magnet use plain text with blank lines between paragraphs. Use "- " for list items and **bold** for emphasis. No HTML.
 - In emails, use {{first_name}} for the reader's name, {{lead_magnet_url}} for the lead magnet link and {{skool_url}} for the group link. Sign emails with the owner's first name.
 - The Skool About page uses plain text with emojis as bullets. Skool has no bold, so keep structure with line breaks.
-- Ad plan: start at $5 to $10 a day if money is tight, $30 to $50 a day is the sweet spot. The main campaign is Traffic to the Skool About page (the owner\'s Skool link), optimised for landing page views. No follower campaigns.`;
+- Ad plan: two small campaigns, up to $15 a day together. Campaign 1 is Leads to the owner's website at $10 a day, optimised for the Lead event. Campaign 2 is Traffic to the Skool About page (the owner's Skool link) at $5 a day, from Day 2, optimised for landing page views. No follower campaigns. $30 to $50 a day is for later, once members pay for it.`;
+
+/** The free trial the member's own offer mentions, if any. Only their words count: nothing is invented. */
+export function trialInOffer(offer: string): { days: number | null; price: string | null } | null {
+  if (!/\bfree[- ]trial\b|\bdays? free\b|\bfree for \d/i.test(offer)) return null;
+  const days = offer.match(/(\d+)[\s-]*days?\b/i);
+  const price = offer.match(/[$£€₹]\s?\d[\d,.]*/) ?? offer.match(/\d[\d,.]*(?:\s*(?:usd|gbp|eur|aud|cad|inr|dollars?|pounds?|euros?))?(?=\s*(?:\/|a\b|per\b)\s*mo)/i);
+  return { days: days ? Number(days[1]) : null, price: price ? price[0].replace(/\s+/g, " ").replace(/[.,]$/, "") : null };
+}
+
+/** The deal in plain words, for the thank-you page. */
+export function trialTerms(t: { days: number | null; price: string | null }): string {
+  return `${t.days ? `${t.days} days free` : "A free trial"}, then ${t.price ? `${t.price} a month` : "the monthly price on the group's page"}. Cancel before it bills and you pay nothing.`;
+}
 
 export function buildPrompt(input: LaunchKitInput) {
+  const trial = trialInOffer(input.offer);
   return `Write the launch kit for this community.
 
 Community name: ${input.businessName}
@@ -84,11 +98,24 @@ Who it serves: ${input.audience}
 Main outcome members want: ${input.outcome}
 Lead magnet idea: ${input.leadMagnetIdea || "(pick the best quick-win lead magnet for this niche)"}
 Offer inside the Skool group: ${input.offer || "(a paid Skool membership, no details given)"}
-Mention a free trial, a price or cancelling only if the offer line above states it. Never invent one, on any page or in any email.
+Mention a free trial, a price or cancelling only if the offer line above states it. Never invent one, on any page or in any email.${
+    trial
+      ? `
+The offer has a free trial, so thankYouBody must state the deal in plain words, right above the button: ${trialTerms(trial)} Keep all of that (how long it's free, the price a month after, and that they can cancel before it bills), in your own warm words. thankYouButton invites them to start the trial.`
+      : ""
+  }
 Tone: ${input.tone}
 
-Counts: exactly 3 bullets, 3 benefits, 3 steps, 4 FAQ items, 3 emails (day 0, day 1, day 3), 3 ads (the 3-Pack: angle pain, dream and lesson, in that order), 10 hooks, 3 campaigns in the ad plan and 7 first-week actions (one per day).
+Counts: exactly 3 bullets, 3 benefits, 3 steps, 4 FAQ items, 3 emails (day 0, day 1, day 3), 3 ads (the 3-Pack: angle pain, dream and lesson, in that order), 10 hooks, 2 campaigns in the ad plan and 7 first-week actions (one per day).
 The lead magnet content must be the full, usable lead magnet itself (300 to 600 words), not a description of it.`;
+}
+
+/** The AI should already have said it. If the deal didn't make it onto the page, it goes on anyway. */
+export function withTrialTerms(kit: LaunchKit, offer: string): LaunchKit {
+  const trial = trialInOffer(offer);
+  if (!trial) return kit;
+  const said = (!trial.days || kit.thankYouBody.includes(String(trial.days))) && (!trial.price || kit.thankYouBody.includes(trial.price)) && /cancel/i.test(kit.thankYouBody);
+  return said ? kit : { ...kit, thankYouBody: `${kit.thankYouBody.trim()} ${trialTerms(trial)}`.trim() };
 }
 
 function take<T>(arr: T[], n: number, filler: (i: number) => T): T[] {
@@ -114,6 +141,7 @@ export function normalizeKit(kit: LaunchKit): LaunchKit {
 export function fallbackKit(input: LaunchKitInput): LaunchKit {
   const first = input.ownerName.split(" ")[0];
   const lm = (input.leadMagnetIdea || `7-Day ${titleCase(input.niche)} Quick-Start Checklist`).replace(/^the\s+/i, "");
+  const trial = trialInOffer(input.offer);
   return {
     leadMagnetName: lm,
     leadMagnetType: "checklist",
@@ -156,8 +184,8 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
       { q: "Can I start today?", a: "Yes. Enter your email and start with day 1." },
     ],
     thankYouHeadline: "It's in your inbox 📬",
-    thankYouBody: `Want the full system? Join ${input.businessName} and get live help every week.`,
-    thankYouButton: "Join the group",
+    thankYouBody: trial ? `Want help putting it to work? Come and join ${input.businessName}. ${trialTerms(trial)}` : `Want the full system? Join ${input.businessName} and get live help every week.`,
+    thankYouButton: trial ? "Start my free trial" : "Join the group",
     emails: [
       {
         subject: `Here's your ${lm} 📥`,
@@ -213,20 +241,19 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
     skoolAboutPage: `🚀 ${input.businessName}\n\n${capitalize(input.outcome)} with a simple plan and real support.\n\n💎 WHAT YOU GET:\n🔹 Step-by-step plan\n🔹 Weekly live calls with ${first}\n🔹 A group that keeps you on track\n\n${input.offer || "Tap Join and come say hi."}`,
     adPlan: {
       dailyBudgetUsd: 15,
-      audience: `People in your country, age 25 to 55, who are interested in ${input.niche}.`,
+      audience: "People in your country, 18 and over, broad with no interests. Your pictures do the targeting.",
       campaigns: [
-        { name: "About-page visitors", objective: "Traffic to your Skool link, optimised for landing page views", budgetUsd: 10, why: "Feeds Skool's 100-visitor bar for Level 2 and finds your first members." },
-        { name: "Leads", objective: "Leads to your landing page", budgetUsd: 3, why: "Collects emails with your free guide, so nobody is lost." },
-        { name: "Retargeting", objective: "Traffic to your Skool link", budgetUsd: 2, why: "Brings warm visitors back to the About page to join." },
+        { name: "Website · Leads", objective: "Leads to your website, using your Meta Pixel and the Lead event", budgetUsd: 10, why: "Collects emails with your free checklist and teaches Meta who your real buyers are." },
+        { name: "Skool link · Traffic", objective: "Traffic to your Skool link, optimised for landing page views", budgetUsd: 5, why: "Starts on Day 2 in its own campaign. Feeds Skool's 100-visitor bar for Level 2." },
       ],
       firstWeek: [
-        "Day 1: Publish your landing page, then launch your 5 statics to your Skool link.",
-        "Day 2: Rewrite the first line of your Skool About page so it sounds like you.",
-        "Day 3: Hands off the ads. Text five people who have the problem you solve.",
-        "Day 4: Pin a Start here post with one question anyone can answer in a line.",
-        "Day 5: Set up your welcome: one membership question and a first job.",
-        "Day 6: Send your Ask by hand to everyone who replied. No link, no price.",
-        "Day 7: Save your check-in and read your Ad review. Change nothing until Day 9.",
+        "Day 1: Publish your website, connect your Meta Pixel, sign up yourself, then launch 5 statics to your website at $10 a day.",
+        "Day 2: Get a free AI key and launch 5 more statics to your Skool link at $5 a day, in their own campaign.",
+        "Day 3: Hands off the ads. Walk through your own website and check your tracking in three places.",
+        "Day 4: Pin a welcome post, make your first Unlock and add one quick win to your Classroom.",
+        "Day 5: List 20 people who already know you and text five by hand. No link until they ask.",
+        "Day 6: Read your Ad review verdicts. Ads marked Kill go off today, and nothing else changes.",
+        "Day 7: Save your check-in, count what you built and decide what happens next.",
       ],
     },
   };
@@ -310,7 +337,7 @@ export async function runLaunchKit(workspaceId: string, rawInput: unknown): Prom
   if (charge) {
     try {
       const res = await generateStructured({ workspaceId, creds: charge.creds, system: SYSTEM, prompt: buildPrompt(input), schema: launchKitSchema, effort: "medium" });
-      kit = normalizeKit(res.data);
+      kit = withTrialTerms(normalizeKit(res.data), input.offer);
       usage = res.usage;
       usedAi = true;
     } catch (err) {

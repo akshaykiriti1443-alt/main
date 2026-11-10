@@ -256,8 +256,7 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
-        lesson="3.1"
-        stage="Day 8"
+        lesson="Day 2"
         title="Your AI"
         sub="Plug in the AI you already use, free plans included. It does the writing and busywork in this account, and the AI bill is yours, never your wallet here."
         first={connected ? "You're connected. Try a playbook line in your AI app." : "Pick the path that sounds like you. One is plenty."}

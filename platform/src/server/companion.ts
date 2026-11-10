@@ -28,7 +28,7 @@ export type CompanionSnapshot = {
   done: number;
   total: number;
   level: number;
-  /** Days 2 to 8: today's lesson. Read-only, never counted (see path.ts). */
+  /** Days 2 to 7: today's lesson. Read-only, never counted (see path.ts). */
   today: TodayCard | null;
 };
 

@@ -1,5 +1,5 @@
 // What the companion (Penny) says: how to do each step of Your path, and what each page is for.
-// Plain words for a total beginner. Lesson numbers match the course (The Skool Growth Ladder).
+// Plain words for a total beginner. The days match the course (The Anti-Pete Week).
 // Client-safe: no server imports.
 
 export const GUIDE_COOKIE = "onx_guide"; // "open" | "min" | "off"; missing = first visit (open, with a hello)
@@ -57,7 +57,8 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
     how: [
       "Open your opt-in page (the one asking for an email).",
       "Change three lines: the headline, who it's for and the button.",
-      "Press Publish, then open the live link on your phone and sign up yourself.",
+      "Open your Thank-you page and check it states the deal in plain words: 7 days free, then your price a month.",
+      "Press Publish. Your Meta Pixel is the very next step, before you test it.",
     ],
   },
   lead1: {
@@ -65,6 +66,7 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "Open your live funnel on your phone (its link is in Funnels & pages).",
       "Sign up with your own email, like a stranger would.",
       "Come back here to Leads: there you are. Email 1 lands within minutes (check spam once).",
+      "Give Meta a couple of minutes, then look in Events Manager for your PageView and your Lead.",
     ],
   },
   research: {
@@ -78,39 +80,41 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   pixel: {
     target: "pixel",
     how: [
-      "Optional: your Day 1 ads don't need a Pixel (lesson 1.7).",
-      "In Meta Events Manager, copy your Dataset ID and generate a Conversions API token.",
-      "Paste both into Meta Pixel & Conversions API here and save.",
+      "Needed today: your website ads use it to tell Meta who gave you their email.",
+      "In Meta Events Manager, click Connect data sources, pick Web, name your dataset and create it.",
+      "On its Settings tab, copy the Dataset ID, then scroll to Conversions API and press Generate access token.",
+      "Paste both into Meta Pixel & Conversions API here and press Save.",
     ],
   },
   statics: {
     target: "ad-studio-make",
     how: [
-      "Check your answers: daily budget, country, who it's for and the result you promise.",
-      "Press Make my 5 statics.",
+      "Check your answers: where these ads go (Day 1 is My website), $10 a day, country, who it's for and the result you promise.",
+      'Open Fine-tune and put "Free checklist:" and its name in Your offer, then press Make my 5 statics.',
       "Paste each image prompt into ChatGPT or Gemini, then follow Your launch plan in Ads Manager.",
     ],
   },
   clicks: {
     how: [
-      "Copy your Skool link from this page.",
-      "In Meta Ads Manager, launch your 5 statics (Ad studio's launch plan) with that link.",
-      "This ticks off at the first real ad click, not your own test.",
+      "Open Your launch plan and follow it in Meta Ads Manager, one click at a time.",
+      "Day 1's ads go to your website as a Leads campaign, with your Pixel under Dataset and Lead as the event.",
+      "This ticks off at your first lead from an ad, or your first ad click on your Skool link. Your own test doesn't count.",
     ],
   },
   review: {
     target: "ad-review",
     how: [
-      "First round: wait for Day 7, hands off till then. After that, weekly.",
+      "First round: Day 6, hands off till then. After that, weekly.",
       "Only ads with 1,000+ impressions. None over? Review your biggest spender once.",
       "Copy each ad's spend, impressions and link clicks from Ads Manager, date range Maximum.",
-      "Paste them here, one ad at a time. You get keep, fix or kill, and the one room to fix. Too early is a normal answer on Day 7. First round: make the changes on Day 9, all at once.",
+      "Paste them here, one ad at a time, and say where it goes: An opt-in page or My Skool link. You get keep, fix or kill, and the one room to fix.",
+      "Switch off anything marked Kill on Day 6, and change nothing else that day. Too early is a normal answer, so leave those running.",
     ],
   },
   customer: {
     how: [
-      "List 20 people who have the problem you solve, or know someone who does, then text five (lesson 2.2).",
-      "Send your Invite to everyone who answered your Ask: Leads › Stage › Engaged.",
+      "List 20 people who have the problem you solve, or know someone who does, then text five.",
+      "Follow up once, three days later, with anyone who replied. Just once.",
       "Ticks off when your Monday check-in says 1 new customer.",
     ],
   },
@@ -164,10 +168,24 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   refresh: {
     target: "ad-studio-make",
     how: [
-      "Read your Day 7 verdicts first. No Kill and no Fix: Hook? No new statics, just the video.",
-      "Otherwise press Make my 5 statics again, or use a spare set in Your saved packs.",
-      "Open Video script (for later), press Copy script and film it by a window.",
-      "Optional: this ticks at your second pack.",
+      "Read Gaps nobody uses yet in Ad research first, so this set is genuinely new.",
+      'Pick My Skool link and $5 a day. In Fine-tune, put "7-day free trial of" and your group\'s name in Your offer.',
+      "Press Make my 5 statics, then launch them as their own Traffic campaign. Leave your website ads alone.",
+      "This ticks at your second pack.",
+    ],
+  },
+  tracking: {
+    how: [
+      "Sign up on your live page with a different email, and check you're in Leads.",
+      "In Meta Events Manager, look for both PageView and Lead.",
+      "Open Your Skool link once from Growth ladder, so you can see it counting.",
+    ],
+  },
+  warm: {
+    how: [
+      "List 20 people who have the problem you solve, or know someone who does.",
+      "Text five, one at a time, in your own words. No link until they ask.",
+      "Anyone who replies goes in with Add contact. Anyone who asks gets your Skool link with ?src=text on the end.",
     ],
   },
   claim1: {
@@ -232,7 +250,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     what: "The whole course as a checklist that ticks itself off when you do things.",
     tips: [
       "The big card is your one next thing.",
-      "Lesson numbers match the classroom in Skool.",
+      "The days match your classroom in Skool.",
     ],
   },
   ai: {
@@ -253,7 +271,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   },
   sites: {
     title: "Funnels & pages",
-    what: "Your landing pages. A stranger gives their email here and gets sent on to Skool.",
+    what: "Your website. A stranger gives their email here, gets your free checklist and sees your Skool offer.",
     tips: ["Change three lines, then Publish.",
       "Want yourname.com? Get a domain from the Custom domain section of your funnel.", "Sign up yourself to test it."],
   },
@@ -289,7 +307,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     what: "Your Skool growth level, what's missing for the next one, and your Skool link.",
     tips: [
       "Do the Monday check-in every week.",
-      "Point every ad at your Skool link so clicks get counted.",
+      "Skool-link ads use Your Skool link, so every click gets counted.",
     ],
   },
   unlocks: {
@@ -304,9 +322,9 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     title: "Ad studio",
     what: "Your first ads, same day: your numbers, 5 statics ready to make, and the exact clicks to launch them.",
     tips: [
-      "Statics first. Record the video on Day 8, add it on Day 9.",
+      "Day 1 goes to your website at $10 a day. Day 2 goes to your Skool link at $5, in its own campaign.",
       "Five different looks, so Meta tests five real ideas.",
-      "Hands off for 72 hours after you publish.",
+      "Hands off till Day 6 after you publish.",
     ],
   },
   "ads/research": {
@@ -320,10 +338,10 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   },
   ads: {
     title: "Ad review",
-    what: "Paste your ad numbers on Day 7, then weekly, and get keep, fix or kill.",
+    what: "Paste your ad numbers on Day 6, then weekly, and get keep, fix or kill.",
     tips: [
       "Fix one room at a time: Hook, Door or About page.",
-      "First round: verdicts on Day 7, edits on Day 9.",
+      "First round: verdicts on Day 6, and Kill ads go off then.",
       "Too early isn't a bad verdict. Nobody's opened that ad yet.",
     ],
   },

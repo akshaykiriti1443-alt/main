@@ -1,20 +1,23 @@
 import * as z from "zod/v4";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { aiGenerations, workspaces } from "@/lib/db/schema";
+import { aiGenerations, sites, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 import { AD_ANGLES, AD_FRAMEWORK_RULES, ANGLE_LABEL, type AdAngle } from "./adFramework";
 import type { ResearchAd } from "./adResearch";
 import { latestCheckins, skoolLinkFor } from "../growth";
+import { siteBaseUrl } from "../sites";
 
-// The Ad studio: a beginner's first ads, the same day. Statics first (the safest bet); the video is
-// recorded on Day 8 and goes live on Day 9 with fresh statics. Four parts, in the course's words:
-//   Your numbers           budget → About-page visits → days to Skool's Level 2 (100 visitors).
+// The Ad studio: a beginner's first ads, the same day. Statics first (the safest bet). Four parts,
+// in the course's words:
+//   Your numbers           budget → visits, and for Skool-link ads the days to Level 2 (100 visitors).
 //   Your 5 statics         five genuinely different image ads. Meta's Andromeda system groups
 //                          near-identical ads and treats them as one, so every pair differs in at
 //                          least two of: format, persona, angle, benefit.
-//   Your launch plan       one Traffic campaign, one broad ad set, all 5 statics, the Skool link.
+//   Your launch plan       one campaign, one broad ad set, all 5 statics, to one of two places:
+//                            website  Day 1: a Leads campaign to the member's published funnel.
+//                            skool    Day 2: a separate Traffic campaign to the tracked Skool link.
 //   Video script (later)   a 20–30 second selfie script on the winning angle.
 // AI writes the creative (on the member's own AI when connected); the numbers and the click-steps
 // are rules, so they are never made up. Without AI, a rule-based pack still gives all of it.
@@ -79,6 +82,13 @@ export const ASSUMED_CPV = { low: 0.5, high: 1.5 } as const;
 export const LEVEL2_VISITORS = 100;
 export const STATICS_PER_PACK = 5;
 
+/** Where a pack's ads send people. Saved packs from before this choice are all "skool". */
+export const STUDIO_DESTINATIONS = ["website", "skool"] as const;
+export type StudioDestination = (typeof STUDIO_DESTINATIONS)[number];
+export const DESTINATION_LABEL: Record<StudioDestination, string> = { website: "My website", skool: "My Skool link" };
+/** Day 1's first pack goes to the website, when there is one. Everything after goes to the Skool link. */
+export const defaultDestination = (funnelPublished: boolean, earlierPack: boolean): StudioDestination => (funnelPublished && !earlierPack ? "website" : "skool");
+
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
@@ -100,6 +110,8 @@ export const adStudioInputSchema = z.object({
   budget: z.coerce.number().min(1).max(10_000).default(5),
   country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).default("US"),
   tone: z.enum(STUDIO_TONES).default("friendly"),
+  /** Left out: the default for this workspace (see defaultDestination). */
+  destination: z.enum(STUDIO_DESTINATIONS).optional(),
   competitorAds: z.array(researchAdSchema).max(10).default([]),
 });
 export type AdStudioInput = z.infer<typeof adStudioInputSchema>;
@@ -173,19 +185,22 @@ const DEFAULT_FORMATS: StaticFormat[] = ["text_on_colour", "photo_overlay", "not
 export type NumbersLine = { key: "assumption" | "level2" | "statics" | "target" | "images" | "social"; title: string; text: string };
 
 /** The plain-words explanation under the numbers. Honest maths: visitors, never members or income. */
-export function numbersLines(n: StudioNumbers, opts: { price?: number; country?: string; formats?: StaticFormat[] } = {}): NumbersLine[] {
+export function numbersLines(n: StudioNumbers, opts: { price?: number; country?: string; formats?: StaticFormat[]; destination?: StudioDestination } = {}): NumbersLine[] {
+  const website = opts.destination === "website";
   const day = range(n.visitsPerDay.low, n.visitsPerDay.high, visits);
   const days = n.daysTo100.fast === n.daysTo100.slow ? `about ${n.daysTo100.fast}` : `${n.daysTo100.fast}–${n.daysTo100.slow}`;
   const when = n.cpvAt ? new Date(n.cpvAt).toDateString() : "";
   const assumption =
     n.cpvSource === "assumption"
-      ? `We assume ${money(ASSUMED_CPV.low)}–${money(ASSUMED_CPV.high)} per About-page visit, a normal range for a first ad. After your first week, Ad review gives you your real number and this page uses it.`
+      ? `Our guess is ${money(ASSUMED_CPV.low)}–${money(ASSUMED_CPV.high)} per ${website ? "website" : "About-page"} visit, a normal range for a first ad. It's a planning guess, not a promise. On Day 6, Ad review gives you your real number and this page uses it.`
       : n.cpvSource === "ad_review"
         ? `Your real cost per visit is about ${money(n.cpvLow)} (from your Ad review${when ? ` on ${when}` : ""}), so these numbers use it.`
         : `Your real cost per visit is about ${money(n.cpvLow)} (ad spend ÷ About-page visitors from your Monday check-in${when ? ` on ${when}` : ""}), so these numbers use it.`;
-  const short = n.visitsPerMonth.low < LEVEL2_VISITORS;
+  const short = !website && n.visitsPerMonth.low < LEVEL2_VISITORS;
   const level2 = [
-    `At ${money(n.budget)} a day that's ${day} visits a day, so Level 2's 100 About-page visitors takes ${days} days. Skool counts the last 30 days.`,
+    website
+      ? `At ${money(n.budget)} a day that's ${day} website visits a day. Skool's Level 2 counts About-page visitors, not emails, so only people who press Join on your website count toward its 100. That's what your second set of ads, on your Skool link, is for.`
+      : `At ${money(n.budget)} a day that's ${day} visits a day, so Level 2's 100 About-page visitors takes ${days} days. Skool counts the last 30 days.`,
     short ? `At this budget 100 in 30 days is a stretch: ${money(n.minBudgetFor100)} a day gets you there.` : "",
     `Visitors aren't members. Level 2 also needs 1 new customer and subscription or tiers pricing${opts.price ? ` (you told us ${money(opts.price)} a month, so pricing is covered)` : ""}. That first customer usually comes from people who already know you.`,
   ]
@@ -197,7 +212,7 @@ export function numbersLines(n: StudioNumbers, opts: { price?: number; country?:
     {
       key: "statics",
       title: "Why 5 statics",
-      text: "Meta's Andromeda system groups ads that look alike and treats them as one. Five genuinely different statics give it five real ideas to test. At $5–$10 a day, five is plenty: each one gets a fair shot.",
+      text: "Meta's Andromeda system groups ads that look alike and treats them as one. Five genuinely different statics give it five real ideas to test. With $5 to $10 a day in a campaign, up to $15 a day across your two, five is plenty: each static gets a fair shot.",
     },
     {
       key: "target",
@@ -217,19 +232,21 @@ export function numbersLines(n: StudioNumbers, opts: { price?: number; country?:
   ];
 }
 
-/** The member's real cost per About-page visit: their latest Ad review, else their Monday check-in. */
-export async function realCostPerVisit(workspaceId: string): Promise<RealCpv | null> {
+/** The member's real cost per visit for this kind of ad: their latest Ad review of one, else (Skool link only) their Monday check-in. */
+export async function realCostPerVisit(workspaceId: string, destination: StudioDestination = "skool"): Promise<RealCpv | null> {
   const db = await getDb();
-  const [review] = await db
+  const reviews = await db
     .select({ input: aiGenerations.input, createdAt: aiGenerations.createdAt })
     .from(aiGenerations)
     .where(and(eq(aiGenerations.workspaceId, workspaceId), eq(aiGenerations.kind, "ad_review")))
     .orderBy(desc(aiGenerations.createdAt))
-    .limit(1);
+    .limit(20);
+  const review = reviews.find((r) => (r.input.destination === "optin") === (destination === "website"));
   const spend = Number(review?.input.spend ?? 0);
   const clicks = Number(review?.input.linkClicks ?? 0);
   // Ten clicks is the least that says anything; fewer is noise.
   if (review && spend > 0 && clicks >= 10) return { cpv: clampCpv(spend / clicks), source: "ad_review", at: review.createdAt.toISOString() };
+  if (destination === "website") return null;
   const [c] = await latestCheckins(workspaceId, 1);
   if (c && c.adSpendPerDay > 0 && c.aboutVisitors >= 30) return { cpv: clampCpv((c.adSpendPerDay * 30) / c.aboutVisitors), source: "checkin", at: c.createdAt.toISOString() };
   return null;
@@ -348,7 +365,7 @@ const STORY_NOTE: Record<StaticFormat, string> = {
   quote_card: "9:16 (1080×1920): same bubble, centred, with empty space above and below.",
 };
 
-type Ctx = { name: string; audience: string; promise: string; proof: string; tone: StudioTone };
+type Ctx = { name: string; audience: string; promise: string; proof: string; tone: StudioTone; website: boolean };
 
 function ctxFrom(input: AdStudioInput, fallbackName: string): Ctx {
   const promise = bare(input.promise || input.offer || (input.niche ? `get real progress with ${lcFirst(input.niche)}` : "get real progress, week by week"));
@@ -358,6 +375,7 @@ function ctxFrom(input: AdStudioInput, fallbackName: string): Ctx {
     promise,
     proof: bare(input.proof),
     tone: input.tone,
+    website: input.destination === "website",
   };
 }
 
@@ -395,7 +413,8 @@ function finishConcept(c: RawConcept, hasProof: boolean): StaticConcept {
 /** One rule-based static per format, filled with the owner's own words. */
 function ruleConcept(format: StaticFormat, x: Ctx): RawConcept {
   const colour = TONE_COLOUR[x.tone];
-  const door = (lead: string) => `${lead} Tap Learn more to look inside.`;
+  // Website ads sell the free checklist first. Only Skool-link ads invite people straight inside.
+  const door = (lead: string) => (x.website ? `${lead} The free checklist is the first step. Tap Learn more.` : `${lead} Tap Learn more to look inside.`);
   switch (format) {
     case "text_on_colour": {
       const words = "Motivation isn't the missing piece.";
@@ -637,47 +656,98 @@ export function videoText(v: VideoScript): string {
 // ---------------------------------------------------------------------------
 
 export type LaunchStep = { title: string; detail: string };
-export type LaunchPlan = { settings: { label: string; value: string }[]; steps: LaunchStep[]; after: LaunchStep[] };
+export type LaunchPlan = { destination?: StudioDestination; settings: { label: string; value: string }[]; steps: LaunchStep[]; after: LaunchStep[] };
+
+/** What happens after Publish, in the course's words. Both destinations follow the same week. */
+export function afterLaunch(): LaunchStep[] {
+  return [
+    { title: "Hands off till Day 6", detail: "Don't edit, pause or add anything to these ads. Every change restarts Meta's learning. If Meta rejects one, read the reason, fix that one line and resubmit." },
+    { title: "Get your verdicts on Day 6", detail: "In Ads Manager, set the date range to Maximum and copy spend, impressions and link clicks into Ad review, for ads with 1,000 impressions or more. You get Keep, Fix, Kill or Too early." },
+    { title: "Kill ads go off on Day 6", detail: "Switch off the ones marked Kill with the toggle next to the ad. That's the only change that day. Too early hasn't lost anything, so leave those running." },
+    { title: "Refresh every 1–3 weeks", detail: "When clicks get dearer, come back here and make 5 new statics. Keep the winners. The video script is here for when you're ready." },
+  ];
+}
 
 /** Numbered click-steps for Meta Ads Manager. Rules, not AI, so they never drift. */
-export function launchPlan(o: { budget: number; country: string; link: string; pixel: boolean; statics: Pick<StaticConcept, "format">[] }): LaunchPlan {
+export function launchPlan(o: { budget: number; country: string; link: string; pixel: boolean; statics: Pick<StaticConcept, "format">[]; destination?: StudioDestination; websiteUrl?: string }): LaunchPlan {
   const b = money(o.budget);
   const names = o.statics.map((s, i) => `S${i + 1} ${FORMAT_LABEL[s.format]}`);
+  const audience = `${o.country}, 18+, Advantage+ audience on, no interests`;
+  const ads = `All ${o.statics.length} statics in that one ad set`;
+  const open: LaunchStep = { title: "Open Ads Manager", detail: "On a computer, go to adsmanager.facebook.com and click the green + Create button." };
+  const budget: LaunchStep = { title: "Set one daily budget", detail: `Under Budget, choose Daily budget and type ${b}. One campaign, one ad set, one budget.` };
+  const broad: LaunchStep = { title: "Go broad", detail: `In Audience, keep Advantage+ audience on. Set Locations to ${o.country} and the minimum age to 18. Add no interests: your 5 pictures do the targeting.` };
+  const placements: LaunchStep = { title: "Leave placements alone", detail: "Keep Advantage+ placements on. Meta shows your ads where they're cheapest." };
+  const firstAd: LaunchStep = { title: "Make ad 1", detail: "In the ad, pick your Facebook Page (and Instagram account). Choose Single image or video, upload static S1, paste its Primary text and Headline, and pick its Call to action." };
+  const others: LaunchStep = {
+    title: `Add the other ${Math.max(0, o.statics.length - 1)}`,
+    detail: `Duplicate ad 1 (the three dots next to it) until you have ${o.statics.length} ads. Swap in each static's image and words. Name them ${names.join(", ")}, so Ad review is easy.`,
+  };
+  const publish: LaunchStep = { title: "Publish", detail: "Click Publish. Meta reviews new ads, usually within a day." };
+
+  if (o.destination === "website" && o.websiteUrl) {
+    return {
+      destination: "website",
+      settings: [
+        { label: "Campaign objective", value: "Leads" },
+        { label: "Campaign name", value: "Website · Leads" },
+        { label: "Conversion location", value: "Website" },
+        { label: "Performance goal", value: "Maximise number of conversions" },
+        { label: "Dataset", value: "Your Meta Pixel" },
+        { label: "Conversion event", value: "Lead" },
+        { label: "Ad sets", value: "1" },
+        { label: "Audience", value: audience },
+        { label: "Placements", value: "Advantage+ placements" },
+        { label: "Daily budget", value: b },
+        { label: "Ads", value: ads },
+        { label: "Website URL", value: o.websiteUrl },
+      ],
+      steps: [
+        open,
+        { title: "Pick Leads", detail: "Choose Leads as the campaign objective and click Continue. Name the campaign “Website · Leads”." },
+        budget,
+        {
+          title: "Send people to your website",
+          detail: `In the ad set, set Conversion location to Website and Performance goal to Maximise number of conversions. Under Dataset, pick your Pixel, then set Conversion event to Lead.${o.pixel ? "" : " Your Pixel isn't connected yet, so do that first in Settings › Meta Pixel & Conversions API."}`,
+        },
+        broad,
+        placements,
+        firstAd,
+        { title: "Paste your website address", detail: `In Website URL, paste ${o.websiteUrl}. It's your published funnel, the page with your free checklist, not your Skool link.` },
+        others,
+        publish,
+      ],
+      after: afterLaunch(),
+    };
+  }
   return {
+    destination: "skool",
     settings: [
       { label: "Campaign objective", value: "Traffic" },
       { label: "Performance goal", value: "Maximise number of landing page views" },
       { label: "Ad sets", value: "1" },
-      { label: "Audience", value: `${o.country}, 18+, Advantage+ audience on, no interests` },
+      { label: "Audience", value: audience },
       { label: "Placements", value: "Advantage+ placements" },
       { label: "Daily budget", value: b },
-      { label: "Ads", value: `All ${o.statics.length} statics in that one ad set` },
+      { label: "Ads", value: ads },
       { label: "Website URL", value: o.link },
     ],
     steps: [
-      { title: "Open Ads Manager", detail: "On a computer, go to adsmanager.facebook.com and click the green + Create button." },
+      open,
       { title: "Pick Traffic", detail: "Choose Traffic as the campaign objective and click Continue. Name the campaign “Skool link · Traffic”." },
-      { title: "Set one daily budget", detail: `Under Budget, choose Daily budget and type ${b}. One campaign, one ad set, one budget.` },
+      budget,
       {
         title: "Send people to your website",
         detail: `In the ad set, set Conversion location to Website and Performance goal to Maximise number of landing page views.${o.pixel ? " Under Dataset, pick your Pixel." : ""}`,
       },
-      { title: "Go broad", detail: `In Audience, keep Advantage+ audience on. Set Locations to ${o.country} and the minimum age to 18. Add no interests: your 5 pictures do the targeting.` },
-      { title: "Leave placements alone", detail: "Keep Advantage+ placements on. Meta shows your ads where they're cheapest." },
-      { title: "Make ad 1", detail: "In the ad, pick your Facebook Page (and Instagram account). Choose Single image or video, upload static S1, paste its Primary text and Headline, and pick its Call to action." },
+      broad,
+      placements,
+      firstAd,
       { title: "Paste your Skool link", detail: `In Website URL, paste ${o.link}. It's your tracked Skool link: it counts the visit, then opens your Skool About page.` },
-      {
-        title: `Add the other ${Math.max(0, o.statics.length - 1)}`,
-        detail: `Duplicate ad 1 (the three dots next to it) until you have ${o.statics.length} ads. Swap in each static's image and words. Name them ${names.join(", ")}, so Ad review is easy.`,
-      },
-      { title: "Publish", detail: "Click Publish. Meta reviews new ads, usually within a day." },
+      others,
+      publish,
     ],
-    after: [
-      { title: "Hands off till Day 9", detail: "Don't edit, pause or add anything yet. Every change restarts Meta's learning." },
-      { title: "Check in Ad review on Day 7", detail: "Copy spend, impressions and link clicks into Ad review. You get keep, fix or kill, and which part to fix. Read it and change nothing: edits wait for Day 9." },
-      { title: "Refresh every 1–3 weeks", detail: "When clicks get dearer, come back here and make 5 new statics. Keep the winners." },
-      { title: "Add the video on Day 9", detail: "Record the video script on Day 8. On Day 9, add it to the same ad set alongside fresh statics for the ones you killed, so Meta relearns once instead of twice." },
-    ],
+    after: afterLaunch(),
   };
 }
 
@@ -695,11 +765,24 @@ export type AdStudioPack = {
   inspiration: string[];
   skoolLink: string;
   country: string;
+  /** Left out on packs saved before the choice existed (those are all Skool-link packs). */
+  destination?: StudioDestination;
+  /** The published funnel a website pack points at. */
+  websiteUrl?: string;
 };
 
 const aiSchema = z.object({ summary: z.string(), concepts: z.array(conceptSchema), video: videoSchema });
 
-const SYSTEM = `You are a Meta ads creative strategist for Skool community owners. They run their first ads at $5 to $10 a day, straight to their Skool About page (their Skool link). No social media following needed.
+const AUDIENCE_LINE: Record<StudioDestination, string> = {
+  website: "These ads send people to the owner's own website, where they give an email for a free checklist. They sell the free checklist, never the paid group cold.",
+  skool: "These ads send people straight to the owner's Skool About page (their Skool link), in a campaign of their own.",
+};
+const DOOR_LINE: Record<StudioDestination, string> = {
+  website: "The door is one way in: tap the button to get the free checklist. It goes to the owner's website, not the Skool About page. Never \"DM me\" or \"follow me\".",
+  skool: "The door is one way in: tap the button to look inside the Skool community. Never \"DM me\" or \"follow me\".",
+};
+
+const systemFor = (destination: StudioDestination) => `You are a Meta ads creative strategist for Skool community owners. They run small budgets, up to $15 a day across two campaigns: about $10 a day to their website and $5 to their Skool link. ${AUDIENCE_LINE[destination]} No social media following needed.
 Write 5 static image ads ("statics") for ONE ad set, plus one short selfie video script for later.
 
 Meta's Andromeda system groups near-identical ads together and treats them as one ad. So the 5 statics must be genuinely different:
@@ -709,11 +792,12 @@ Meta's Andromeda system groups near-identical ads together and treats them as on
 - Angles: pain, dream, lesson. Use proof (and quote_card) only if a real member result is given below, and then only with those exact facts.
 
 ${AD_FRAMEWORK_RULES}
+${destination === "website" ? "For this pack, the Door and the ad's link go to the owner's website for the free checklist, not the Skool About page." : ""}
 
 Each static has:
 - name: a 2-4 word nickname.
 - onImageText: the words on the picture, 7 words or fewer.
-- hook, turn, door: the primary text in three short parts. The door is one way in: tap the button to look inside the Skool community. Never "DM me" or "follow me".
+- hook, turn, door: the primary text in three short parts. ${DOOR_LINE[destination]}
 - headline: under 40 characters. cta: one of ${STATIC_CTAS.join(", ")} ("Learn more" is the safe default).
 - imagePrompt: a complete prompt to paste into ChatGPT, Gemini or Midjourney: the scene, style, colours, and where the on-image words go (write them in quotes). Portrait 4:5, 1080×1350 px. No logos, brand names or real people's likeness. Before/after splits show routines or to-do lists, never bodies.
 - storyNote: one line on the 9:16 (1080×1920) Stories and Reels version.
@@ -725,7 +809,7 @@ Meta ad policy, always: never "Are you…?" or any wording that asserts or impli
 ${VOICE_RULES}
 summary: one or two sentences on why these five, in plain words.`;
 
-function buildPrompt(input: AdStudioInput, name: string, link: string) {
+function buildPrompt(input: AdStudioInput, name: string, link: string, websiteUrl: string | null) {
   const ads = input.competitorAds.slice(0, 8);
   return `Community: ${name}.
 Niche: ${input.niche || "unknown"}.
@@ -734,7 +818,7 @@ Who it's for, in the owner's words: ${input.audience || "unknown"}.
 The result they promise: ${input.promise || "unknown"}.
 Real member result: ${input.proof || "none yet (so no proof angle and no quote_card)"}.
 Tone: ${input.tone}. Country: ${countryLabel(input.country)}. Daily budget: $${input.budget}.
-Ads send people to ${link} (it opens the Skool About page).
+${input.destination === "website" && websiteUrl ? `Ads send people to ${websiteUrl} (the owner's website, where they give an email for a free checklist).` : `Ads send people to ${link} (it opens the Skool About page).`}
 ${
   ads.length
     ? `Long-running competitor ads the owner picked (days running, page, text). Study the rhythm of their hooks and their angles; never copy their wording, names, results or claims:
@@ -793,10 +877,14 @@ export async function makeAdStudioPack(
   const db = await getDb();
   const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
   if (!ws) return { ok: false, error: "Workspace not found." };
-  const input = withWorkspace(parsed.data, ws);
+  const websiteUrl = await publishedFunnelUrl(workspaceId);
+  const destination = parsed.data.destination ?? defaultDestination(Boolean(websiteUrl), (await listAdStudioPacks(workspaceId, 1)).length > 0);
+  // Before any AI run is spent: a plan with nowhere to send people is no use.
+  if (destination === "website" && !websiteUrl) return { ok: false, error: "Your website isn't published yet. Publish your funnel in Funnels & pages, or send these ads to your Skool link." };
+  const input: AdStudioInput = { ...withWorkspace(parsed.data, ws), destination };
   const hasProof = Boolean(input.proof);
   const link = skoolLinkFor(ws.slug);
-  const numbers = studioNumbers(input.budget, await realCostPerVisit(workspaceId));
+  const numbers = studioNumbers(input.budget, await realCostPerVisit(workspaceId, destination));
 
   let statics = fallbackStatics(input, ws.name);
   let video = videoFromConcept(statics[0], 0, hasProof);
@@ -821,8 +909,8 @@ export async function makeAdStudioPack(
           effort: "medium",
           maxTokens: 14000,
           schema: aiSchema,
-          system: SYSTEM,
-          prompt: buildPrompt(input, input.businessName, link),
+          system: systemFor(destination),
+          prompt: buildPrompt(input, input.businessName, link, websiteUrl),
         });
         statics = normalizeStatics(res.data.concepts, input, ws.name);
         video = finishVideo(res.data.video, statics, hasProof);
@@ -839,11 +927,13 @@ export async function makeAdStudioPack(
     summary,
     numbers,
     statics,
-    plan: launchPlan({ budget: numbers.budget, country: countryLabel(input.country), link, pixel: Boolean(ws.settings.metaPixelId), statics }),
+    plan: launchPlan({ budget: numbers.budget, country: countryLabel(input.country), link, pixel: Boolean(ws.settings.metaPixelId), statics, destination, websiteUrl: websiteUrl ?? undefined }),
     video,
     inspiration: firstLines(input.competitorAds),
     skoolLink: link,
     country: countryLabel(input.country),
+    destination,
+    ...(destination === "website" && websiteUrl ? { websiteUrl } : {}),
   };
   const [row] = await db
     .insert(aiGenerations)
@@ -885,6 +975,18 @@ export async function getAdStudioPack(workspaceId: string, id: string): Promise<
   return r ? { id: r.id, createdAt: r.createdAt, model: r.model, input: r.input as Partial<AdStudioInput>, pack: r.output as unknown as AdStudioPack } : null;
 }
 
+/** The address of the member's published funnel (the newest, if there's more than one), or null. */
+export async function publishedFunnelUrl(workspaceId: string): Promise<string | null> {
+  const db = await getDb();
+  const [site] = await db
+    .select({ slug: sites.slug, customDomain: sites.customDomain, domainStatus: sites.domainStatus })
+    .from(sites)
+    .where(and(eq(sites.workspaceId, workspaceId), eq(sites.published, true)))
+    .orderBy(desc(sites.updatedAt))
+    .limit(1);
+  return site ? siteBaseUrl(site) : null;
+}
+
 /** The latest Ad research run's ads, longest-running first, so the owner can pick a few. */
 export async function latestResearchAds(workspaceId: string): Promise<{ id: string; query: string; createdAt: Date; ads: ResearchAd[] } | null> {
   const db = await getDb();
@@ -914,6 +1016,10 @@ export async function adStudioDefaults(ws: WsRow): Promise<AdStudioInput> {
   const s = ws.settings;
   const prev = last?.input ?? {};
   const base = adStudioInputSchema.parse({});
+  const destination = defaultDestination(Boolean(await publishedFunnelUrl(ws.id)), Boolean(last));
+  // The course's budgets: $10 a day to the website, $5 to the Skool link. The last pack's budget
+  // only carries over to the same kind of pack, so Day 2 doesn't start at Day 1's $10.
+  const sameKind = (prev.destination ?? "skool") === destination;
   return {
     ...base,
     businessName: String(prev.businessName || s.businessName || ws.name),
@@ -923,9 +1029,10 @@ export async function adStudioDefaults(ws: WsRow): Promise<AdStudioInput> {
     promise: String(prev.promise || kit?.input.outcome || ""),
     proof: String(prev.proof || ""),
     price: Number(prev.price) || 0,
-    budget: Number(prev.budget) || 5,
+    budget: (sameKind && Number(prev.budget)) || (destination === "website" ? 10 : 5),
     country: typeof prev.country === "string" && /^[A-Z]{2}$/.test(prev.country) ? prev.country : "US",
     tone: STUDIO_TONES.includes(prev.tone as StudioTone) ? (prev.tone as StudioTone) : base.tone,
+    destination,
   };
 }
 

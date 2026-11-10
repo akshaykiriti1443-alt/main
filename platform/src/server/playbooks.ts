@@ -26,13 +26,13 @@ export const PLAYBOOKS: Playbook[] = [
     description: "Your first ads, same day: your numbers, 5 genuinely different static ads with image prompts, the launch plan and a video script for later.",
     say: `Make my 5 statics with ${env.platformName}.`,
     steps: `1. Call get_overview for my business, niche, offer and Skool link.
-2. Ask me, unless I already said: my daily budget ($5, $10 or other), the country to target, who it's for in my own words, the result I promise, a real member result if I have one (optional), and the tone (friendly, bold or calm).
+2. Ask me, unless I already said: where these ads go (my website or my Skool link), my daily budget ($10 for website ads, $5 for Skool-link ads, or other), the country to target, who it's for in my own words, the result I promise, a real member result if I have one (optional), and the tone (friendly, bold or calm).
 3. Optional: call search_competitor_ads with my niche. Study the longest-running ads' hooks and angles. Never copy their wording, names or claims.
 4. Write 5 statics for ONE ad set. Meta's Andromeda system groups near-identical ads and treats them as one, so each static uses a different format (text_on_colour, photo_overlay, notes_app, before_after, checklist; quote_card only with a real member result) and a different persona, and every pair differs in at least two of: format, persona, angle, benefit. Angles: pain, dream, lesson; proof only with a real result.
-5. Each static: on-image text (7 words or fewer), a Hook, Turn and Door (the Door is one way in: my Skool link to the About page), a headline, a call to action (Learn more is the safe default), an image prompt ready for ChatGPT, Gemini or Midjourney (portrait 4:5, 1080×1350), a one-line 9:16 Stories note and a one-line design note. Meta policy: no "Are you…?" personal attributes, no income claims, no made-up testimonials or numbers.
+5. Each static: on-image text (7 words or fewer), a Hook, Turn and Door (the Door is one way in: to my free checklist if these ads go to my website, or to the About page if they go to my Skool link), a headline, a call to action (Learn more is the safe default), an image prompt ready for ChatGPT, Gemini or Midjourney (portrait 4:5, 1080×1350), a one-line 9:16 Stories note and a one-line design note. Meta policy: no "Are you…?" personal attributes, no income claims, no made-up testimonials or numbers.
 6. Write one 20-30 second selfie video script on the angle you think will win: Hook (0-2s), Turn and Door, each with what to say, the on-screen caption and the shot.
 7. Call make_ad_studio_pack with my answers, the 5 statics and the video. It checks Meta policy and Andromeda variety, adds my numbers and the Ads Manager click-steps, and saves it to my Ad studio page.
-8. Show me my numbers, the 5 statics and the launch plan's numbered steps it returns, plus any policy flags to fix. Remind me: hands off for 72 hours, then Ad review.`,
+8. Show me my numbers, the 5 statics and the launch plan's numbered steps it returns, plus any policy flags to fix. Remind me: hands off till Day 6, then Ad review, and any ad marked Kill goes off that day.`,
   },
   {
     name: "do_my_ai_tasks",

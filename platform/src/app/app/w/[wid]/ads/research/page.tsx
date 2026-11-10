@@ -128,8 +128,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
   return (
     <>
       <PageHead
-        lesson="1.5"
-        stage="Day 1"
+        lesson="Days 1 and 2"
         eyebrow="Get members"
         title="Ad research"
         sub="Find the ads your competitors keep paying for, then let AI show you what's working in your niche and the gaps nobody uses yet."
@@ -351,7 +350,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
               })}
             </div>
             <Callout tone="tip">
-              Next, lesson 1.6: open <Link href={`/app/w/${wid}/ads/studio`}>Ad studio</Link>. Your 🔥 finds are ticked under Borrow from long-running ads, so Make my 5 statics turns them into five different statics, with image prompts and a launch plan.
+              Next: open <Link href={`/app/w/${wid}/ads/studio`}>Ad studio</Link>. Your 🔥 finds are ticked under Borrow from long-running ads, so Make my 5 statics turns them into five different statics, with image prompts and a launch plan.
             </Callout>
           </Panel>
         </>

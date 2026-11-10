@@ -53,15 +53,15 @@ describe("Your path: the course as a guided flow", () => {
     const fresh = await computePath({ ...ws, settings: { ...ws.settings, skoolUrl: "" } }, user.id);
     // Connecting your AI is optional, so a new member starts on the launch kit.
     expect(fresh.next?.key).toBe("kit");
-    expect(fresh.stages[0].steps.map((x) => x.key)).toEqual(["app", "kit", "skool", "publish", "lead1"]);
-    expect(fresh.stages[1].steps.map((x) => x.key)).toEqual(["research", "statics", "clicks", "pixel"]);
-    expect(fresh.stages.find((s) => s.key === "day8")?.steps.find((x) => x.key === "ai")).toMatchObject({ title: "Connect your AI (optional)", lesson: "3.1", kind: "optional", done: false });
-    expect(fresh.total).toBe(26); // 27 with "Say hi"
+    expect(fresh.stages[0].steps.map((x) => x.key)).toEqual(["app", "kit", "skool", "publish", "pixel", "lead1"]);
+    expect(fresh.stages[1].steps.map((x) => x.key)).toEqual(["research", "statics", "clicks"]);
+    expect(fresh.stages.find((s) => s.key === "day2")?.steps.find((x) => x.key === "ai")).toMatchObject({ title: "Get your free AI key", lesson: "Day 2", done: false, locked: "Opens Day 2" });
+    expect(fresh.total).toBe(28); // 29 with "Say hi"
     expect(fresh.loop).toEqual({ clicks: 0, leads: 0, customers: 0 });
     // Lead follow-ups need the Growth plan, like every automation.
-    expect(fresh.stages.find((s) => s.key === "rhythm")?.steps.find((s) => s.key === "automations")).toMatchObject({
+    expect(fresh.stages.find((s) => s.key === "season2")?.steps.find((s) => s.key === "automations")).toMatchObject({
       title: "Switch on your lead follow-ups",
-      lesson: "6.1",
+      lesson: "Season 2",
       href: `/app/w/${ws.id}/automations`,
       locked: "Growth plan",
       kind: "optional",
@@ -97,41 +97,44 @@ describe("Your path: the course as a guided flow", () => {
     for (const k of ["visitors", "network", "weeks"]) expect(m(k)?.done, k).toBe(true);
   });
 
-  it("follows the course (v6): Day 1, Launch Week, then the after-trial modules, the agency last", async () => {
+  it("follows the course: Day 1 to Day 7, then Season 2, the agency last", async () => {
     const { ws, user } = await makeWorkspace();
     const p = await computePath({ ...ws, accessSource: "member" }, user.id, { entryTicketOn: true });
     const where = (k: string) => p.stages.find((s) => s.steps.some((x) => x.key === k));
     const all = p.stages.flatMap((s) => s.steps);
     expect(Object.fromEntries(all.map((x) => [x.key, x.lesson]))).toEqual({
-      hello: "1.1", app: "1.3", kit: "1.3", skool: "1.3", publish: "1.4", lead1: "1.4",
-      research: "1.5", statics: "1.6", clicks: "1.7", pixel: "1.7",
-      checkin: "2.6", review: "2.6",
-      ai: "3.1", refresh: "3.1",
-      l2: "4.1", customer: "4.2",
-      unlock: "5.2", claim1: "5.2",
-      email4: "6.1", automations: "6.1", weeks: "6.2",
-      bio: "7.1", visitors: "7.1", network: "7.2", l3: "7.2", l4: "7.2",
-      agency: "B.1",
+      hello: "Day 1", app: "Day 1", kit: "Day 1", skool: "Day 1", publish: "Day 1", pixel: "Day 1", lead1: "Day 1",
+      research: "Day 1", statics: "Day 1", clicks: "Day 1",
+      ai: "Day 2", refresh: "Day 2",
+      tracking: "Day 3",
+      unlock: "Day 4",
+      warm: "Day 5",
+      review: "Day 6",
+      checkin: "Day 7",
+      l2: "Season 2", customer: "Season 2", claim1: "Season 2", email4: "Season 2", automations: "Season 2", weeks: "Season 2",
+      bio: "Season 2", visitors: "Season 2", network: "Season 2", l3: "Season 2", l4: "Season 2",
+      agency: "Bonus",
     });
-    expect(p.total).toBe(27);
-    expect(where("automations")?.key).toBe("rhythm");
-    expect(p.stages.map((s) => s.key)).toEqual(["start", "ads", "launch", "day8", "level2", "talk", "rhythm", "upper", "second"]);
-    expect(p.stages.map((s) => s.tag)).toEqual(["Day 1", "Day 1", "Days 2–7", "Day 8", "Level 2", "Talk", "Rhythm", "Season 2", "Bonus"]);
+    expect(p.total).toBe(29);
+    expect(where("automations")?.key).toBe("season2");
+    expect(p.stages.map((s) => s.key)).toEqual(["start", "ads", "day2", "day3", "day4", "day5", "day6", "day7", "season2", "second"]);
+    expect(p.stages.map((s) => s.tag)).toEqual(["Day 1", "Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7", "Season 2", "Bonus"]);
     expect(p.stages.map((s) => s.steps.map((x) => x.key))).toEqual([
-      ["hello", "app", "kit", "skool", "publish", "lead1"],
-      ["research", "statics", "clicks", "pixel"],
-      ["checkin", "review"],
+      ["hello", "app", "kit", "skool", "publish", "pixel", "lead1"],
+      ["research", "statics", "clicks"],
       ["ai", "refresh"],
-      ["l2", "customer"],
-      ["unlock", "claim1"],
-      ["email4", "automations", "weeks"],
-      ["bio", "visitors", "network", "l3", "l4"],
+      ["tracking"],
+      ["unlock"],
+      ["warm"],
+      ["review"],
+      ["checkin"],
+      ["l2", "customer", "claim1", "email4", "automations", "weeks", "bio", "visitors", "network", "l3", "l4"],
       ["agency"],
     ]);
     expect(all.find((x) => x.key === "research")?.title).toBe("Find ads that already work");
     expect(all.find((x) => x.key === "lead1")?.title).toBe("Be your own lead #1");
     // Optional steps and outcomes are marked, so Up next walks past them.
-    expect(all.filter((x) => x.kind === "optional").map((x) => x.key)).toEqual(["pixel", "ai", "refresh", "automations", "agency"]);
+    expect(all.filter((x) => x.kind === "optional").map((x) => x.key)).toEqual(["automations", "agency"]);
     expect(all.filter((x) => x.kind === "outcome").map((x) => x.key)).toEqual(["l2", "customer", "claim1", "visitors", "network", "l3", "l4"]);
     // The agency step stays last.
     expect(all.at(-1)?.key).toBe("agency");
@@ -141,14 +144,15 @@ describe("Your path: the course as a guided flow", () => {
     expect(steps.map((x) => x.key)).not.toContain("sync");
     for (const x of steps) expect(x.href, x.key).not.toMatch(/\/skool(\/|$|[?#])/);
     expect(p.stages.map((s) => s.title)).toEqual([
-      "Open the shop",
-      "Five ads live",
-      "Launch Week",
-      "Keep, fix or kill",
-      "Wake up Printy",
-      "Give them a reason to post",
-      "Half a boring hour a week",
-      "The upper rungs",
+      "Your whole machine goes live",
+      "Your first 5 ads",
+      "Five more ads, straight to Skool",
+      "Walk through your own machine",
+      "Furnish the room before guests arrive",
+      "Your first 20 already know your name",
+      "Your real numbers",
+      "The scoreboard, and your decision",
+      "After your free week",
       "Agency or software",
     ]);
     expect(all.find((x) => x.key === "hello")?.why).not.toMatch(/likes?/i);
@@ -158,7 +162,7 @@ describe("Your path: the course as a guided flow", () => {
     const { ws, user } = await makeWorkspace();
     const db = await getDb();
     const lead1 = async () => (await computePath(ws, user.id)).stages[0].steps.find((s) => s.key === "lead1");
-    expect(await lead1()).toMatchObject({ title: "Be your own lead #1", lesson: "1.4", href: `/app/w/${ws.id}/leads`, done: false });
+    expect(await lead1()).toMatchObject({ title: "Be your own lead #1", lesson: "Day 1", href: `/app/w/${ws.id}/leads`, done: false });
     // An Unlock claim or an import makes a contact, but that isn't an opt-in.
     const [c] = await db.insert(contacts).values({ workspaceId: ws.id, email: `me-${Date.now()}@example.com`, source: "manual" }).returning();
     await db.insert(activities).values({ workspaceId: ws.id, contactId: c.id, type: "unlock_claim", data: {} });
@@ -170,9 +174,9 @@ describe("Your path: the course as a guided flow", () => {
     expect(p.loop.leads).toBe(0);
   });
 
-  it("Up next walks past the optional Pixel and outcome steps, which still tick when they happen", async () => {
+  it("makes the Pixel a Day 1 to-do between publish and lead #1, and walks past outcomes, which still tick", async () => {
     const { ws: fresh, user } = await makeWorkspace();
-    // Past Day 18, so no course lesson is still waiting to open.
+    // Past every Opens Day, so no course day is still waiting.
     const ws = { ...fresh, createdAt: new Date(Date.now() - 19.5 * 86_400_000) };
     const db = await getDb();
     const steps = async (w = ws) => {
@@ -181,40 +185,38 @@ describe("Your path: the course as a guided flow", () => {
     };
     const gen = (kind: "launch_kit" | "ad_research" | "ad_studio" | "ad_review") => db.insert(aiGenerations).values({ workspaceId: ws.id, kind, model: "rules" });
 
-    // The Pixel is optional and comes right after the Skool-link clicks.
     let { p, s } = await steps();
-    const keys = p.stages[1].steps.map((x) => x.key);
-    expect(keys.indexOf("pixel")).toBe(keys.indexOf("clicks") + 1);
-    expect(s("pixel")).toMatchObject({ title: "Connect your Meta Pixel (optional)", lesson: "1.7", kind: "optional", done: false });
+    const keys = p.stages[0].steps.map((x) => x.key);
+    expect(keys.indexOf("pixel")).toBe(keys.indexOf("publish") + 1);
+    expect(keys.indexOf("lead1")).toBe(keys.indexOf("pixel") + 1);
+    expect(s("pixel")).toMatchObject({ title: "Connect your Meta Pixel", lesson: "Day 1", done: false });
+    expect(s("pixel")?.kind).toBeUndefined();
 
-    // Day 1 done except the Pixel: Up next goes to Launch Week, not Settings › Tracking.
+    // Everything before it done: the Pixel is Up next, not skipped.
     await gen("launch_kit");
     await db.insert(sites).values({ workspaceId: ws.id, name: "Funnel", slug: `funnel-${Date.now()}`, theme: {} as never, published: true });
+    ({ p } = await steps());
+    expect(p.next?.key).toBe("pixel");
+
+    const pixelled = { ...ws, settings: { ...ws.settings, metaPixelId: "1234567890" } };
     await db.insert(activities).values({ workspaceId: ws.id, type: "lead", data: {} });
     await gen("ad_research");
     await gen("ad_studio");
     await db.insert(activities).values({ workspaceId: ws.id, type: "skool_visit", data: { source: "meta-ad" } });
-    ({ p, s } = await steps());
-    expect(p.stages.slice(0, 2).flatMap((st) => st.steps).filter((x) => !x.done).map((x) => x.key)).toEqual(["pixel"]);
-    expect(p.next?.key).toBe("checkin");
-
-    // Check-in and review done, no customer yet: Up next skips the optional Day 8 steps, Level 2 and "Land your first paying member".
-    await saveCheckin(ws.id, { aboutVisitors: 40, newPaid: 0, networkSignups: 0, linkInBio: false, skoolLevel: 1 });
-    await gen("ad_review");
-    ({ p, s } = await steps());
+    ({ p, s } = await steps(pixelled));
+    expect(s("pixel")?.done).toBe(true);
+    expect(p.next?.key).toBe("ai");
     expect(s("customer")).toMatchObject({ kind: "outcome", done: false });
     expect(s("l2")).toMatchObject({ kind: "outcome", done: false });
-    expect(s("refresh")).toMatchObject({ kind: "optional", done: false });
-    expect(p.next?.key).toBe("unlock");
     const before = p.done;
 
-    // Outcomes and optional steps still tick when they happen.
+    // Outcomes still tick when they happen, and never hold Up next.
     await saveCheckin(ws.id, { aboutVisitors: 60, newPaid: 1, networkSignups: 0, linkInBio: false, skoolLevel: 1 });
-    ({ p, s } = await steps({ ...ws, settings: { ...ws.settings, metaPixelId: "1234567890" } }));
+    ({ p, s } = await steps(pixelled));
     expect(s("customer")?.done).toBe(true);
-    expect(s("pixel")?.done).toBe(true);
+    expect(s("checkin")?.done).toBe(true); // the check-in itself ticks too
     expect(p.done).toBe(before + 2);
-    expect(p.next?.key).toBe("unlock");
+    expect(p.next?.key).toBe("ai");
   });
 
   it("a step locked to another plan never holds Up next, but stays listed with its lock", async () => {
@@ -222,24 +224,27 @@ describe("Your path: the course as a guided flow", () => {
     const ws = { ...fresh, createdAt: new Date(Date.now() - 19.5 * 86_400_000) }; // past every Opens Day
     const db = await getDb();
     const gen = (kind: "launch_kit" | "ad_research" | "ad_studio" | "ad_review") => db.insert(aiGenerations).values({ workspaceId: ws.id, kind, model: "rules" });
-    // Every to-do up to "Create your first Unlock" done.
-    for (const k of ["launch_kit", "ad_research", "ad_studio", "ad_review"] as const) await gen(k);
+    // Every to-do through Day 7 done.
+    for (const k of ["launch_kit", "ad_research", "ad_studio", "ad_studio", "ad_review"] as const) await gen(k);
     await db.insert(sites).values({ workspaceId: ws.id, name: "Funnel", slug: `funnel-lock-${Date.now()}`, theme: {} as never, published: true });
     await db.insert(activities).values({ workspaceId: ws.id, type: "lead", data: {} });
+    await db.insert(activities).values({ workspaceId: ws.id, type: "lead", data: {} });
     await db.insert(activities).values({ workspaceId: ws.id, type: "skool_visit", data: { source: "meta-ad" } });
+    await db.insert(contacts).values({ workspaceId: ws.id, email: `warm-${Date.now()}@example.com`, source: "manual" });
     await saveCheckin(ws.id, { aboutVisitors: 60, newPaid: 0, networkSignups: 0, linkInBio: true, skoolLevel: 1 });
+    const ready = { ...ws, settings: { ...ws.settings, metaPixelId: "1234567890", aiKeyEnc: "x" } };
 
-    const member = await computePath(ws, user.id);
+    const member = await computePath(ready, user.id);
     const follow = member.stages.flatMap((s) => s.steps).find((s) => s.key === "automations");
     expect(follow).toMatchObject({ title: "Switch on your lead follow-ups", locked: "Growth plan", done: false });
     // "Create your first Unlock" is Up next, not the locked follow-ups.
     expect(member.next?.key).toBe("unlock");
     await createUnlock(ws.id, { title: "Hook Vault", reward: "100 hooks", rewardUrl: "https://docs.example.com/hooks", action: "comment", instructions: "Comment your niche.", skoolPostUrl: "", zapierWebhookUrl: "" });
     // ...then "Add email 4", walking past the locked follow-ups beside it.
-    expect((await computePath(ws, user.id)).next?.key).toBe("email4");
+    expect((await computePath(ready, user.id)).next?.key).toBe("email4");
 
     // On the Growth plan the step isn't locked, but it stays optional, so it still never holds Up next.
-    const growth = await computePath({ ...ws, plan: "growth" }, user.id);
+    const growth = await computePath({ ...ready, plan: "growth" }, user.id);
     expect(growth.stages.flatMap((s) => s.steps).find((s) => s.key === "automations")).toMatchObject({ kind: "optional", done: false });
     expect(growth.stages.flatMap((s) => s.steps).find((s) => s.key === "automations")?.locked).toBeUndefined();
     expect(growth.next?.key).toBe("email4");
@@ -273,21 +278,22 @@ describe("Your path: the course as a guided flow", () => {
     await db.insert(emailSequenceSteps).values([email(a.id, 0), email(a.id, 1), email(a.id, 2), email(b.id, 0), email(b.id, 1), email(b.id, 2)]);
     expect((await step("email4"))?.done).toBe(false);
     await db.insert(emailSequenceSteps).values(email(b.id, 3));
-    expect(await step("email4")).toMatchObject({ title: "Add email 4", lesson: "6.1", href: `/app/w/${ws.id}/emails`, done: true });
+    expect(await step("email4")).toMatchObject({ title: "Add email 4", lesson: "Season 2", href: `/app/w/${ws.id}/emails`, done: true });
   });
 
-  it("gives Launch Week its own stage badge, so it never reads as Level 2", async () => {
+  it("numbers each day, and Season 2 gets a flag so it never reads as Level 2", async () => {
     const { ws, user } = await makeWorkspace();
     const p = await computePath(ws, user.id);
     expect(Object.fromEntries(p.stages.map((s) => [s.key, stageBadge(s)]))).toEqual({
       start: { num: "1" },
       ads: { num: "1" },
-      launch: { icon: "calendar" },
-      day8: { num: "8" },
-      level2: { num: "2" },
-      talk: { icon: "flag" },
-      rhythm: { icon: "flag" },
-      upper: { icon: "flag" }, // "Season 2" must never show as a 2
+      day2: { num: "2" },
+      day3: { num: "3" },
+      day4: { num: "4" },
+      day5: { num: "5" },
+      day6: { num: "6" },
+      day7: { num: "7" },
+      season2: { icon: "flag" }, // "Season 2" must never show as a 2
       second: { icon: "flag" },
     });
     // Any other range ("Weeks 2–3") would never show its first number either.

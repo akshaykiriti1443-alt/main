@@ -59,7 +59,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
   const ladder = computeLadder(last);
   const link = skoolLinkFor(workspace.slug);
   const stale = !last || Date.now() - last.createdAt.getTime() > 8 * 86_400_000;
-  // The first check-in is Day 7 (lesson 2.6). Before that, members come here for the Skool link.
+  // The first check-in is Day 7. Before that, members come here for the Skool link.
   const beforeFirstCheckin = !last && launchDay(workspace.createdAt) < 7;
   const checkinFirst = stale && !beforeFirstCheckin;
 
@@ -145,8 +145,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
   return (
     <>
       <PageHead
-        lesson="2.6"
-        stage="Day 7"
+        lesson="Day 7"
         eyebrow="Get members"
         title="Growth ladder"
         sub="Skool runs ads for communities that climb its levels. See which rung you're on and exactly what gets you to the next one."
@@ -250,7 +249,7 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
           ) : null}
         </Panel>
 
-        <Panel icon={LinkIcon} title="Your Skool link" sub="Point your ads here, not straight at Skool. It counts every click by source and tells Meta about each visit, so your ads learn who actually lands.">
+        <Panel icon={LinkIcon} title="Your Skool link" sub="Point your Skool-link ads here, not straight at Skool. It counts every click by source and tells Meta about each visit, so your ads learn who actually lands.">
           {target ? (
             <>
               <div className="flex items-center gap-2">
