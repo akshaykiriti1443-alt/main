@@ -228,7 +228,9 @@ describe("honest about money, across the app", () => {
   });
 
   it("the sales page states the bill plainly, with the real seat count only", () => {
-    const page = source("app/skool/page.tsx");
+    // The words both /skool pages share live in content.tsx; the short page must not drop the bill line.
+    const page = source("app/skool/content.tsx");
+    expect(source("app/skool/page.tsx")).toContain("AUTO_BILL");
     expect(page).toContain("Skool bills you automatically unless you cancel");
     expect(page).toContain("What happens when the free week ends?");
     expect(page).toContain("IF_YOU_CANCEL.how");

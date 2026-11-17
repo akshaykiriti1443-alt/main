@@ -19,7 +19,7 @@ html:has(.sia-root) { scroll-behavior: smooth; }
 
 .sia .w { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 .sia .mono { font-family: var(--font-mono), 'Geist Mono', ui-monospace, monospace; }
-.sia .serif { font-family: var(--font-serif), 'Instrument Serif', Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+.sia .serif { font-family: var(--font-serif), 'Bricolage Grotesque', system-ui, sans-serif; font-style: normal; font-weight: 600; letter-spacing: -0.035em; font-synthesis: none; }
 .sia .grad { background: linear-gradient(100deg, #6ee7b7 0%, #34d399 45%, #a7f3d0 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .sia .gradd { background: linear-gradient(100deg, #065f46 0%, #10b981 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .sia .badge { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 500; }

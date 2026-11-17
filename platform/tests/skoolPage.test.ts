@@ -4,18 +4,19 @@ import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { WEEK } from "@/lib/week";
 
-// The public /skool sales page: one story in order, real prices only, no pressure, no fake proof,
-// and every app menu name it mentions is a real menu item.
+// The public /skool pages: the short sales page (/skool) and the full tour (/skool/inside). Each
+// tells its story in order, real prices only, no pressure, no fake proof, and every app menu name
+// they mention is a real menu item.
 
 const ROOT = path.join(process.cwd(), "src");
 const NO_PRESSURE = /\b(hurry|last chance|don't miss|you'd lose|you will lose|act now|lock it in|goes up soon|limited spots|spots left|only \d+ left)\b|\d+ days? left|\bcountdown\b/i;
 const FAKE_PROOF = /testimonial|\d[\d,]* (members|students|coaches) (joined|already)|made \$|earned \$|\$\d+k/i;
 const JARGON = /\b(server|platform owner|wallet|CAPI|Conversions API|env)\b/i;
 
-async function render(live: boolean) {
+async function render(live: boolean, page: "short" | "inside" = "inside") {
   vi.resetModules();
   vi.doMock("@/lib/reelvault", () => ({ reelVaultConfigured: () => live }));
-  const mod = await import("@/app/skool/page");
+  const mod = page === "short" ? await import("@/app/skool/page") : await import("@/app/skool/inside/page");
   return renderToStaticMarkup(mod.default());
 }
 const text = (html: string) =>
@@ -27,7 +28,46 @@ const text = (html: string) =>
     .replace(/&quot;/g, '"')
     .replace(/\s+/g, " ");
 
-describe("/skool page", () => {
+describe("/skool short page", () => {
+  it("says the whole offer up top, then the wins, the price and the questions", async () => {
+    const t = text(await render(true, "short"));
+    const order = ["without a following", "One membership. Three parts.", "Then nobody came.", "Seven days.", "No made-up reviews.", "How every day works", "What it costs", "Good to know", "Want every detail?"];
+    let at = -1;
+    for (const s of order) {
+      const i = t.indexOf(s, at + 1);
+      expect(i, s).toBeGreaterThan(at);
+      at = i;
+    }
+    for (const d of [1, 2, 3, 4, 5, 6, 7]) expect(t).toContain(`Day ${d}`);
+    // The ads are part of the course's story, but the money is never hidden: named in the price box and the FAQ.
+    expect(t).toContain("about $15 a day on your own card");
+    expect(t).toContain("about $15 a day while you test");
+    expect(t).toContain("Skool bills you automatically unless you cancel");
+    expect(t).toContain("The course, the OneX app and ReelVault");
+    expect(t).toContain("Do I need a following or an audience first?");
+    expect(t).not.toMatch(NO_PRESSURE);
+    expect(t).not.toMatch(FAKE_PROOF);
+    expect(t).not.toMatch(JARGON);
+    expect(t).not.toContain("—");
+    expect(t).not.toMatch(/(Claude|ChatGPT)[^.?]*instead/);
+  });
+
+  it("says plainly when ReelVault isn't switched on", async () => {
+    const t = text(await render(false, "short"));
+    expect(t).toContain("Being set up");
+    expect(t).toContain("The course and the OneX app");
+  });
+
+  it("joins on Skool, links the full tour, and every in-page link has a target", async () => {
+    const html = await render(true, "short");
+    expect(html).toContain('href="https://www.skool.com/0-to-1x-academy-9129/about"');
+    expect(html).toContain('href="http://localhost:3000/signup"');
+    expect(html).toContain('href="/skool/inside"');
+    for (const m of html.matchAll(/href="#([a-z-]+)"/g)) expect(html, m[1]).toContain(`id="${m[1]}"`);
+  });
+});
+
+describe("/skool/inside page", () => {
   it("renders the whole story in order, with ReelVault live", async () => {
     const t = text(await render(true));
     const order = ["Meet Pete", "We were all Pete once", "Seven days.", "One-Before-You", "The app does it.", "ReelVault:", "What it costs", "If you cancel", "Good to know"];
@@ -70,6 +110,7 @@ describe("/skool page", () => {
     expect(html).toContain('href="http://localhost:3000/signup"');
     expect(html).toContain('href="http://localhost:3000/login"');
     for (const id of ["week", "rule", "app", "cost", "cancel", "faq", "reelvault", "pete"]) expect(html).toContain(`id="${id}"`);
+    for (const m of html.matchAll(/href="#([a-z-]+)"/g)) expect(html, m[1]).toContain(`id="${m[1]}"`);
   });
 
   it("menu names on the page are the app's own", () => {
@@ -78,11 +119,13 @@ describe("/skool page", () => {
       .map((f) => readFileSync(f, "utf8"))
       .join("\n");
     const chips = new Set<string>();
-    for (const f of readdirSync(path.join(ROOT, "components/skool"))) {
-      const src = readFileSync(path.join(ROOT, "components/skool", f), "utf8");
+    // The section files and their motion pieces in components/skool/fx/.
+    for (const f of readdirSync(path.join(ROOT, "components/skool"), { recursive: true, withFileTypes: true })) {
+      if (!f.isFile() || !/\.tsx?$/.test(f.name)) continue;
+      const src = readFileSync(path.join(f.parentPath, f.name), "utf8");
       for (const m of src.matchAll(/label: "([^"]+)"/g)) chips.add(m[1]);
     }
-    const page = readFileSync(path.join(ROOT, "app/skool/page.tsx"), "utf8");
+    const page = readFileSync(path.join(ROOT, "app/skool/content.tsx"), "utf8");
     for (const m of page.matchAll(/tools: \[([^\]]+)\]/g)) for (const n of m[1].matchAll(/"([^"]+)"/g)) chips.add(n[1]);
     expect(chips.size).toBeGreaterThan(5);
     for (const c of chips) expect(menu, c).toContain(`label: "${c}"`);

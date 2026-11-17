@@ -19,7 +19,7 @@ function pinnedTheme() {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
-    <NextThemes attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange forcedTheme={pinnedTheme()}>
+    <NextThemes attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange forcedTheme={pinnedTheme()}>
       {children}
     </NextThemes>
   );

@@ -1,0 +1,321 @@
+/* The /skool page's look: glass, soft violet light, light that follows the pointer.
+   Two themes. Light (the default) is a bright lilac morning; dark (html.dark) is a deep violet night.
+   How the two share one set of components: the components were drawn for the night and write
+   "white" for ink (text-white/60, bg-white/[0.05]). In light, .sk-site re-points --color-white at
+   the ink colour, so the same classes read as dark text and soft ink tints on the light page.
+   Anything that must stay white in both themes uses #fff, and a deliberately dark picture (a phone
+   screen) wears .sk-island, which puts the night's tokens back for everything inside it.
+   Every effect is decoration: with no JS, no WebGL or reduced motion the page reads the same. */
+
+@property --sk-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* Light: the default. */
+.sk-site {
+  --background: #f7f5ff;
+  --foreground: #17112f;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --muted: rgb(23 17 47 / 0.04);
+  --border: rgb(23 17 47 / 0.09);
+  --color-white: #17112f;
+  --violet-200: #4a22cf;
+  --violet-300: #5b33e8;
+  --sk-violet: #6a45f5;
+  --sk-lilac: #5b33e8;
+  --sk-pink: #d9367f;
+  --sk-gold: #c27c00;
+  --sk-mint: #0a8f63;
+  --sk-line: rgb(23 17 47 / 0.06);
+  --sk-glass: rgb(255 255 255 / 0.7);
+  --sk-frame: #ffffff;
+  --sk-on-solid: #ffffff;
+  --sk-nav: rgb(255 255 255 / 0.6);
+  --sk-nav-scrolled: rgb(255 255 255 / 0.86);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Dark: the night. Also used inside .sk-island in either theme. */
+.dark .sk-site,
+.sk-island {
+  --background: #07051a;
+  --foreground: #eeebf8;
+  --card: #0f0c26;
+  --popover: #120e2c;
+  --muted: rgb(255 255 255 / 0.05);
+  --border: rgb(255 255 255 / 0.085);
+  --color-white: #fff;
+  --violet-200: #dcd2fe;
+  --violet-300: #c0aefc;
+  --sk-violet: #7c5cff;
+  --sk-lilac: #c9b8ff;
+  --sk-pink: #ff6fae;
+  --sk-gold: #ffd36f;
+  --sk-mint: #6ff2c4;
+  --sk-line: rgb(255 255 255 / 0.09);
+  --sk-glass: rgb(255 255 255 / 0.035);
+  --sk-frame: rgb(13 10 38 / 0.9);
+  --sk-on-solid: #12082e;
+  --sk-nav: rgb(16 11 42 / 0.42);
+  --sk-nav-scrolled: rgb(12 9 34 / 0.8);
+}
+.sk-island { color: #fff; }
+.sk-site ::selection { background: rgb(124 92 255 / 0.3); }
+.dark .sk-site ::selection { background: rgb(124 92 255 / 0.45); color: #fff; }
+
+/* Lenis (smooth scroll) needs these. */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+@layer components {
+/* Headlines: Bricolage Grotesque, big and tight. */
+.sk-display {
+  font-family: var(--font-serif), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.032em;
+  line-height: 0.98;
+  font-synthesis: none;
+  text-wrap: balance;
+}
+.sk-h2 {
+  font-family: var(--font-serif), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(40px, 6vw, 80px);
+  letter-spacing: -0.032em;
+  line-height: 0.96;
+  text-wrap: balance;
+  font-synthesis: none;
+}
+.sk-h2 em, .sk-display em { font-style: normal; }
+.sk-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sk-lilac);
+}
+.sk-eyebrow::before {
+  content: "";
+  width: 22px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--sk-lilac));
+}
+
+/* Gradient text. Light: deep violet into magenta into amber. Dark: white into lilac into pink. */
+.sk-grad {
+  background: linear-gradient(100deg, #3b1ba6 0%, #6a45f5 38%, #d9367f 78%, #e07a00 110%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dark .sk-site .sk-grad, .sk-island .sk-grad {
+  background-image: linear-gradient(100deg, #ffffff 0%, #d8cbff 35%, #ff9ccb 75%, #ffd36f 110%);
+}
+.sk-grad-anim {
+  background: linear-gradient(100deg, #6a45f5, #d9367f, #e0761a, #d9367f, #6a45f5);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sk-pan 9s linear infinite;
+}
+.dark .sk-site .sk-grad-anim, .sk-island .sk-grad-anim {
+  background-image: linear-gradient(100deg, #b9a4ff, #ff8cc1, #ffc58a, #ff8cc1, #b9a4ff);
+}
+
+/* The night sky behind everything: three slow aurora blobs, a faint grid and film grain. */
+.sk-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sk-aurora i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.38;
+  will-change: transform;
+}
+.dark .sk-aurora i { opacity: 0.5; }
+.sk-aurora i:nth-child(1) { width: 60vw; height: 60vw; left: -18vw; top: -22vw; background: radial-gradient(closest-side, rgb(124 92 255 / 0.55), transparent); animation: sk-drift-a 26s ease-in-out infinite alternate; }
+.sk-aurora i:nth-child(2) { width: 52vw; height: 52vw; right: -16vw; top: 18vh; background: radial-gradient(closest-side, rgb(255 111 174 / 0.32), transparent); animation: sk-drift-b 32s ease-in-out infinite alternate; }
+.sk-aurora i:nth-child(3) { width: 46vw; height: 46vw; left: 25vw; bottom: -30vw; background: radial-gradient(closest-side, rgb(94 231 255 / 0.16), transparent); animation: sk-drift-a 38s ease-in-out infinite alternate-reverse; }
+.sk-grain {
+  position: fixed;
+  inset: -50%;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation: sk-grain 1.2s steps(6) infinite;
+}
+.sk-gridlines {
+  background-image: linear-gradient(var(--sk-line) 1px, transparent 1px), linear-gradient(90deg, var(--sk-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(70% 60% at 50% 30%, black, transparent);
+}
+
+/* Glass: the card every section uses. Light: frosted white with a violet-tinted shadow. */
+.sk-glass {
+  position: relative;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.92), rgb(255 255 255 / 0.66));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 1), inset 0 0 0 1px rgb(23 17 47 / 0.07), 0 1px 2px rgb(23 17 47 / 0.04), 0 30px 70px -36px rgb(74 34 207 / 0.28);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+.dark .sk-site .sk-glass, .sk-island .sk-glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.015));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09), inset 0 0 0 1px rgb(255 255 255 / 0.07), 0 30px 80px -40px rgb(0 0 0 / 0.8);
+}
+
+/* .spot: a glow and a lit border that follow the pointer (fx/motion.tsx PointerGlow sets --mx/--my). */
+.spot { position: relative; isolation: isolate; }
+.spot::before,
+.spot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.spot::before {
+  z-index: -1;
+  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 0%), rgb(124 92 255 / 0.12), transparent 45%);
+}
+.spot::after {
+  padding: 1px;
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgb(106 69 245 / 0.75), rgb(217 54 127 / 0.3) 30%, transparent 60%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.dark .sk-site .spot::after {
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgb(201 184 255 / 0.85), rgb(255 111 174 / 0.35) 30%, transparent 60%);
+}
+.spot[data-hover]::before,
+.spot[data-hover]::after { opacity: 1; }
+
+/* A light that runs around a card's border forever (the "border beam"). */
+.sk-beam { position: relative; isolation: isolate; }
+.sk-beam::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from var(--sk-angle), transparent 0deg, transparent 250deg, var(--sk-lilac) 300deg, var(--sk-pink) 330deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 1;
+  animation: sk-spin 5s linear infinite;
+}
+
+/* The main button: a glowing pill with a sheen that sweeps across on hover.
+   Light: a violet pill with white words. Dark: a white pill with ink words. */
+.sk-cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 28px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+  background: linear-gradient(180deg, #7b5aff, #5b33e8);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22) inset, 0 1px 0 rgb(255 255 255 / 0.35) inset, 0 12px 34px -10px rgb(91 51 232 / 0.75), 0 0 70px -24px rgb(217 54 127 / 0.6);
+  overflow: hidden;
+  transition: transform 300ms cubic-bezier(.16,1,.3,1), box-shadow 300ms ease;
+  text-decoration: none !important;
+}
+.sk-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.45) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform 900ms cubic-bezier(.16,1,.3,1);
+}
+.sk-cta:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.3) inset, 0 1px 0 rgb(255 255 255 / 0.4) inset, 0 18px 44px -10px rgb(91 51 232 / 0.9), 0 0 100px -24px rgb(217 54 127 / 0.8); color: #fff; }
+.sk-cta:hover::after { transform: translateX(120%); }
+.dark .sk-site .sk-cta {
+  color: #12082e;
+  background: linear-gradient(180deg, #ffffff, #e6ddff);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.6) inset, 0 10px 40px -8px rgb(124 92 255 / 0.85), 0 0 80px -20px rgb(255 111 174 / 0.7);
+}
+.dark .sk-site .sk-cta::after { background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.9) 50%, transparent 65%); }
+.dark .sk-site .sk-cta:hover { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.8) inset, 0 16px 50px -8px rgb(124 92 255 / 1), 0 0 110px -20px rgb(255 111 174 / 0.9); color: #12082e; }
+.sk-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 56px;
+  padding: 0 26px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--foreground);
+  background: rgb(255 255 255 / 0.7);
+  box-shadow: inset 0 0 0 1px rgb(23 17 47 / 0.12), 0 8px 24px -16px rgb(74 34 207 / 0.35);
+  backdrop-filter: blur(10px);
+  transition: background-color 250ms ease, box-shadow 250ms ease;
+  text-decoration: none !important;
+}
+.sk-ghost:hover { background: #fff; box-shadow: inset 0 0 0 1px rgb(23 17 47 / 0.22), 0 10px 28px -14px rgb(74 34 207 / 0.45); color: var(--foreground); }
+.dark .sk-site .sk-ghost { color: #fff; background: rgb(255 255 255 / 0.04); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14); }
+.dark .sk-site .sk-ghost:hover { background: rgb(255 255 255 / 0.09); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3); color: #fff; }
+
+/* The floating top bar's glass. */
+.sk-navbar { background: var(--sk-nav); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), inset 0 0 0 1px rgb(23 17 47 / 0.08), 0 20px 50px -34px rgb(74 34 207 / 0.5); }
+html[data-scrolled] .sk-navbar { background: var(--sk-nav-scrolled); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.8), inset 0 0 0 1px rgb(106 69 245 / 0.16), 0 24px 60px -28px rgb(74 34 207 / 0.45); }
+.dark .sk-navbar { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), inset 0 0 0 1px rgb(255 255 255 / 0.08), 0 20px 50px -34px rgb(0 0 0 / 0.9); }
+html.dark[data-scrolled] .sk-navbar { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.1), inset 0 0 0 1px rgb(201 184 255 / 0.14), 0 24px 60px -24px rgb(0 0 0 / 0.95), 0 0 60px -30px rgb(124 92 255 / 0.8); }
+
+/* An endless strip of words. */
+.sk-marquee { display: flex; overflow: hidden; mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent); }
+.sk-marquee > div { display: flex; flex-shrink: 0; gap: 48px; padding-right: 48px; animation: sk-marquee 38s linear infinite; }
+
+/* Softer, deeper version of the app's .reveal for this page. */
+.sk-site.js-reveal .reveal:not(.is-in),
+.js-reveal .sk-site .reveal:not(.is-in) { opacity: 0; transform: translateY(26px); filter: blur(8px); }
+.sk-site .reveal { transition: opacity 900ms cubic-bezier(.16,1,.3,1), transform 1000ms cubic-bezier(.16,1,.3,1), filter 900ms ease; }
+
+/* Plain links inside the page. */
+.sk-site a:not([data-slot]):not(.sk-cta):not(.sk-ghost) { color: var(--sk-lilac); }
+}
+
+@keyframes sk-pan { to { background-position: 300% 0; } }
+@keyframes sk-drift-a { to { transform: translate3d(8vw, 6vh, 0) scale(1.15); } }
+@keyframes sk-drift-b { to { transform: translate3d(-10vw, 10vh, 0) scale(0.9); } }
+@keyframes sk-grain {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-3%, 2%); }
+  66% { transform: translate(2%, -3%); }
+  100% { transform: translate(-1%, 1%); }
+}
+@keyframes sk-spin { to { --sk-angle: 360deg; } }
+@keyframes sk-marquee { to { transform: translateX(-100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-aurora i, .sk-grain, .sk-beam::before, .sk-marquee > div, .sk-grad-anim { animation: none !important; }
+}

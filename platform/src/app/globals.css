@@ -199,7 +199,7 @@
 }
 
 @theme inline {
-  /* Display: Instrument Serif, for page titles and marketing headlines only (>= 28px).
+  /* Display: Bricolage Grotesque, for page titles and marketing headlines only (>= 28px).
      Heading: the UI sans at semibold, for every smaller title. */
   --font-display: var(--font-serif);
   --font-heading: var(--font-sans);
@@ -337,18 +337,19 @@
     text-decoration-color: currentColor;
   }
   h1, h2, h3, h4 { @apply font-heading; line-height: 1.2; text-wrap: balance; letter-spacing: -0.012em; }
-  /* h1 is always a display moment: Instrument Serif, regular weight. font-synthesis stops a
-     stray font-bold from faking a heavy serif. */
+  /* h1 is always a display moment: Bricolage Grotesque, semibold and tight. The face has no
+     italic, so font-synthesis stops <em> from faking one: emphasis is colour, not slant. */
   h1 {
     @apply font-display text-3xl;
-    font-weight: 400;
+    font-weight: 600;
     font-synthesis: none;
-    letter-spacing: -0.01em;
-    line-height: 1.05;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
   }
   h2 { @apply text-lg font-semibold; }
   h3 { @apply text-base font-semibold; }
-  .font-display { font-weight: 400; font-synthesis: none; }
+  .font-display { font-weight: 600; font-synthesis: none; letter-spacing: -0.03em; }
+  .font-display em, h1 em { font-style: normal; }
   code { @apply font-mono text-[0.88em]; }
   ::selection { background: color-mix(in oklab, var(--violet-600) 18%, transparent); }
   :focus-visible { outline-offset: 2px; }
