@@ -1,0 +1,125 @@
+/* The app's look, matched to scaleitads.com/skool: a soft aurora behind everything, a translucent
+   content panel, glassy cards with a violet-tinted shadow and a glowing pill for the one main
+   action. Scoped to .app-look (the AppShell wrapper), so sign-in, booking, legal and funnel pages
+   keep the base tokens from globals.css. Token overrides only, plus the backdrop: utilities still
+   win, so a page that sets its own colour keeps it. The aurora is static on purpose (people work
+   in the app for hours; nothing should repaint behind them). */
+
+.app-look {
+  --background: #f7f5ff;
+  --foreground: #17112f;
+  --card: rgb(255 255 255 / 0.84);
+  --card-foreground: #17112f;
+  --popover: #ffffff;
+  --primary: #6a45f5;
+  --primary-hover: #4a22cf;
+  --ring: #6a45f5;
+  --link: #5b33e8;
+  --accent-foreground: #4a22cf;
+  --cta: #6a45f5;
+  --cta-hover: #5b33e8;
+  --cta-foreground: #ffffff;
+  --sidebar: transparent;
+  --sidebar-active: #ffffff;
+  --sidebar-accent: rgb(23 17 47 / 0.05);
+  --sidebar-border: rgb(23 17 47 / 0.07);
+  --app-ground: #f1eefc;
+  --app-panel: rgb(255 255 255 / 0.55);
+  --app-panel-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 0 0 1px rgb(23 17 47 / 0.05), 0 30px 80px -40px rgb(74 34 207 / 0.25);
+  --card-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 1px 2px rgb(23 17 47 / 0.04), 0 22px 50px -30px rgb(74 34 207 / 0.3);
+  --lift-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 2px 6px rgb(23 17 47 / 0.05), 0 30px 70px -30px rgb(74 34 207 / 0.38);
+  --cta-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 10px 30px -8px rgb(106 69 245 / 0.65), 0 0 60px -22px rgb(217 54 127 / 0.6);
+  --app-cta-image: linear-gradient(180deg, #7c5cff, #5b33e8);
+  --app-blob-opacity: 0.32;
+}
+
+.dark .app-look {
+  --background: #0b0822;
+  --foreground: #eeebf8;
+  --card: rgb(22 17 52 / 0.72);
+  --card-foreground: #eeebf8;
+  --popover: #15112f;
+  --primary: #7c5cff;
+  --primary-hover: #8f73ff;
+  --ring: #9c82f7;
+  --link: #c9b8ff;
+  --accent-foreground: #d6c8ff;
+  --cta: #ffffff;
+  --cta-hover: #f1ecff;
+  --cta-foreground: #12082e;
+  --sidebar: transparent;
+  --sidebar-active: rgb(255 255 255 / 0.08);
+  --sidebar-accent: rgb(255 255 255 / 0.05);
+  --sidebar-border: rgb(255 255 255 / 0.07);
+  --app-ground: #07051a;
+  --app-panel: rgb(14 10 36 / 0.6);
+  --app-panel-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 0 0 1px rgb(255 255 255 / 0.06), 0 30px 80px -40px rgb(0 0 0 / 0.8);
+  --card-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 0 0 1px rgb(255 255 255 / 0.02), 0 24px 60px -36px rgb(0 0 0 / 0.85);
+  --lift-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 16px 40px -14px rgb(0 0 0 / 0.65), 0 40px 80px -40px rgb(124 92 255 / 0.4);
+  --cta-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.6), 0 10px 36px -8px rgb(124 92 255 / 0.8), 0 0 70px -20px rgb(255 111 174 / 0.55);
+  --app-cta-image: linear-gradient(180deg, #ffffff, #e6ddff);
+  --app-blob-opacity: 0.5;
+}
+
+/* On the violet "do this next" card (and other night panels) the main action is a white pill,
+   in both themes, so it never sinks into the violet behind it. */
+.app-look .bg-hero,
+.app-look .bg-galaxy {
+  --cta: #ffffff;
+  --cta-hover: #f1ecff;
+  --cta-foreground: #12082e;
+  --app-cta-image: linear-gradient(180deg, #ffffff, #e6ddff);
+  --cta-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.6), 0 10px 36px -8px rgb(20 8 60 / 0.55), 0 0 70px -20px rgb(255 111 174 / 0.55);
+}
+
+/* The backdrop: ground colour, three still aurora blobs and a whisper of grain. It sits at
+   z-index -1 inside the isolated wrapper, so it paints behind the sidebar and the panel. */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background: var(--app-ground);
+}
+.app-backdrop i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: var(--app-blob-opacity);
+}
+.app-backdrop i:nth-child(1) { width: 60vw; height: 60vw; left: -18vw; top: -24vw; background: radial-gradient(closest-side, rgb(124 92 255 / 0.55), transparent); }
+.app-backdrop i:nth-child(2) { width: 50vw; height: 50vw; right: -16vw; top: 22vh; background: radial-gradient(closest-side, rgb(255 111 174 / 0.3), transparent); }
+.app-backdrop i:nth-child(3) { width: 44vw; height: 44vw; left: 28vw; bottom: -30vw; background: radial-gradient(closest-side, rgb(94 231 255 / 0.14), transparent); }
+.app-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+@layer components {
+  /* The one main action: a glowing gradient pill with a light sweep on hover (as on /skool). */
+  .app-look [data-slot="button"][data-variant="cta"] {
+    background-image: var(--app-cta-image);
+    overflow: hidden;
+    transition: transform 300ms var(--ease-soft), box-shadow 300ms var(--ease-soft), background-color 150ms;
+  }
+  .app-look [data-slot="button"][data-variant="cta"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.45) 50%, transparent 65%);
+    transform: translateX(-120%);
+    transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .app-look [data-slot="button"][data-variant="cta"]:hover { transform: translateY(-1px); }
+  .app-look [data-slot="button"][data-variant="cta"]:hover::after { transform: translateX(120%); }
+  .app-look [data-slot="button"][data-variant="default"] { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.12), transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-look [data-slot="button"][data-variant="cta"]::after { display: none; }
+}

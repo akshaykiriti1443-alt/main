@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppHeader, AppSidebar, type NavGroup, type Place, type ShellBrand, type ShellUser } from "./shell";
+import "./app-look.css";
 
 export type { IconName, NavGroup, NavItem, Place } from "./shell";
 
@@ -35,9 +36,15 @@ export async function AppShell({
   const ours = brand.name === env.platformName || Boolean(brand.sub?.endsWith(env.platformName));
   const attribution = ours && env.platformBy ? { label: `${env.platformName} by ${env.platformBy}`, href: env.platformByUrl } : null;
   return (
-    <SidebarProvider defaultOpen={defaultOpen}>
+    <SidebarProvider defaultOpen={defaultOpen} className="app-look isolate">
+      {/* The same aurora as scaleitads.com/skool, still (see app-look.css). */}
+      <div className="app-backdrop" aria-hidden>
+        <i />
+        <i />
+        <i />
+      </div>
       <AppSidebar brand={brand} groups={groups} places={places} user={user} attribution={attribution} />
-      <SidebarInset className="min-w-0">
+      <SidebarInset className="min-w-0 bg-transparent max-md:bg-(--app-panel) md:peer-data-[variant=inset]:bg-(--app-panel) md:peer-data-[variant=inset]:shadow-(--app-panel-shadow) md:peer-data-[variant=inset]:ring-0 dark:md:peer-data-[variant=inset]:shadow-(--app-panel-shadow) dark:md:peer-data-[variant=inset]:ring-0">
         <AppHeader brand={brand} groups={groups} places={places} extra={headerExtra} />
         {/* A container, so page grids respond to the real width (the guide docks beside it on wide screens). */}
         <div className="@container/main mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-8 px-4 pt-8 pb-24 md:px-10 md:pt-12 xl:px-12">
