@@ -18,8 +18,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 const TRIGGER: Record<string, string> = { lead_created: "New lead", tag_added: "Tag added", manual: "Manual / automation" };
 
-/** Sent is green, failed is red; for broadcasts, anything past draft but not sent (scheduled, sending) is amber. */
-function StatusBadge({ status, title, broadcast }: { status: string; title?: string; broadcast?: boolean }) {
+/**
+ * Sent is green, failed is red; for broadcasts, anything past draft but not sent (scheduled, sending) is amber.
+ * A "sent" email that only went to the log (a dev or test copy of the app, provider "console") never
+ * reached anyone, so it says Logged only. The live site marks those failed instead.
+ */
+function StatusBadge({ status, title, broadcast, provider }: { status: string; title?: string; broadcast?: boolean; provider?: string }) {
+  if (status === "sent" && provider === "console") {
+    return (
+      <Badge variant="secondary" title="This copy of the app only writes emails to its log. Nobody received this one.">
+        Logged only
+      </Badge>
+    );
+  }
   const variant = status === "sent" ? "success" : status === "failed" ? "destructive" : broadcast && status !== "draft" ? "gold" : "secondary";
   return (
     <Badge variant={variant} className="capitalize" title={title}>
@@ -194,7 +205,7 @@ export default async function EmailsPage({ params, searchParams }: { params: Pro
                     </TableCell>
                     <TableCell className="hidden max-w-72 truncate text-muted-foreground @2xl/main:table-cell">{m.subject}</TableCell>
                     <TableCell>
-                      <StatusBadge status={m.status} title={m.error ?? undefined} />
+                      <StatusBadge status={m.status} title={m.error ?? undefined} provider={m.provider} />
                     </TableCell>
                     <TableCell className="text-right text-[13px] text-subtle-foreground">{relativeTime(m.sentAt ?? m.createdAt)}</TableCell>
                   </TableRow>

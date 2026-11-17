@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { jobs, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
-import { LEVELS, aboutUrl, computeLadder, saveCheckin, skoolVisits, visitSource } from "@/server/growth";
+import { LEVELS, aboutUrl, checkinSavedMessage, computeLadder, isTextSource, saveCheckin, skoolVisits, textLinkFor, visitSource } from "@/server/growth";
 import { GET as goRoute } from "@/app/go/[slug]/route";
 import { POST as mcpRoute } from "@/app/api/mcp/[token]/route";
 import { createConnectorToken, revokeConnectorToken, listConnectorTokens } from "@/server/connectors";
@@ -183,5 +185,47 @@ describe("bring your own AI key", () => {
     const { ws } = await makeWorkspace();
     const row = await saveCheckin(ws.id, { aboutVisitors: -5, skoolLevel: 9, boostPercent: 300 });
     expect(row).toMatchObject({ aboutVisitors: 0, skoolLevel: 4, boostPercent: 100 });
+  });
+});
+
+describe("Days 5 and 7 on Growth ladder", () => {
+  it("the link for texts comes with ?src=text on, and its taps count as text", async () => {
+    const { ws } = await makeWorkspace();
+    const textLink = textLinkFor(ws.slug);
+    expect(textLink).toMatch(new RegExp(`/go/${ws.slug}\\?src=text$`));
+    expect(visitSource(new URL(textLink).searchParams, "")).toBe("text");
+    for (const s of ["text", "text-mum", "TEXT"]) expect(isTextSource(s), s).toBe(true);
+    for (const s of ["texts", "context", "meta-ad", "direct"]) expect(isTextSource(s), s).toBe(false);
+
+    const path = new URL(textLink).pathname + new URL(textLink).search;
+    const res = await goRoute(new NextRequest(`http://localhost${path}`, { headers: { "user-agent": "Mozilla/5.0 (iPhone)" } }), { params: Promise.resolve({ slug: ws.slug }) });
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.get("location")!).searchParams.get("src")).toBeNull();
+    expect((await skoolVisits(ws.id)).bySource).toEqual([{ source: "text", count: 1 }]);
+  });
+
+  it("says Saved. and marks the first check-in", () => {
+    const l1 = computeLadder({ ...base });
+    expect(checkinSavedMessage(l1, true)).toBe("Saved. Your numbers qualify for Level 1. Next up: Level 2. Your first check-in is in.");
+    expect(checkinSavedMessage(l1, false)).toBe("Saved. Your numbers qualify for Level 1. Next up: Level 2.");
+    expect(checkinSavedMessage(computeLadder({ ...base, aboutVisitors: 12000, newPaid: 2, networkSignups: 31, linkInBio: true, postsPerWeek: 5 }), false)).toBe("Saved. You're at the top level.");
+  });
+
+  it("the page has a copy button for texts and a short check-in that isn't tied to Mondays", () => {
+    const page = readFileSync(join(process.cwd(), "src/app/app/w/[wid]/growth/page.tsx"), "utf8");
+    expect(page).toContain('label="Copy link for texts"');
+    expect(page).toContain('title="Check-in"');
+    expect(page).toContain('data-guide="checkin"');
+    expect(page).not.toMatch(/Monday/);
+    // The four boxes the course names come first; the bio tick waits in the extras until Level 3.
+    const fourBoxes = ["About-page visitors", "New customers", "Skool Network sign-ups", "Level Skool shows"].map((l) => page.indexOf(`>${l}<`));
+    expect(fourBoxes.every((i) => i > 0)).toBe(true);
+    expect(page.indexOf('name="linkInBio"')).toBeGreaterThan(page.indexOf('title="A few extra numbers"'));
+    // The stay-or-go line points at the course's facts and never at a date.
+    expect(page).not.toMatch(/bill(s|ing)? (on|date)|days left|countdown/i);
+    // It points where the cancel steps really are, and the CSV button only shows once there are leads.
+    expect(page).toContain("the cancel steps are in Day 7 of the course");
+    expect(page).not.toMatch(/pinned/);
+    expect(page).toMatch(/Download CSV button\s+once anyone is in it\./);
   });
 });

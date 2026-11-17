@@ -19,6 +19,38 @@ export class EmailProviderError extends Error {
   }
 }
 
+/** What the person reads when a message could not go out because sending was never set up. */
+export const EMAIL_OFF = "Not sent. Email sending isn't switched on yet.";
+
+/**
+ * The real site people use, as opposed to a laptop or the e2e run, which start the production build
+ * on localhost with console email on purpose. Vercel always counts as live, so a deploy missing
+ * APP_URL can't pass for a laptop.
+ */
+export function isLiveSite() {
+  if (!env.isProd) return false;
+  if (process.env.VERCEL) return true;
+  try {
+    return !["localhost", "127.0.0.1", "[::1]", "0.0.0.0"].includes(new URL(env.appUrl).hostname);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * True only when emails can really leave: a real provider with its key. "console" only logs, so a
+ * screen must never say "we sent you a link" while this is false.
+ */
+export function emailSendingOn() {
+  if (env.emailProvider === "resend") return Boolean(env.resendKey);
+  if (env.emailProvider === "postmark") return Boolean(env.postmarkToken);
+  return false;
+}
+
+// A send that gets no answer must not hold up the page that asked for it (a lead's sign-up, a
+// new account). It fails here and the queue tries again.
+const SEND_TIMEOUT_MS = 15_000;
+
 export async function sendEmail(msg: OutgoingEmail): Promise<{ provider: string; id: string }> {
   switch (env.emailProvider) {
     case "postmark":
@@ -26,15 +58,27 @@ export async function sendEmail(msg: OutgoingEmail): Promise<{ provider: string;
     case "resend":
       return sendResend(msg);
     default:
+      // Logging stands in for sending on a laptop (and in the e2e run). On the live site it would
+      // mean nobody gets their email while every screen says "sent", so there it fails out loud.
+      if (isLiveSite()) {
+        console.error(`[email] NOT SENT to=${msg.to} subject="${msg.subject}": EMAIL_PROVIDER is "console", which only logs. Set EMAIL_PROVIDER to resend or postmark, with its key.`);
+        throw new EmailProviderError(EMAIL_OFF, true);
+      }
       console.info(`[email:console] to=${msg.to} subject="${msg.subject}"${msg.attachments?.length ? ` attachments=${msg.attachments.map((a) => a.name).join(",")}` : ""}`);
       return { provider: "console", id: `console-${Date.now().toString(36)}` };
   }
 }
 
+function missingKey(name: string) {
+  console.error(`[email] NOT SENT: ${name} is not set.`);
+  return new EmailProviderError(EMAIL_OFF, true);
+}
+
 async function sendPostmark(msg: OutgoingEmail) {
-  if (!env.postmarkToken) throw new EmailProviderError("POSTMARK_SERVER_TOKEN is not set", true);
+  if (!env.postmarkToken) throw missingKey("POSTMARK_SERVER_TOKEN");
   const res = await fetch("https://api.postmarkapp.com/email", {
     method: "POST",
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
@@ -61,9 +105,10 @@ async function sendPostmark(msg: OutgoingEmail) {
 }
 
 async function sendResend(msg: OutgoingEmail) {
-  if (!env.resendKey) throw new EmailProviderError("RESEND_API_KEY is not set", true);
+  if (!env.resendKey) throw missingKey("RESEND_API_KEY");
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     headers: { Authorization: `Bearer ${env.resendKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from: msg.from,

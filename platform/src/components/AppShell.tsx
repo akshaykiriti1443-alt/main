@@ -12,6 +12,7 @@ export async function AppShell({
   places = [],
   user,
   banner,
+  footnote,
   headerExtra,
   companion,
   children,
@@ -21,6 +22,8 @@ export async function AppShell({
   places?: Place[];
   user: ShellUser;
   banner?: ReactNode;
+  /** Quiet notes drawn after the page (membership and card info), never above the next step. */
+  footnote?: ReactNode;
   /** Small controls in the top bar, before the theme toggle (e.g. the guide button). */
   headerExtra?: ReactNode;
   /** The step-by-step guide, floating over every page. */
@@ -38,9 +41,9 @@ export async function AppShell({
         <AppHeader brand={brand} groups={groups} places={places} extra={headerExtra} />
         {/* A container, so page grids respond to the real width (the guide docks beside it on wide screens). */}
         <div className="@container/main mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-8 px-4 pt-8 pb-24 md:px-10 md:pt-12 xl:px-12">
-
           {banner}
           {children}
+          {footnote ? <div className="flex flex-col gap-3 pt-4 text-sm text-muted-foreground">{footnote}</div> : null}
         </div>
       </SidebarInset>
       {companion}

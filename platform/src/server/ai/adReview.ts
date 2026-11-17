@@ -1,13 +1,13 @@
 import * as z from "zod/v4";
-import { and, desc, eq, gte } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { aiGenerations, workspaces } from "@/lib/db/schema";
+import { activities, aiGenerations, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { latestCheckins, skoolAdVisits, skoolTargetFor } from "../growth";
 import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 
-// Ad review (Day 6, then every Monday): one ad's numbers in, a verdict out. Ads marked Kill go off
-// on Day 6, and nothing else changes that day.
+// Ad review (Day 6, then weekly): one ad's numbers in, a verdict out. In week one nothing changes
+// on Day 6 except a broken Skool link (doNextNote); switching a Kill ad off is the member's call.
 //
 // Two modes, both normal:
 //   "skool"   The ad's Website URL is the Skool link (/go/<slug>), so every click opens the Skool
@@ -34,7 +34,8 @@ export const adReviewInputSchema = z.object({
   spend: z.coerce.number().min(0),
   impressions: z.coerce.number().int().min(0),
   linkClicks: z.coerce.number().int().min(0),
-  leads: z.coerce.number().int().min(0).default(0),
+  /** This ad's own leads. Blank means "not known": an empty box must not read as 0 sign-ups. */
+  leads: z.preprocess(blank, z.coerce.number().int().min(0).optional()),
   followers: z.coerce.number().int().min(0).default(0),
   /** New members (joins) since the ad went live. Blank means "not known", so the About page isn't judged. */
   members: z.preprocess(blank, z.coerce.number().int().min(0).optional()),
@@ -80,7 +81,7 @@ export type AdReview = {
   /** One plain sentence: why this verdict. */
   why?: string;
   adName?: string;
-  /** The member's daily budget (from the Monday check-in) and what to set it to. */
+  /** The member's daily budget (from their latest check-in) and what to set it to. */
   budget?: { now: number; next: number } | null;
   /** What the Skool link counted, and cost per visit = total spend ÷ counted ad visits. */
   counted?: { ready: boolean; adVisits: number; days: number; totalSpend: number; ads: number; costPerVisit: number | null; spendTyped?: boolean } | null;
@@ -138,11 +139,12 @@ export function reviewMode(i: Pick<AdReviewInput, "destination">): AdReviewMode 
 }
 
 export function computeMetrics(i: Pick<AdReviewInput, "spend" | "impressions" | "linkClicks" | "leads" | "followers">) {
+  const leads = i.leads ?? 0;
   const ctr = i.impressions ? (i.linkClicks / i.impressions) * 100 : 0;
   const cpm = i.impressions ? (i.spend / i.impressions) * 1000 : 0;
   const cpc = i.linkClicks ? i.spend / i.linkClicks : 0;
-  const cpl = i.leads ? i.spend / i.leads : 0;
-  const optIn = i.linkClicks ? (i.leads / i.linkClicks) * 100 : 0;
+  const cpl = leads ? i.spend / leads : 0;
+  const optIn = i.linkClicks ? (leads / i.linkClicks) * 100 : 0;
   const cpf = i.followers ? i.spend / i.followers : 0;
   return { ctr, cpm, cpc, cpl, optIn, cpf };
 }
@@ -157,6 +159,26 @@ function earlyCheck(i: AdReviewInput) {
   const learning = i.days < RULES.learnDays;
   const barely = i.impressions < RULES.minImpressions || (i.spend < RULES.minSpend && i.linkClicks < RULES.noiseClicks);
   return { learning, barely };
+}
+
+// "Too early" is most ads' answer in week one (small budgets rarely reach 1,000 impressions in five
+// days), so it reads as the normal, good answer it is, never as a failure.
+function tooEarlyWhy(i: AdReviewInput, learning: boolean) {
+  return learning
+    ? "Too early to tell: it's been under 72 hours, and new ads are toddlers learning to walk. Leave it running and keep your hands off."
+    : `Too early to tell: Meta has only shown it ${plural(i.impressions, "time")} and spent ${usd(i.spend)}, so it hasn't lost. Leave it running. In week one, that's the usual answer.`;
+}
+
+function tooEarlyActions(learning: boolean): AdReview["actions"] {
+  return learning
+    ? [
+        { title: "Hands off till 72 hours", detail: "No edits, no pausing, no new ads. Every change restarts Meta's learning." },
+        { title: "Then come back", detail: "Paste this ad's numbers again after 72 hours (Ads Manager, date range Maximum)." },
+      ]
+    : [
+        { title: "Leave it running", detail: "Nothing to change. Meta tends to spend on one ad first, so this one just hasn't had its turn yet." },
+        { title: "Look again in a week", detail: "Once it's past 1,000 impressions, paste its numbers again. Judge the ads Meta did spend on first." },
+      ];
 }
 
 /** The keep-fix-kill call for an ad pointed at the Skool link. "The first no picks the room." */
@@ -249,9 +271,7 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
   const ctrWords = i.linkClicks ? `only ${pct(m.ctr)} of people who saw it clicked` : `nobody clicked in ${plural(i.impressions, "impression")}`;
   const hookWhy = m.ctr < RULES.hookCtr ? ctrWords : `each click costs ${usd(m.cpc)}`;
   const why: Record<AdCall, string> = {
-    too_early: learning
-      ? "It's been under 72 hours and new ads are toddlers learning to walk, so hands off for now."
-      : `Meta barely spent on it (${usd(i.spend)}, ${plural(i.impressions, "impression")}), so it hasn't lost yet: leave it on.`,
+    too_early: tooEarlyWhy(i, learning),
     fix_hook: `${hookWhy[0].toUpperCase()}${hookWhy.slice(1)}, so give it new on-image text and a new first line, same picture.`,
     kill: `You've fixed it twice and ${hookWhy}, so switch it off and give its slot to a fresh static.`,
     fix_door:
@@ -264,15 +284,7 @@ export function skoolLinkReview(i: AdReviewInput, ctx: AdReviewContext = {}): Ad
 
   const handsOff = { title: "Hands off for 72 hours", detail: "A change restarts Meta's learning. Judge it again after that." };
   const actions: Record<AdCall, AdReview["actions"]> = {
-    too_early: learning
-      ? [
-          { title: "Hands off till 72 hours", detail: "No edits, no pausing, no new ads. Every change restarts Meta's learning." },
-          { title: "Then come back", detail: "Paste this ad's numbers again after 72 hours (Ads Manager, date range Maximum)." },
-        ]
-      : [
-          { title: "Leave it on", detail: "Meta leans towards one ad first. This one hasn't had its turn yet, so it hasn't lost." },
-          { title: "Look again next Monday", detail: "Review it at your next weigh-in. Judge the ads Meta did spend on first." },
-        ],
+    too_early: tooEarlyActions(learning),
     fix_hook: [
       { title: "Fix the Hook", detail: "New on-image text and a new first line. Keep the same picture, the Turn and the Door." },
       { title: "Swap the words, not the picture", detail: "Same image with new words on it (Canva is free), then edit the first line of Primary text in Ads Manager." },
@@ -331,21 +343,28 @@ function optinCall(i: AdReviewInput): { call: AdCall; learning: boolean; barely:
   const { learning, barely } = earlyCheck(i);
   if (learning || barely) return { call: "too_early", learning, barely };
   if (m.ctr < RULES.hookCtr || m.cpc > RULES.okCpc) return { call: i.fixes >= RULES.killAfterFixes ? "kill" : "fix_hook", learning, barely };
-  if (i.linkClicks > RULES.visitsComing && m.optIn < 15) return { call: "fix_door", learning, barely };
+  // The page is only judged on leads the member gave: a blank Leads box is "not known", not 0.
+  if (i.leads !== undefined && i.linkClicks > RULES.visitsComing && m.optIn < 15) return { call: "fix_door", learning, barely };
   return { call: "keep", learning, barely };
 }
 
-/** Ad review for an ad that points at an opt-in page (0 leads is an answer too). */
+/** Ad review for an ad that points at an opt-in page (0 leads is an answer too, blank is "not known"). */
 export function funnelReview(i: AdReviewInput): AdReview {
   const m = computeMetrics(i);
   const { call, learning } = optinCall(i);
   const early = call === "too_early";
   const judged = (s: MetricStatus): MetricStatus => (early ? "wait" : s);
+  const known = i.leads !== undefined;
+  const leads = i.leads ?? 0;
   const metrics: AdMetric[] = [
     { name: "Link click-through", value: pct(m.ctr), status: judged(m.ctr >= 1 ? "good" : m.ctr >= 0.8 ? "ok" : "fix"), note: "Rule of thumb: 1% or more. Under 0.8% means a new hook." },
     { name: "Cost per click", value: i.linkClicks ? usd(m.cpc) : "no clicks yet", status: judged(i.linkClicks && m.cpc <= 1 ? "good" : i.linkClicks && m.cpc <= 2 ? "ok" : "fix"), note: "Lower is better. New creatives bring it down." },
-    { name: "Page opt-in rate", value: `${m.optIn.toFixed(1)}%`, status: judged(m.optIn >= 25 ? "good" : m.optIn >= 15 ? "ok" : "fix"), note: "Rule of thumb: 25%+. Under 15% means a new headline." },
-    { name: "Cost per lead", value: i.leads ? usd(m.cpl) : "no leads yet", status: judged(i.leads && m.cpl <= 5 ? "good" : i.leads && m.cpl <= 10 ? "ok" : "fix"), note: "Rule of thumb: under $5 to start." },
+    known
+      ? { name: "Page opt-in rate", value: `${m.optIn.toFixed(1)}%`, status: judged(m.optIn >= 25 ? "good" : m.optIn >= 15 ? "ok" : "fix"), note: "Rule of thumb: 25%+. Under 15% means a new headline." }
+      : { name: "Page opt-in rate", value: "not given", status: "wait", note: "Rule of thumb: 25%+. Add this ad's leads next time and your page gets judged too." },
+    known
+      ? { name: "Cost per lead", value: leads ? usd(m.cpl) : "no leads yet", status: judged(leads && m.cpl <= 5 ? "good" : leads && m.cpl <= 10 ? "ok" : "fix"), note: "Rule of thumb: under $5 to start." }
+      : { name: "Cost per lead", value: "not given", status: "wait", note: "Rule of thumb: under $5 to start." },
   ];
   if (i.followers) {
     metrics.push({ name: "Cost per follower", value: usd(m.cpf), status: judged(m.cpf <= 0.5 ? "good" : m.cpf <= 1 ? "ok" : "fix"), note: "Rule of thumb: under $0.50." });
@@ -353,27 +372,17 @@ export function funnelReview(i: AdReviewInput): AdReview {
   const ctrWords = i.linkClicks ? `only ${pct(m.ctr)} of people who saw it clicked` : `nobody clicked in ${plural(i.impressions, "impression")}`;
   const hookWhy = m.ctr < RULES.hookCtr ? ctrWords : `each click costs ${usd(m.cpc)}`;
   const why: Record<AdCall, string> = {
-    too_early: learning
-      ? "It's been under 72 hours and new ads are toddlers learning to walk, so hands off for now."
-      : `Meta barely spent on it (${usd(i.spend)}, ${plural(i.impressions, "impression")}), so it hasn't lost yet: leave it on.`,
+    too_early: tooEarlyWhy(i, learning),
     fix_hook: `${hookWhy[0].toUpperCase()}${hookWhy.slice(1)}, so give it new on-image text and a new first line, same picture.`,
     kill: `You've fixed it twice and ${hookWhy}, so switch it off and give its slot to a fresh static.`,
     fix_door: `${plural(i.linkClicks, "person", "people")} clicked and only ${m.optIn.toFixed(1)}% signed up, so the page's headline is the part to fix, not the ad.`,
     // Not used for opt-in ads: the About page is judged on Skool-link ads only.
     fix_about: "",
-    keep: i.leads ? `${pct(m.ctr)} of people clicked and each lead costs ${usd(m.cpl)}, so keep it.` : `${pct(m.ctr)} of people clicked, so keep it and let the sign-ups come.`,
+    keep: leads ? `${pct(m.ctr)} of people clicked and each lead costs ${usd(m.cpl)}, so keep it.` : `${pct(m.ctr)} of people clicked, so keep it and let the sign-ups come.`,
   };
-  const scale = i.leads > 0 && m.cpl <= 5;
+  const scale = leads > 0 && m.cpl <= 5;
   const actions: Record<AdCall, AdReview["actions"]> = {
-    too_early: learning
-      ? [
-          { title: "Hands off till 72 hours", detail: "No edits, no pausing, no new ads. Every change restarts Meta's learning." },
-          { title: "Then come back", detail: "Paste this ad's numbers again after 72 hours (Ads Manager, date range Maximum)." },
-        ]
-      : [
-          { title: "Leave it on", detail: "Meta leans towards one ad first. This one hasn't had its turn yet, so it hasn't lost." },
-          { title: "Look again next Monday", detail: "Review it at your next check-in. Judge the ads Meta did spend on first." },
-        ],
+    too_early: tooEarlyActions(learning),
     fix_hook: [{ title: "Fix the Hook", detail: "Few people stop to click. Keep the picture, the Turn and the Door. Give it new on-image text and a new first line." }],
     kill: [
       { title: "Switch it off", detail: "In Ads Manager, turn this ad off. Leave the others alone." },
@@ -385,6 +394,7 @@ export function funnelReview(i: AdReviewInput): AdReview {
       scale
         ? { title: "Keep it and scale", detail: "This one works. Raise its budget by about 20% every 2-3 days. Don't touch the ad itself." }
         : { title: "Keep it", detail: "Don't touch the ad itself. Look at your cost per lead again at your next check-in." },
+      ...(known ? [] : [{ title: "Add its leads next time", detail: "Put this ad's own leads in the Leads box, and Ad review checks your page too." }]),
     ],
   };
   const perDay = i.spend / i.days;
@@ -400,9 +410,75 @@ export function funnelReview(i: AdReviewInput): AdReview {
   };
 }
 
+/**
+ * The line above "Do this next". Week one is hands-off, so a verdict's changes wait for next week,
+ * except a broken Skool link: that's setup, not an ad change, and every click is lost until it's fixed.
+ */
+export function doNextNote(review: Pick<AdReview, "mode" | "call" | "counted">, firstWeek: boolean): string | null {
+  if (review.mode === "skool" && review.call === "fix_door") {
+    return review.counted?.ready === false
+      ? "This one is a setup fix, not an ad change. Do it today: add your Skool group link in Settings, or the clicks you pay for can't reach your About page."
+      : "This one is a setup fix, not an ad change. Do it today: put your Skool link in the ad's Website URL, or the clicks you pay for never get counted.";
+  }
+  if (!firstWeek || !review.call || review.call === "too_early") return null;
+  return review.call === "kill" ? "Switching it off is your call. Change nothing else today." : "This is next week's list. Today, change nothing.";
+}
+
 /** The rule-based review: Skool-link mode unless the ad points at an opt-in page. */
 export function ruleReview(i: AdReviewInput, ctx: AdReviewContext = {}): AdReview {
   return reviewMode(i) === "skool" ? skoolLinkReview(i, ctx) : funnelReview(i);
+}
+
+// ---------------------------------------------------------------------------
+// Two prices from two totals: what each campaign spent (typed from Ads Manager) divided by what the
+// app counted itself. No benchmark is attached: it's the member's own number, nothing to grade.
+// ---------------------------------------------------------------------------
+
+/** "Since the start": older than any workspace, so skoolAdVisits counts every ad visit. */
+const ALL_TIME_DAYS = 36_500;
+
+export type PriceLine ={ spend: number; count: number; cost: number | null; line: string };
+
+/** A typed dollar total, or null when the box was left empty or isn't a number. */
+export function spendFrom(raw: unknown): number | null {
+  const s = String(raw ?? "").replace(/[$,\s]/g, "");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, 1_000_000) : null;
+}
+
+/** Cost per lead (website ads) and cost per Skool visit (Skool ads), and the two lines for the Day 6 post. */
+export function twoSums(t: { webSpend: number | null; skoolSpend: number | null; adLeads: number; adVisits: number }) {
+  const price = (spend: number | null, count: number, what: string, each: string, label: string): PriceLine | null => {
+    if (spend === null) return null;
+    const cost = count > 0 ? round2(spend / count) : null;
+    return {
+      spend,
+      count,
+      cost,
+      line: cost === null ? `${label}: ${usd(spend)} spent, 0 ${what}s so far` : `${label}: ${usd(spend)} spent ÷ ${plural(count, what)} = ${usd(cost)} a ${each}`,
+    };
+  };
+  const lead = price(t.webSpend, t.adLeads, "lead", "lead", "Website ads");
+  const visit = price(t.skoolSpend, t.adVisits, "ad visit", "visit", "Skool ads");
+  return { lead, visit, post: [lead?.line, visit?.line].filter(Boolean).join("\n") };
+}
+
+/**
+ * The other half of each sum, counted by the app: leads that arrived from a Meta ad (the opt-in form
+ * kept Meta's fbclid, the same count as "Leads from your ads" on Your shelf), and every ad visit the
+ * Skool link has counted. Both are all-time, to match the lifetime spend (date range Maximum) they divide.
+ */
+export async function adTotals(workspaceId: string) {
+  const db = await getDb();
+  const [[leads], adVisits] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(activities)
+      .where(and(eq(activities.workspaceId, workspaceId), eq(activities.type, "lead"), sql`${activities.data}->'utm'->>'fbclid' is not null`)),
+    skoolAdVisits(workspaceId, ALL_TIME_DAYS),
+  ]);
+  return { adLeads: leads?.n ?? 0, adVisits };
 }
 
 /** What the Skool link counted over the ad's days running, plus this week's other reviewed ads. */
@@ -476,12 +552,14 @@ export async function runAdReview(workspaceId: string, raw: unknown) {
   let model = "rules";
   let warning: string | undefined;
   const charge = await chargeAi(workspaceId, "ai_generation", "AI ad review");
-  if (env.aiEnabled && !charge) warning = "You've used this month's AI generations, so this is the rule-based review.";
+  if (env.aiEnabled && !charge) {
+    warning = "This month's included AI runs are used, so this is the rule-based review. The verdict is the same, only the wording is plainer. Add your own free key in Your AI and the AI words it again.";
+  }
   if (charge) {
     try {
       const m = computeMetrics(input);
       const business = `Business: ${ws?.settings.businessName ?? ""} (${ws?.settings.niche ?? "coaching"}).`;
-      const numbers = `${input.adName ? `Ad: ${input.adName}. ` : ""}${input.days} days running: spend $${input.spend}, impressions ${input.impressions}, link clicks ${input.linkClicks}, leads ${input.leads}, new members ${input.members ?? "not given"}, times already fixed ${input.fixes}.
+      const numbers = `${input.adName ? `Ad: ${input.adName}. ` : ""}${input.days} days running: spend $${input.spend}, impressions ${input.impressions}, link clicks ${input.linkClicks}, leads ${input.leads ?? "not given"}, new members ${input.members ?? "not given"}, times already fixed ${input.fixes}.
 Computed: CTR ${m.ctr.toFixed(2)}%, CPM $${m.cpm.toFixed(2)}, cost per click $${m.cpc.toFixed(2)}.`;
       const owner = `Goal: ${input.goal || "more paying members"}.
 Notes from the owner: ${input.notes || "none"}`;
@@ -512,7 +590,7 @@ ${owner}`,
           schema: funnelSchema,
           system: FUNNEL_SYSTEM,
           prompt: `${business}
-${numbers} Opt-in ${m.optIn.toFixed(1)}%, cost per lead ${input.leads ? `$${m.cpl.toFixed(2)}` : "n/a"}, new followers ${input.followers}.
+${numbers} Opt-in ${input.leads === undefined ? "not known (leads not given, so don't judge the page)" : `${m.optIn.toFixed(1)}%`}, cost per lead ${input.leads ? `$${m.cpl.toFixed(2)}` : "n/a"}, new followers ${input.followers}.
 Verdict (from the rules): ${review.verdict}. ${review.why}
 ${owner}`,
         });

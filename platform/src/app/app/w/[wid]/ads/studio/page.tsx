@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import {
   CalculatorIcon,
   CameraIcon,
@@ -31,12 +31,11 @@ import {
   VideoIcon,
   type LucideIcon,
 } from "lucide-react";
-import { env } from "@/lib/env";
 import { isUuid, relativeTime, truncate } from "@/lib/util";
 import { cn } from "@/lib/utils";
 import { requireWorkspace } from "@/server/tenancy";
+import { pixelStatus, type TrackingSettings } from "@/server/meta/capi";
 import { skoolLinkFor, skoolTargetFor } from "@/server/growth";
-import { AI_PROVIDERS, aiCredsFor } from "@/server/ai/client";
 import { ANGLE_LABEL, type AdAngle } from "@/server/ai/adFramework";
 import {
   adStudioDefaults,
@@ -50,6 +49,7 @@ import {
   publishedFunnelUrl,
   staticText,
   STUDIO_COUNTRIES,
+  studioOffers,
   videoFromConcept,
   videoText,
   type LaunchPlan,
@@ -61,6 +61,7 @@ import {
   type StudioTone,
 } from "@/server/ai/adStudio";
 import { adStudioAction } from "@/actions/adStudio";
+import { ReelVaultProvenHooks } from "@/components/reelvault/proven-hooks";
 import { Callout, Flash, MoreOptions, PageHead, Panel, Stat, StepDot } from "@/components/ui";
 import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +70,8 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { aiRunsFor, needsKey } from "../../ai/runs";
+import { OutOfRunsCard, RunsNote } from "../../ai/runs-card";
 import { BudgetPicker } from "./budget-picker";
 
 export const metadata = { title: "Ad studio" };
@@ -109,14 +112,15 @@ const statRange = (a: number, b: number) => {
 export default async function AdStudioPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
   const sp = await searchParams;
-  const { workspace } = await requireWorkspace(wid);
-  const [packs, defaults, research, creds, skoolTarget, funnelUrl] = await Promise.all([
+  const { workspace, user, viewAs } = await requireWorkspace(wid);
+  const [packs, defaults, research, runs, skoolTarget, funnelUrl, offers] = await Promise.all([
     listAdStudioPacks(wid, 8),
     adStudioDefaults(workspace),
     latestResearchAds(wid),
-    aiCredsFor(wid),
+    aiRunsFor(workspace),
     skoolTargetFor(wid, workspace.settings.skoolUrl),
     publishedFunnelUrl(wid),
+    studioOffers(workspace),
   ]);
   const chosen = isUuid(sp.pack) ? (packs.find((p) => p.id === sp.pack) ?? (await getAdStudioPack(wid, sp.pack))) : (packs[0] ?? null);
   const pack = chosen?.pack ?? null;
@@ -128,12 +132,6 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
   const v = Number(sp.video);
   const video =
     pack && Number.isInteger(v) && v >= 0 && v < pack.statics.length && v !== pack.video.basedOn ? videoFromConcept(pack.statics[v], v, Boolean(chosen?.input.proof)) : (pack?.video ?? null);
-
-  const aiLine = creds
-    ? `Runs on your ${AI_PROVIDERS[creds.provider].label}. Takes about a minute.`
-    : env.aiEnabled
-      ? "Uses 1 AI generation. Takes about a minute."
-      : null;
 
   const form = (
     <form action={adStudioAction.bind(null, wid)} className="flex flex-col gap-6">
@@ -147,7 +145,8 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
             </span>
             <span className="grid min-w-0 gap-0.5">
               <span className="font-semibold">{DESTINATION_LABEL.website}</span>
-              <span className="truncate text-xs text-muted-foreground">{funnelUrl ? `Leads · ${funnelUrl.replace(/^https?:\/\//, "")}` : "Publish your funnel first"}</span>
+              <span className="truncate text-xs text-muted-foreground">{funnelUrl ? `Leads · ${funnelUrl.replace(/^https?:\/\//, "")}` : "Publish your website first"}</span>
+              <span className="text-xs leading-snug text-foreground/80">Offers: {offers.website}</span>
             </span>
           </label>
           <label className={CHOICE}>
@@ -157,15 +156,16 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
             </span>
             <span className="grid min-w-0 gap-0.5">
               <span className="font-semibold">{DESTINATION_LABEL.skool}</span>
-              <span className="truncate font-mono text-[11.5px] text-muted-foreground">Traffic · {link.replace(/^https?:\/\//, "")}</span>
+              <span className="truncate font-mono text-[11.5px] text-muted-foreground">{skoolTarget ? `Traffic · ${link.replace(/^https?:\/\//, "")}` : "Add your Skool group link below first"}</span>
+              <span className="text-xs leading-snug text-foreground/80">Offers: {offers.skool}</span>
             </span>
           </label>
         </div>
         <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-          Day 1&apos;s ads go to your website. Day 2&apos;s go to your Skool link, in their own campaign.{" "}
+          Day 1&apos;s ads go to your website and offer your free checklist. Day 2&apos;s go to your Skool link and offer your free trial, in their own campaign.{" "}
           {funnelUrl ? null : (
             <>
-              <Link href={`${base}/sites`}>Publish your funnel</Link> to send ads to your website.
+              <Link href={`${base}/sites`}>Publish your website</Link> to send ads to it.
             </>
           )}
         </p>
@@ -208,7 +208,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
         </Field>
       </div>
 
-      <MoreOptions icon={PaletteIcon} title="Fine-tune (optional)" sub="Your community, offer, price, tone and a real member result. Already filled from your workspace.">
+      <MoreOptions icon={PaletteIcon} title="Fine-tune (optional)" sub="Your community, price, tone and a real member result. Already filled from your account and your launch kit.">
         <div className="grid gap-5 @2xl/main:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="businessName">Community name</FieldLabel>
@@ -219,9 +219,11 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
             <Input id="niche" name="niche" defaultValue={defaults.niche} placeholder="Fitness for busy dads" />
           </Field>
           <Field>
-            <FieldLabel htmlFor="offer">Your offer</FieldLabel>
-            <Input id="offer" name="offer" defaultValue={defaults.offer} placeholder="Free checklist: The 7-Day Dad Reset" />
-            <FieldDescription>What these ads sell. Website ads: Free checklist: its name. Skool-link ads: 7-day free trial of your group.</FieldDescription>
+            <FieldLabel htmlFor="offer">
+              Your offer <span className="font-normal text-muted-foreground">(leave blank)</span>
+            </FieldLabel>
+            <Input id="offer" name="offer" defaultValue={defaults.offer} placeholder={offers[defaults.destination ?? "skool"]} />
+            <FieldDescription>Blank is right for most people: website ads offer your free checklist, Skool-link ads offer your free trial. Type here only to offer something else.</FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="price">Your Skool price a month</FieldLabel>
@@ -275,7 +277,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
           </fieldset>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No Ad research yet. <Link href={`${base}/ads/research`}>Search your niche in Ad research</Link> and the long-runners show up here to pick from. Or paste a few below.
+            No Ad research yet. <Link href={`${base}/ads/research`}>Paste 3 competitor ads into Ad research</Link> and they show up here to pick from. Or paste a few below.
           </p>
         )}
         <Field>
@@ -285,17 +287,21 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
         </Field>
       </MoreOptions>
 
+      {/* Fetches its own findings, so the rest of the page never waits for ReelVault (null when it's off). */}
+      <Suspense fallback={null}>
+        <ReelVaultProvenHooks user={user} workspaceId={wid} base={base} viewAs={viewAs} />
+      </Suspense>
+
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border/80 pt-5">
         <SubmitButton variant="cta" size="lg" guide="ad-studio-make" pendingText="Making your statics… (up to a minute)">
           <SparklesIcon data-icon="inline-start" />
           Make my 5 statics
         </SubmitButton>
-        <span className="max-w-[52ch] text-xs leading-relaxed text-muted-foreground">
-          {aiLine ?? (
-            <>
-              No AI connected, so you get our quick pack in a second. <Link href={`${base}/ai`}>Connect your AI</Link> for statics written around your niche.
-            </>
-          )}
+        <span className="grid max-w-[52ch] gap-0.5">
+          <RunsNote runs={runs} wid={wid} />
+          <span className="text-xs leading-relaxed text-muted-foreground">
+            {needsKey(runs) ? "Press it now and you get our quick pack in a second, not written by AI." : "Takes about a minute."}
+          </span>
         </span>
       </div>
     </form>
@@ -308,13 +314,14 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
         eyebrow="Get members"
         title="Ad studio"
         sub="Answer a few quick questions. Get your numbers, 5 statics ready to make, and the exact clicks to launch them today."
-        first={pack ? "Make each image with its prompt, then follow Your launch plan in Ads Manager." : "Check the answers below, then press Make my 5 statics."}
+        first={pack ? "Make each image with its prompt. On Days 1 and 2, post them in Skool first, then follow Your launch plan in Ads Manager." : "Check the answers below, then press Make my 5 statics."}
       />
       <Flash searchParams={sp} />
+      <OutOfRunsCard runs={runs} wid={wid} then="come back and press Make my 5 statics" />
 
       {!skoolTarget ? (
-        <Callout tone="warn" title="Your Skool link has nowhere to go yet">
-          Add your Skool group link below (or in <Link href={`${base}/settings#business`}>Settings</Link>) so your Skool-link ads and your Join button land on your Skool About page.
+        <Callout tone="warn" title="Add your Skool group link before your Skool-link ads">
+          Paste it in the box below (or in <Link href={`${base}/settings#business`}>Settings</Link>). Until then Ad studio makes website packs only, so no paid click lands nowhere.
         </Callout>
       ) : null}
 
@@ -323,7 +330,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
           <MoreOptions
             icon={PaletteIcon}
             title="Your answers"
-            sub={`${money(pack.numbers.budget)} a day · ${DESTINATION_LABEL[pack.destination ?? "skool"]} · ${pack.country}${chosen.input.audience ? ` · ${truncate(String(chosen.input.audience), 60)}` : ""}. Change anything and make a new pack.`}
+            sub={`${money(pack.numbers.budget)} a day · ${DESTINATION_LABEL[pack.destination ?? "skool"]} · ${pack.country}${chosen.input.offer ? ` · Offers: ${truncate(String(chosen.input.offer), 70)}` : ""}. Change anything and make a new pack.`}
           >
             {form}
           </MoreOptions>
@@ -362,7 +369,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
               <div className="flex flex-col gap-2 rounded-xl bg-muted/50 p-4 text-sm ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
                 <span className="flex items-center gap-2 font-semibold">
                   <SearchIcon className="size-4 text-primary dark:text-violet-300" aria-hidden />
-                  Long-running hooks you picked
+                  Hooks you picked
                 </span>
                 <ul className="flex flex-col gap-1.5 text-muted-foreground">
                   {pack.inspiration.map((h) => (
@@ -381,6 +388,10 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
           {pack.destination === "website" && !workspace.settings.metaPixelId ? (
             <Callout tone="warn" title="Connect your Pixel before you launch">
               This plan picks your Pixel under Dataset. Add it in <Link href={`${base}/settings#tracking`}>Settings › Meta Pixel &amp; Conversions API</Link> first.
+            </Callout>
+          ) : pack.destination === "website" && pixelStatus(workspace.settings as TrackingSettings).state === "rejected" ? (
+            <Callout tone="warn" title="Meta said no to your Pixel test">
+              Your website ads use the Pixel to count leads. <Link href={`${base}/settings#tracking`}>Settings › Meta Pixel &amp; Conversions API</Link> shows Meta&apos;s reason. Fix it there before you launch.
             </Callout>
           ) : null}
 

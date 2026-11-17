@@ -924,6 +924,23 @@
 .lp-cta-panel .lp-btn {
   margin-top: 12px;
 }
+/* Editor preview only: a button that has no link yet, so it is not on the live page. */
+.lp-btn.is-waiting {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+  box-shadow: none;
+}
+.lp-cta-waiting {
+  max-width: 34em;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px dashed currentColor;
+  border-radius: 12px;
+  color: var(--t-panel-muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
 .lp-sec-cta.is-lead {
   padding-top: clamp(4px, 1cqi, 16px);
 }

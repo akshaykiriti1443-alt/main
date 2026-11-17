@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { CheckIcon, FlameIcon, PaletteIcon, SparklesIcon } from "lucide-react";
+import { CheckIcon, MegaphoneIcon, PaletteIcon, SparklesIcon } from "lucide-react";
 import { env } from "@/lib/env";
 import { requestHost } from "@/server/auth";
 import { agencyForHost } from "@/server/agency";
@@ -14,13 +14,13 @@ export type AuthAside = { eyebrow: string; title: string; points: string[]; scen
 
 const DEFAULT_ASIDE: AuthAside = {
   eyebrow: "For Skool community owners",
-  title: "Your whole Skool funnel, in one calm place.",
-  points: ["A landing page and free guide, written by AI", "Leads that sort themselves into hot, warm and cold", "The Skool growth ladder, one step at a time", "Bring your own AI. Free plans work"],
+  title: "Your Skool launch, in one calm place.",
+  points: ["A website and free checklist, written by AI", "Leads that sort themselves into hot, warm and cold", "The Skool growth ladder, one step at a time", "Bring your own AI. Free plans work"],
 };
 
 const CARD = "absolute rounded-2xl bg-card text-card-foreground shadow-float ring-1 ring-black/5 dark:ring-white/10";
 
-/** A little scene: your next step, a fresh lead and Penny (for agencies: your brand and client accounts). Pure decoration. */
+/** A little scene: your next step, your first ads and Penny (for agencies: your brand and client accounts). Pure decoration. */
 function Scene({ variant = "member" }: { variant?: "member" | "agency" }) {
   return (
     <div aria-hidden className="relative mx-auto h-[300px] w-full max-w-[440px] select-none">
@@ -58,24 +58,25 @@ function Scene({ variant = "member" }: { variant?: "member" | "agency" }) {
         <>
           <div className={`${CARD} top-0 left-0 w-[82%] -rotate-[3deg] p-4`}>
             <div className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Day 1</div>
-            <div className="mt-1.5 font-display text-[24px] leading-[1.05]">Publish your funnel</div>
+            <div className="mt-1.5 font-display text-[24px] leading-[1.05]">Publish your website</div>
             <div className="mt-1 text-[13px] text-muted-foreground">Edit three lines, then press the scary button.</div>
             <div className="mt-3.5 flex items-center gap-2">
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <span className="block h-full w-[22%] rounded-full bg-[linear-gradient(90deg,var(--violet-500),var(--pink-400))]" />
               </span>
-              <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">3 of 26</span>
             </div>
           </div>
           <div className={`${CARD} right-0 bottom-3 w-[80%] rotate-[2.5deg] p-3.5`}>
             <div className="flex items-center gap-3">
-              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,var(--violet-100),var(--pink-100))] text-xs font-semibold text-violet-700">JD</span>
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,var(--violet-100),var(--pink-100))] text-violet-700">
+                <MegaphoneIcon className="size-4" />
+              </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">Jamie signed up</div>
-                <div className="truncate text-xs text-muted-foreground">from your Pain ad · just now</div>
+                <div className="truncate text-sm font-semibold">Your 5 ads are ready</div>
+                <div className="truncate text-xs text-muted-foreground">from Ad studio · in your own words</div>
               </div>
-              <span className="inline-flex h-[22px] shrink-0 items-center gap-1 rounded-full bg-hot-soft px-2 text-[11px] font-semibold text-hot">
-                <FlameIcon className="size-3" /> Hot
+              <span className="inline-flex h-[22px] shrink-0 items-center gap-1 rounded-full bg-success-soft px-2 text-[11px] font-semibold text-success">
+                <CheckIcon className="size-3" strokeWidth={3} /> Ready
               </span>
             </div>
           </div>

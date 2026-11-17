@@ -113,6 +113,12 @@ export function computeLadder(c: CheckinInput | null): Ladder {
   return { qualifies, reported: v.skoolLevel, next, gaps, moves };
 }
 
+/** What the member reads after Save check-in. It starts "Saved." (the course quotes it). */
+export function checkinSavedMessage(ladder: Ladder, first: boolean) {
+  const where = ladder.next ? `Saved. Your numbers qualify for Level ${ladder.qualifies}. Next up: Level ${ladder.next.level}.` : "Saved. You're at the top level.";
+  return first ? `${where} Your first check-in is in.` : where;
+}
+
 export async function latestCheckins(workspaceId: string, limit = 8) {
   const db = await getDb();
   return db.select().from(skoolCheckins).where(eq(skoolCheckins.workspaceId, workspaceId)).orderBy(desc(skoolCheckins.createdAt)).limit(limit);
@@ -146,6 +152,12 @@ export async function saveCheckin(workspaceId: string, input: Partial<CheckinInp
 // ---------------------------------------------------------------------------
 
 export const skoolLinkFor = (slug: string) => `${env.appUrl}/go/${slug}`;
+
+/** Day 5's link for texts: the Skool link tagged ?src=text, so friends count apart from ads. */
+export const textLinkFor = (slug: string) => `${skoolLinkFor(slug)}?src=text`;
+
+/** A click from the link for texts. Same test as the Day 5 tick on Your path. */
+export const isTextSource = (source: string) => /^text\b/.test(source.toLowerCase());
 
 /** Is this an http(s) link on skool.com? */
 export function isSkoolUrl(raw: string): boolean {

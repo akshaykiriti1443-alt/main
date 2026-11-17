@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { env } from "@/lib/env";
 import { logActivity } from "@/server/activity";
 import { enqueue } from "@/server/jobs/queue";
 import { isBot, skoolTargetFor, visitSource, workspaceBySlug } from "@/server/growth";
@@ -7,6 +6,7 @@ import { randomToken } from "@/lib/crypto";
 import { clientIp } from "@/lib/ip";
 import { takeRateLimit } from "@/server/rateLimit";
 import { isWorkspaceLive } from "@/server/liveness";
+import { holdingResponse } from "../holding";
 
 // The Skool link: an instant redirect to the owner's Skool About page.
 //   - counts the click by source (ads, bio, YouTube...) for the Growth ladder
@@ -16,13 +16,16 @@ import { isWorkspaceLive } from "@/server/liveness";
 // Skool still sees where the visitor came from. Query params (utm_*, ref) pass through.
 // A paused workspace (or agency) keeps redirecting to the member's own Skool group: their ads may
 // still be running, and those visitors are theirs. It just stops counting and stops sending Meta events.
+// With no Skool link saved yet there is nowhere to send anyone: the visitor gets a short "not ready
+// yet" page (never the app's own login screen), and nothing is counted or sent to Meta.
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const ws = await workspaceBySlug(slug);
   const target = ws ? await skoolTargetFor(ws.id, ws.settings.skoolUrl) : "";
-  if (!ws || !target) return NextResponse.redirect(env.appUrl, 302);
+  if (!ws) return holdingResponse(null, 404);
+  if (!target) return holdingResponse(ws.settings.businessName || ws.name, 200);
 
   const url = new URL(target);
   req.nextUrl.searchParams.forEach((v, k) => {

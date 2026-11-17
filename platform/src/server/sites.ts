@@ -1,11 +1,12 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { pages, sites, type PageKind } from "@/lib/db/schema";
+import { pages, sites, workspaces, type PageKind } from "@/lib/db/schema";
 import { pageContentSchema, siteThemeSchema, type PageContent, type Section, type SectionType, type SiteTheme } from "@/lib/db/types";
 import { env } from "@/lib/env";
 import { safeUrl } from "@/lib/html";
 import { shortId, slugify, isUuid } from "@/lib/util";
 import { RESERVED_SLUGS } from "./defaults";
+import { settingsKeepingJourney } from "./settingsWrite";
 
 export type Site = typeof sites.$inferSelect;
 export type Page = typeof pages.$inferSelect;
@@ -149,6 +150,7 @@ export async function publishSite(workspaceId: string, siteId: string) {
     }
     await tx.update(sites).set({ published: true, updatedAt: new Date() }).where(eq(sites.id, siteId));
   });
+  return site;
 }
 
 export async function unpublishSite(workspaceId: string, siteId: string) {
@@ -250,11 +252,79 @@ export function resolveSiteLink(site: Pick<Site, "slug" | "customDomain" | "doma
   return safeUrl(link);
 }
 
-export function siteVars(site: Site): Record<string, string> {
+/**
+ * One Skool link per account. The account's link wins; a website's own copy (kept in step by
+ * setAccountSkoolUrl) only covers accounts from before the link was saved on the account. So a
+ * Join button never goes live empty, or stale, because the link was saved after the website was built.
+ */
+export function siteVars(site: Site, accountSkoolUrl?: string | null): Record<string, string> {
   return {
-    skool_url: safeUrl(site.skoolUrl),
+    skool_url: safeUrl(accountSkoolUrl) || safeUrl(site.skoolUrl),
     lead_magnet_url: resolveSiteLink(site, site.leadMagnetUrl),
     lead_magnet_name: site.leadMagnetName,
     site_url: siteBaseUrl(site),
   };
+}
+
+/** The account's Skool link: the saved one, or (accounts from before it was saved there) the first website's copy. */
+export async function accountSkoolUrl(workspaceId: string, settingsUrl?: string | null): Promise<string> {
+  const saved = safeUrl(settingsUrl);
+  if (saved) return saved;
+  const db = await getDb();
+  const [site] = await db
+    .select({ skoolUrl: sites.skoolUrl })
+    .from(sites)
+    .where(and(eq(sites.workspaceId, workspaceId), sql`${sites.skoolUrl} <> ''`))
+    .orderBy(asc(sites.createdAt))
+    .limit(1);
+  return site ? safeUrl(site.skoolUrl) : "";
+}
+
+/** Copy the account's Skool link onto every website it has. An empty link clears them all. */
+export async function syncSkoolUrlToSites(workspaceId: string, url: string) {
+  const db = await getDb();
+  await db
+    .update(sites)
+    .set({ skoolUrl: safeUrl(url), updatedAt: new Date() })
+    .where(eq(sites.workspaceId, workspaceId));
+}
+
+/** Save the account's one Skool link and put it on every website. Callers check it is a skool.com link. */
+export async function setAccountSkoolUrl(workspaceId: string, url: string) {
+  const clean = safeUrl(url);
+  const db = await getDb();
+  const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+  if (!ws) throw new Error("Account not found");
+  await db
+    .update(workspaces)
+    .set({ settings: settingsKeepingJourney({ ...ws.settings, skoolUrl: clean }) })
+    .where(eq(workspaces.id, workspaceId));
+  await syncSkoolUrlToSites(workspaceId, clean);
+  return clean;
+}
+
+const SKOOL_VAR = /\{\{\s*skool_url\s*\}\}/;
+
+/** Does any of these pages carry a button that goes to the Skool group? */
+export function usesSkoolLink(list: Pick<Page, "content">[]): boolean {
+  return list.some((p) => p.content.sections.some((s) => s.type === "cta" && Boolean(s.buttonText) && SKOOL_VAR.test(s.buttonUrl)));
+}
+
+/** True when a website has a Join button and nowhere to send it (the button is hidden until there is). */
+export function joinLinkMissing(site: Site, list: Pick<Page, "content">[], accountUrl?: string | null): boolean {
+  return usesSkoolLink(list) && !siteVars(site, accountUrl).skool_url;
+}
+
+/**
+ * Own domains are a Growth-plan tool. Without it there is no domain box and no "Get a domain"
+ * offer (it could buy a domain with nowhere to connect it); a domain connected earlier stays manageable.
+ */
+export function domainTools(canConnect: boolean, site: Pick<Site, "customDomain">): { show: boolean; offerPurchase: boolean } {
+  return { show: canConnect || Boolean(site.customDomain), offerPurchase: canConnect && !site.customDomain };
+}
+
+/** When the website last went live, or null for a draft. */
+export function lastPublishedAt(list: Pick<Page, "publishedAt">[]): Date | null {
+  const times = list.map((p) => p.publishedAt?.getTime() ?? 0).filter(Boolean);
+  return times.length ? new Date(Math.max(...times)) : null;
 }

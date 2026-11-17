@@ -32,7 +32,7 @@ export default async function EditPage({ params }: { params: Promise<{ wid: stri
         initialTitle={page.title}
         initialSections={page.content.sections}
         theme={site.theme}
-        vars={siteVars(site)}
+        vars={siteVars(site, workspace.settings.skoolUrl)}
         businessName={workspace.settings.businessName || workspace.name}
         save={savePageAction.bind(null, wid, pageId)}
       />

@@ -5,7 +5,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { activities, aiGenerations, contacts, sites, workspaces } from "@/lib/db/schema";
 import { parseCsvRows, toCsv } from "@/lib/csv";
-import { canBeUpNext } from "@/lib/guides";
+import { PAGE_GUIDES, STEP_HOWTO } from "@/lib/guides";
+import { allWeekStrings, postFor, WEEK } from "@/lib/week";
 import { CANCEL_ROUTE, IF_YOU_CANCEL } from "@/lib/leaving";
 import { firstEightDayMembers } from "@/server/admin";
 import { runAdReview } from "@/server/ai/adReview";
@@ -25,6 +26,8 @@ const onDay = <T extends { createdAt: Date }>(ws: T, n: number) => ({ ...ws, cre
 const source = (file: string) => readFileSync(path.join(process.cwd(), "src", file), "utf8");
 const NO_PRESSURE = /\b(hurry|last chance|don't miss|you'd lose|you will lose|act now|lock it in|goes up soon)\b|\d+ days? left|\bcountdown\b/i;
 
+const NO_BILLING = /\b(charged|billed|billing date|renews|expires?|trial (has )?ended|your trial ends|last chance|hurry)\b|\d+ days? left|\bDay \d+ of \d+\b/i;
+
 async function finishDay1(workspaceId: string) {
   const db = await getDb();
   for (const kind of ["launch_kit", "ad_research", "ad_studio"] as const) await db.insert(aiGenerations).values({ workspaceId, kind, model: "rules" });
@@ -32,57 +35,71 @@ async function finishDay1(workspaceId: string) {
   await db.insert(activities).values({ workspaceId, type: "lead", data: {} });
 }
 
-describe("days Skool hasn't opened can't be Up next", () => {
-  const stepsOn = async (n: number) => {
-    const { ws, user } = await makeWorkspace();
-    await finishDay1(ws.id);
-    await (await getDb()).insert(activities).values({ workspaceId: ws.id, type: "skool_visit", data: { source: "meta-ad" } });
-    await saveCheckin(ws.id, { aboutVisitors: 30, newPaid: 0, networkSignups: 0, linkInBio: false, skoolLevel: 1 });
-    await (await getDb()).insert(aiGenerations).values({ workspaceId: ws.id, kind: "ad_review", model: "rules" });
-    const p = await computePath({ ...onDay(ws, n), settings: { ...ws.settings, metaPixelId: "1234567890", aiKeyEnc: "x" } }, user.id);
-    return { p, step: (k: string) => p.stages.flatMap((s) => s.steps).find((s) => s.key === k) };
-  };
+/** Every string a member reads on Dashboard, Your path and in Penny's how-to. */
+const allCopy = () => [
+  ...allWeekStrings(),
+  ...Object.values(STEP_HOWTO).flatMap((h) => h.how),
+  ...Object.values(PAGE_GUIDES).flatMap((g) => [g.title, g.what, ...g.tips]),
+];
 
-  it("locks each day until the course opens it", async () => {
-    const { p, step } = await stepsOn(2);
-    expect(p.today?.lesson).toBe("Day 2");
-    expect(step("tracking")?.locked).toBe("Opens Day 3");
-    expect(step("unlock")).toMatchObject({ locked: "Opens Day 4", done: false });
-    expect(step("warm")?.locked).toBe("Opens Day 5");
-    expect(step("review")?.locked).toBe("Opens Day 6");
-    expect(step("checkin")?.locked).toBe("Opens Day 7");
-    expect(step("email4")?.locked).toBe("Opens Day 8");
-    expect(step("weeks")?.locked).toBe("Opens Day 8");
-    expect(step("bio")?.locked).toBe("Opens Day 8");
-    expect(p.next?.key).toBe("refresh");
-    expect(canBeUpNext(step("unlock")!)).toBe(false);
+describe("the week's words press nobody", () => {
+  it("has no pressure, no billing dates, no countdowns and no em dash, anywhere", () => {
+    const copy = allCopy();
+    expect(copy.length).toBeGreaterThan(200);
+    for (const s of copy) {
+      expect(s, s).not.toMatch(NO_PRESSURE);
+      expect(s, s).not.toMatch(NO_BILLING);
+      expect(s, s).not.toMatch(/—/);
+      expect(s, s).not.toMatch(/like-for-like|\bpod\b|journey|game-changer/i);
+    }
   });
 
-  it("opens each one on the course's own day", async () => {
-    expect((await stepsOn(3)).step("unlock")?.locked).toBe("Opens Day 4");
-    expect((await stepsOn(4)).step("unlock")?.locked).toBeUndefined();
-    expect((await stepsOn(7)).step("email4")?.locked).toBe("Opens Day 8");
-    const eight = await stepsOn(8);
-    expect(eight.step("email4")?.locked).toBeUndefined();
-    expect(eight.step("bio")?.locked).toBeUndefined();
+  it("promises no times and invents no numbers about Meta or members", () => {
+    for (const s of allCopy()) {
+      expect(s, s).not.toMatch(/\b24[ -]?hours?\b|within (a day|hours)|members usually|most members|guaranteed/i);
+      expect(s, s).not.toMatch(/\b(streak|points|badge)s?\b/i);
+    }
   });
 
-  it("still ticks a locked step when someone does it early", async () => {
-    const { ws, user } = await makeWorkspace();
-    await saveCheckin(ws.id, { aboutVisitors: 30, newPaid: 0, networkSignups: 0, linkInBio: true, skoolLevel: 1 });
-    const p = await computePath(onDay(ws, 7), user.id);
-    expect(p.stages.flatMap((s) => s.steps).find((s) => s.key === "bio")).toMatchObject({ done: true, locked: "Opens Day 8" });
+  it("uses the course's seven section names and puts the member's own website in the post", () => {
+    expect(WEEK.map((d) => d.section)).toEqual(["Day 1: 5-Second Test", "Day 2: Thumb-Stop Vote", "Day 3: Live or Stuck", "Day 4: Would You Answer?", "Day 5: Would You Reply?", "Day 6: Three Numbers", "Day 7: Before and After"]);
+    expect(postFor(1, "https://fit-dads.example.com")).toContain("My website: https://fit-dads.example.com");
+    expect(postFor(3, "https://fit-dads.example.com")).toContain("Live: https://fit-dads.example.com");
+    expect(postFor(1)).toContain("[your link]");
+    for (const d of WEEK) expect(postFor(d.day), `Day ${d.day}`).not.toContain("{website}");
   });
 });
 
-describe("Your shelf, Days 6 to 8", () => {
+describe("nothing locks, and working ahead counts", () => {
+  it("never locks a step by the calendar, and the next step stays on unfinished work", async () => {
+    const { ws, user } = await makeWorkspace();
+    await finishDay1(ws.id);
+    // A saved journey key: an older account that started the checklist gets it the same way.
+    const started = { ...ws, settings: { ...ws.settings, journey: {} } };
+    for (const n of [1, 2, 5, 9, 30]) {
+      const p = await computePath(onDay(started, n), user.id);
+      for (const s of [...p.days.flatMap((d) => d.steps), ...p.after]) expect(s, `${s.key} on Day ${n}`).not.toHaveProperty("locked");
+      // The free key is still Day 1's first step, whatever the date.
+      expect(p.current?.key, `Day ${n}`).toBe("ai");
+    }
+  });
+
+  it("ticks a later day's step the moment it's done, even on Day 1", async () => {
+    const { ws, user } = await makeWorkspace();
+    await saveCheckin(ws.id, { aboutVisitors: 30, newPaid: 0, networkSignups: 0, linkInBio: true, skoolLevel: 1 });
+    const p = await computePath(ws, user.id);
+    expect(p.days[6].steps.find((s) => s.key === "checkin")).toMatchObject({ done: true, tick: "app" });
+    expect(p.after.find((s) => s.key === "bio")?.done).toBe(true);
+    expect(p.current?.day).toBe(1);
+  });
+});
+
+describe("the shelf: what the app can see of the week", () => {
   const blank = { kit: false, funnel: false, pixel: false, research: false, statics: false, adLeads: 0, adClicks: 0, verdicts: 0, aboutVisitors: null };
 
-  it("only shows up on Days 6 to 8", async () => {
+  it("is always there for Day 7's decision and the week-done card", async () => {
     const { ws, user } = await makeWorkspace();
-    expect((await computePath(onDay(ws, 5), user.id)).shelf).toBeNull();
-    for (const d of [6, 7, 8]) expect((await computePath(onDay(ws, d), user.id)).shelf, `Day ${d}`).not.toBeNull();
-    expect((await computePath(onDay(ws, 9), user.id)).shelf).toBeNull();
+    for (const d of [1, 5, 7, 9]) expect((await computePath(onDay(ws, d), user.id)).shelf.items.length, `Day ${d}`).toBeGreaterThan(0);
   });
 
   it("reads real data: an ad click counts, your own test click doesn't", async () => {
@@ -90,27 +107,28 @@ describe("Your shelf, Days 6 to 8", () => {
     await finishDay1(ws.id);
     const db = await getDb();
     await db.insert(activities).values({ workspaceId: ws.id, type: "skool_visit", data: { source: "direct" } });
-    const before = await computePath(onDay(ws, 7), user.id);
-    expect(before.shelf?.items.find((x) => x.key === "clicks")).toMatchObject({ have: false, note: "0 so far. Meta may still be warming up" });
+    const before = await computePath(ws, user.id);
+    expect(before.shelf.items.find((x) => x.key === "clicks")).toMatchObject({ have: false, note: "0 so far. Meta may still be warming up" });
     await db.insert(activities).values({ workspaceId: ws.id, type: "skool_visit", data: { source: "meta-ad" } });
-    const after = await computePath(onDay(ws, 7), user.id);
-    expect(after.shelf?.items.find((x) => x.key === "clicks")).toMatchObject({ have: true, note: "1" });
-    expect(after.shelf?.items.find((x) => x.key === "kit")).toMatchObject({ have: true, note: "Built" });
+    const after = await computePath(ws, user.id);
+    expect(after.shelf.items.find((x) => x.key === "clicks")).toMatchObject({ have: true, note: "1" });
+    expect(after.shelf.items.find((x) => x.key === "kit")).toMatchObject({ have: true, note: "Built" });
   });
 
   it("counts a lead from an ad, not your own test sign-up", async () => {
     const { ws, user } = await makeWorkspace();
     const db = await getDb();
     await finishDay1(ws.id); // includes your own sign-up, with no ad click id
-    const leadsLine = async () => (await computePath(onDay(ws, 7), user.id)).shelf?.items.find((x) => x.key === "leads");
+    const leadsLine = async () => (await computePath(ws, user.id)).shelf.items.find((x) => x.key === "leads");
     expect(await leadsLine()).toMatchObject({ have: false });
     await db.insert(activities).values({ workspaceId: ws.id, type: "lead", data: { utm: { fbclid: "abc" } } });
     expect(await leadsLine()).toMatchObject({ have: true, note: "1" });
   });
 
-  it("says written, not live, and labels what the member typed", () => {
-    const shelf = buildShelf({ ...blank, statics: true, verdicts: 3, aboutVisitors: 22 });
+  it("says written, not live, saved, not connected, and labels what the member typed", () => {
+    const shelf = buildShelf({ ...blank, statics: true, pixel: true, verdicts: 3, aboutVisitors: 22 });
     expect(shelf.items.find((x) => x.key === "statics")?.note).toBe("Written. The app can't see if they went live");
+    expect(shelf.items.find((x) => x.key === "pixel")?.note).toBe("Saved");
     expect(shelf.items.find((x) => x.key === "verdicts")?.note).toBe("3, from the numbers you typed");
     expect(shelf.items.find((x) => x.key === "checkin")?.note).toBe("22 About-page visitors, you typed this");
     expect(shelf.empty).toBe(false);
@@ -120,7 +138,7 @@ describe("Your shelf, Days 6 to 8", () => {
     const shelf = buildShelf(blank);
     expect(shelf.empty).toBe(true);
     for (const item of shelf.items) {
-      expect(`${item.label} ${item.note}`, item.key).not.toMatch(/\blikes?\b|like level|Growth Level|lesson|streak|buddy|posted|Win #|—/i);
+      expect(`${item.label} ${item.note}`, item.key).not.toMatch(/\blikes?\b|like level|Growth Level|lesson|streak|buddy|posted|Win #|connected|—/i);
       expect(item.note, item.key).not.toMatch(NO_PRESSURE);
     }
   });
@@ -216,7 +234,10 @@ describe("honest about money, across the app", () => {
     expect(page).toContain("IF_YOU_CANCEL.how");
     expect(page).toContain("first 100 founding members");
     expect(page).not.toMatch(NO_PRESSURE);
-    expect(page).toContain("The scoreboard, and your decision");
+    // Its day titles are the app's own (src/lib/week.ts), so the two can never disagree.
+    expect(page).toContain('import { WEEK } from "@/lib/week"');
+    expect(page).toContain("title: dayTitle(7)");
+    expect(WEEK[6].title).toBe("The scoreboard, and your decision");
     expect(page).not.toMatch(/Launch Week|Teardown|Lesson \d\.\d|Day 9|No Pixel needed/);
   });
 

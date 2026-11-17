@@ -186,7 +186,8 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
       <ul className={cn("grid gap-5", sites.length > 1 && "@2xl/main:grid-cols-2")}>
         {sites.map((s) => {
           const url = siteBaseUrl(s);
-          const address = s.customDomain ?? url.replace(/^https?:\/\//, "");
+          // The address it really opens at: a custom domain only once it is verified.
+          const address = url.replace(/^https?:\/\//, "");
           const pageCount = counts.find((c) => c.siteId === s.id)?.pages ?? 0;
           const leadCount = leads.find((l) => l.siteId === s.id)?.n ?? 0;
           const wide = sites.length === 1;

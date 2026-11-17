@@ -4,7 +4,7 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { activities, workspaces } from "@/lib/db/schema";
-import { adReviewInputSchema, reviewMode, ruleReview, runAdReview, type AdReviewContext, type SkoolLinkCounts } from "@/server/ai/adReview";
+import { adReviewInputSchema, adTotals, doNextNote, reviewMode, ruleReview, runAdReview, spendFrom, twoSums, type AdReviewContext, type SkoolLinkCounts } from "@/server/ai/adReview";
 import { isAdSource, saveCheckin } from "@/server/growth";
 import { makeWorkspace } from "./helpers";
 
@@ -44,16 +44,17 @@ describe("Ad review: Skool-link mode", () => {
     expect(r.metrics.find((m) => m.name === "Link click-through")?.status).toBe("wait");
   });
 
-  it("Too early: Meta barely spent on it, so leave it on", () => {
+  it("Too early: Meta barely spent on it, so leave it running, said as the normal answer it is", () => {
     for (const raw of [
       { spend: 3, impressions: 600, linkClicks: 4, days: 6 }, // under 1,000 impressions
       { spend: 4, impressions: 1200, linkClicks: 5, days: 6 }, // under $5 and under 10 clicks
     ]) {
       const r = ruleReview(ad(raw), counted());
       expect(r.call, JSON.stringify(raw)).toBe("too_early");
-      expect(r.why).toMatch(/barely spent on it.*leave it on/);
-      expect(r.actions[0].title).toBe("Leave it on");
+      expect(r.why).toMatch(/^Too early to tell: .*hasn't lost\. Leave it running\. In week one, that's the usual answer\.$/);
+      expect(r.actions.map((a) => a.title)).toEqual(["Leave it running", "Look again in a week"]);
     }
+    expect(ruleReview(ad({ spend: 3, impressions: 600, linkClicks: 4, days: 6 }), counted()).why).toContain("shown it 600 times and spent $3.00");
     // Cheap but busy is not "barely spent": $3 for 2,000 impressions and 25 clicks gets judged.
     expect(ruleReview(ad({ spend: 3, impressions: 2000, linkClicks: 25, days: 6, members: "1" }), counted()).call).toBe("keep");
   });
@@ -137,12 +138,31 @@ describe("Ad review: Skool-link mode", () => {
     expect(JSON.stringify(page)).not.toMatch(/Skool link/);
   });
 
-  it("says verdicts on Day 6 and Kill ads go off then, with no Day 7 or Day 9 edits", () => {
+  it("reads a blank Leads box as not known, never as 0 sign-ups", () => {
+    expect(ad({ ...healthy }).leads).toBeUndefined();
+    expect(ad({ ...healthy, leads: "0" }).leads).toBe(0);
+    // The same busy website ad: blank leads keeps it (the page isn't judged), 0 leads says fix the page.
+    const blank = ruleReview(ad({ ...healthy, destination: "optin" }));
+    expect(blank).toMatchObject({ mode: "funnel", call: "keep" });
+    expect(blank.metrics.find((m) => m.name === "Page opt-in rate")).toMatchObject({ value: "not given", status: "wait" });
+    expect(blank.metrics.find((m) => m.name === "Cost per lead")).toMatchObject({ value: "not given", status: "wait" });
+    expect(blank.actions.map((a) => a.title)).toContain("Add its leads next time");
+    expect(ruleReview(ad({ ...healthy, destination: "optin", leads: "0" })).call).toBe("fix_door");
+    expect(ruleReview(ad({ ...healthy, destination: "optin", leads: "9" })).actions.map((a) => a.title)).not.toContain("Add its leads next time");
+  });
+
+  it("week one is hands-off: the page says change nothing today, and Too early is a good answer", () => {
     const page = readFileSync(path.join(process.cwd(), "src/app/app/w/[wid]/ads/page.tsx"), "utf8");
     expect(page).toContain('lesson="Day 6"');
-    expect(page).toMatch(/First round\? Day 6 is verdict day\. Switch off any ad marked Kill/);
+    expect(page).toContain("Week one: change nothing today. Too early means leave it running, and a Fix or a Keep goes on next week's list.");
+    expect(page).toContain("Too early to tell, leave it running. A normal answer, not a bad one.");
+    // The three numbers, and where they live, in words.
+    for (const words of ["Impressions", "Link clicks", "Amount spent", "Maximum", "Performance and clicks"]) expect(page).toContain(words);
+    // The website choice uses the same name as Ad studio.
+    expect(page).toContain("My website");
+    expect(page).not.toContain("An opt-in page");
     for (const text of [page, readFileSync(path.join(process.cwd(), "src/server/ai/adReview.ts"), "utf8")]) {
-      expect(text).not.toMatch(/Day 7|Day 9|your alarm|alarm rings|lesson \d\.\d/);
+      expect(text).not.toMatch(/Day 7|Day 9|your alarm|alarm rings|lesson \d\.\d|next Monday/);
     }
   });
 
@@ -188,5 +208,90 @@ describe("Ad review, saved: what the Skool link counted", () => {
     const lost = await runAdReview(ws.id, { spend: "9", impressions: "2000", linkClicks: "30", days: "5" });
     if (!lost.ok) throw new Error(lost.error);
     expect(lost.review).toMatchObject({ call: "fix_door", counted: { ready: false } });
+
+    // A broken link is setup, not an ad change: it's fixed today, even in week one.
+    for (const review of [r.review, lost.review]) {
+      const note = doNextNote(review, true);
+      expect(note).toMatch(/^This one is a setup fix, not an ad change\. Do it today/);
+      expect(note).not.toMatch(/change nothing/i);
+      expect(doNextNote(review, false)).toBe(note);
+    }
+    expect(doNextNote(r.review, true)).toContain("Website URL");
+    expect(doNextNote(lost.review, true)).toContain("Settings");
+  });
+});
+
+describe("Ad review: the week-one note above Do this next", () => {
+  const verdict = (raw: Record<string, unknown>) => ruleReview(ad(raw), counted());
+  it("holds every ad change till next week, and says nothing after week one", () => {
+    const hook = verdict({ spend: 12, impressions: 2400, linkClicks: 10, days: 6 });
+    expect(hook.call).toBe("fix_hook");
+    expect(doNextNote(hook, true)).toBe("This is next week's list. Today, change nothing.");
+    expect(doNextNote(hook, false)).toBeNull();
+    expect(doNextNote(verdict({ ...healthy, members: "2" }), true)).toBe("This is next week's list. Today, change nothing.");
+    const kill = verdict({ spend: 12, impressions: 2400, linkClicks: 10, days: 6, fixes: "2" });
+    expect(kill.call).toBe("kill");
+    expect(doNextNote(kill, true)).toBe("Switching it off is your call. Change nothing else today.");
+    expect(doNextNote(verdict({ ...healthy, days: 2 }), true)).toBeNull();
+    // An opt-in page's Fix: Door is the page's headline, an ordinary fix that waits like the rest.
+    const page = ruleReview(ad({ ...healthy, destination: "optin", leads: "0" }));
+    expect(page.call).toBe("fix_door");
+    expect(doNextNote(page, true)).toBe("This is next week's list. Today, change nothing.");
+  });
+});
+
+describe("Ad review: your two prices", () => {
+  it("reads a typed total, and leaves an empty or odd box out", () => {
+    expect(spendFrom("50")).toBe(50);
+    expect(spendFrom("$1,234.50")).toBe(1234.5);
+    for (const raw of ["", "  ", undefined, null, "abc", "-3"]) expect(spendFrom(raw), String(raw)).toBeNull();
+  });
+
+  it("divides each campaign's spend by what the app counted, with no benchmark attached", () => {
+    const both = twoSums({ webSpend: 50, skoolSpend: 20, adLeads: 4, adVisits: 18 });
+    expect(both.lead).toMatchObject({ spend: 50, count: 4, cost: 12.5, line: "Website ads: $50.00 spent ÷ 4 leads = $12.50 a lead" });
+    expect(both.visit).toMatchObject({ spend: 20, count: 18, cost: 1.11, line: "Skool ads: $20.00 spent ÷ 18 ad visits = $1.11 a visit" });
+    expect(both.post).toBe(`${both.lead?.line}\n${both.visit?.line}`);
+    expect(JSON.stringify(both)).not.toMatch(/good|bad|rule of thumb/i);
+
+    // Zero is an answer: no dividing by it.
+    const zero = twoSums({ webSpend: 35, skoolSpend: 15, adLeads: 0, adVisits: 0 });
+    expect(zero.lead).toMatchObject({ cost: null, line: "Website ads: $35.00 spent, 0 leads so far" });
+    expect(zero.visit).toMatchObject({ cost: null, line: "Skool ads: $15.00 spent, 0 ad visits so far" });
+
+    // Only the campaigns they typed.
+    const one = twoSums({ webSpend: null, skoolSpend: 12, adLeads: 3, adVisits: 1 });
+    expect(one.lead).toBeNull();
+    expect(one.post).toBe("Skool ads: $12.00 spent ÷ 1 ad visit = $12.00 a visit");
+    expect(twoSums({ webSpend: null, skoolSpend: null, adLeads: 3, adVisits: 4 }).post).toBe("");
+  });
+
+  it("counts leads that came from a Meta ad and the Skool link's ad visits, nothing else", async () => {
+    const { ws } = await makeWorkspace();
+    const db = await getDb();
+    await db.insert(activities).values([
+      { workspaceId: ws.id, type: "lead", data: { utm: { fbclid: "abc" } } },
+      { workspaceId: ws.id, type: "lead", data: { utm: {} } }, // their own test sign-up
+      { workspaceId: ws.id, type: "lead", data: {} },
+      { workspaceId: ws.id, type: "skool_visit", data: { source: "meta-ad" } },
+      { workspaceId: ws.id, type: "skool_visit", data: { source: "ads" } },
+      { workspaceId: ws.id, type: "skool_visit", data: { source: "text" } },
+      // Older than 30 days still counts: the spend it's divided by is lifetime (date range Maximum).
+      { workspaceId: ws.id, type: "skool_visit", data: { source: "meta-ad" }, createdAt: new Date(Date.now() - 60 * 86_400_000) },
+      { workspaceId: ws.id, type: "lead", data: { utm: { fbclid: "old" } }, createdAt: new Date(Date.now() - 60 * 86_400_000) },
+    ]);
+    expect(await adTotals(ws.id)).toEqual({ adLeads: 2, adVisits: 3 });
+  });
+
+  it("the panel says 'No leads yet' instead of a price, and doesn't overclaim what it counts", () => {
+    const page = readFileSync(path.join(process.cwd(), "src/app/app/w/[wid]/ads/page.tsx"), "utf8");
+    expect(page).toContain('none="No leads yet"');
+    expect(page).toContain('none="No visits yet"');
+    expect(page).not.toContain('"0 so far"');
+    expect(page).toContain("nearly always your ads");
+    expect(page).not.toContain("only counts sign-ups that came in from a Meta ad");
+    // Lifetime spend over lifetime visits: no 30-day window in the Skool sum.
+    expect(page).not.toContain("visits from ads, last 30 days");
+    expect(page).toContain("A broken link is the one thing to fix today.");
   });
 });

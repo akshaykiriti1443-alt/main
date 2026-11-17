@@ -32,9 +32,12 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
   const user = await getCurrentUser();
   if (!user) {
     return (
-      <AuthShell title="Confirm your email" sub={`Log in with the password you chose for ${data.email}, then confirm.`}>
-        <LoginForm next={`/verify?token=${encodeURIComponent(token)}`} />
+      <AuthShell title="Confirm your email" sub={`Log in with the password you chose for ${data.email}, then press Confirm.`}>
+        <LoginForm next={`/verify?token=${encodeURIComponent(token)}`} defaultEmail={data.email} />
         <p className="mt-5 text-center text-xs text-muted-foreground">
+          Signed up on your computer? Confirm here, then go back to it: that screen asks you to log in once more.
+        </p>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
           Didn&apos;t create this account, or forgot the password? <Link href="/forgot">Reset the password</Link>. That confirms the email too.
         </p>
       </AuthShell>

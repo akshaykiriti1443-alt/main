@@ -1,51 +1,70 @@
 import { describe, expect, it } from "vitest";
-import { companionSnapshot } from "@/server/companion";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { companionSnapshot, snapshotFromPath } from "@/server/companion";
 import { computePath } from "@/server/path";
-import { canBeUpNext, PAGE_GUIDES, pageGuideFor, STEP_HOWTO } from "@/lib/guides";
+import { howFor, PAGE_GUIDES, pageGuideFor, STEP_HOWTO } from "@/lib/guides";
+import { HELLO_STEP, POST_KEYS, WEEK, WEEK_STEPS } from "@/lib/week";
 import { makeWorkspace } from "./helpers";
 
+// The data-guide targets that exist on the app's pages, so "Show me where" always has something to glow.
+const TARGETS = ["ai-key", "skool-link", "kit-build", "site-publish", "pixel", "research-analyse", "ad-studio-make", "unlock-create", "ad-review", "checkin", "automation-ai", "agency-new"];
+
 describe("Penny, the step-by-step guide", () => {
-  it("knows how to do every step on Your path", async () => {
-    const { ws, user } = await makeWorkspace();
-    const path = await computePath({ ...ws, accessSource: "member" }, user.id, { entryTicketOn: true });
-    const keys = path.stages.flatMap((s) => s.steps.map((x) => x.key)).filter((k) => k !== "app");
-    for (const k of keys) expect(STEP_HOWTO[k]?.how.length, k).toBeGreaterThan(0);
-    // ...and nothing about the removed Skool member CRM.
+  it("knows how to do every step of the week, with the posts sharing one entry", () => {
+    for (const s of [HELLO_STEP, ...WEEK_STEPS]) {
+      if (POST_KEYS.includes(s.key)) {
+        expect(STEP_HOWTO, s.key).not.toHaveProperty(s.key);
+        continue;
+      }
+      expect(STEP_HOWTO[s.key]?.how.length, s.key).toBeGreaterThan(0);
+    }
+    expect(STEP_HOWTO.post.how.join(" ")).toContain("{section}");
+    for (const d of WEEK) {
+      const how = howFor(`post${d.day}`, d.section)!.how.join(" ");
+      expect(how, `Day ${d.day}`).toContain(d.section);
+      expect(how).not.toContain("{section}");
+    }
+    // One to four lines each, and every glow target is one that exists.
+    for (const [k, h] of Object.entries(STEP_HOWTO)) {
+      expect(h.how.length, k).toBeGreaterThanOrEqual(1);
+      expect(h.how.length, k).toBeLessThanOrEqual(4);
+      if (h.target) expect(TARGETS, k).toContain(h.target);
+    }
+    // Gone: the Day 3 tracking bundle, the removed Skool member CRM, and the old lesson numbers.
+    expect(STEP_HOWTO).not.toHaveProperty("tracking");
     expect(STEP_HOWTO).not.toHaveProperty("price");
     expect(STEP_HOWTO).not.toHaveProperty("sync");
     expect(PAGE_GUIDES).not.toHaveProperty("skool");
     expect(JSON.stringify({ STEP_HOWTO, PAGE_GUIDES })).not.toMatch(/four piles|member export|Hobby way/i);
-    // No 3-Pack to launch, and Penny quotes the course's days, never the old lesson numbers.
     expect(JSON.stringify({ STEP_HOWTO, PAGE_GUIDES })).not.toMatch(/3-Pack|\b[Ll]esson \d\.\d|Hook, Turn or Door|Day 8|Day 9|Optional: your Day 1/);
     expect(STEP_HOWTO.lead1.how.join(" ")).toMatch(/own email/);
     expect(STEP_HOWTO.bio.how.join(" ")).toContain("(Instagram, TikTok or YouTube)");
+    // The free key is Day 1 and needs no connector; the connector lives in that page's tip.
+    expect(STEP_HOWTO.ai.how.join(" ")).not.toMatch(/connector/i);
+    expect(PAGE_GUIDES.ai.tips.join(" ")).toMatch(/connector/i);
   });
 
-  it("starts a new member on the launch kit (your own AI is optional), with where to go and how far along they are", async () => {
+  it("says nothing a Member can't use", () => {
+    expect(PAGE_GUIDES.leads.tips.join(" ")).not.toMatch(/Inbox|Growth plan/);
+    expect(PAGE_GUIDES.sites.tips.join(" ")).not.toMatch(/domain/i);
+    expect(PAGE_GUIDES[""].what).toBe("Your one next step is the big card. Everything else can wait.");
+  });
+
+  it("reads the same next step as the big card, and never picks one herself", async () => {
     const { ws, user } = await makeWorkspace();
-    const snap = await companionSnapshot(ws, user.id);
-    // Penny's rule matches Up next: optional steps, outcomes and plan-locked steps never hold you up.
-    const next = snap.steps.find(canBeUpNext);
-    expect(next).toMatchObject({ key: "kit", lesson: "Day 1", href: `/app/w/${ws.id}/launch`, stage: "Day 1" });
-    expect(snap.steps.find((s) => s.key === "ai")).toMatchObject({ done: false, stage: "Day 2", locked: "Opens Day 2" });
-    expect(snap.done).toBe(snap.steps.filter((s) => s.done).length); // "Open your app", plus the Skool link the helper sets
-    expect(snap.total).toBe(snap.steps.length);
+    const p = await computePath(ws, user.id);
+    const snap = snapshotFromPath(p);
+    expect(snap.current?.key).toBe(p.current?.key);
+    expect(snap).toMatchObject({ mode: "week", state: p.state, dayTitle: "Your whole machine goes live", doneKeys: p.doneKeys, waitingOnMeta: false });
+    expect(snap.wins.skool).toBe("Done: your group's link is saved. Every Join button now goes there.");
+    expect((await companionSnapshot(ws, user.id)).current?.key).toBe(p.current?.key);
   });
 
-  it("walks past a step locked to another plan, like Up next does", async () => {
-    const { ws: fresh, user } = await makeWorkspace(); // Member plan: lead follow-ups need the Growth plan
-    const ws = { ...fresh, createdAt: new Date(Date.now() - 19.5 * 86_400_000) }; // past every Opens Day
-    const snap = await companionSnapshot(ws, user.id);
-    const follow = snap.steps.find((s) => s.key === "automations");
-    expect(follow).toMatchObject({ locked: "Growth plan", done: false, stage: "Season 2" });
-    expect(canBeUpNext(follow!)).toBe(false);
-    // Everything before the follow-ups done: Penny walks past them to the check-ins.
-    const at = snap.steps.findIndex((s) => s.key === "automations");
-    const later = snap.steps.map((s, i) => ({ ...s, done: s.done || i < at }));
-    expect(later.find(canBeUpNext)?.key).toBe("weeks");
-    expect(later.map((s) => (s.key === "weeks" ? { ...s, done: true } : s)).find(canBeUpNext)?.key).toBe("bio");
-    // One rule for Penny and Your path.
-    expect(snap.steps.find(canBeUpNext)?.key).toBe((await computePath(ws, user.id)).next?.key);
+  it("has no progress bar, no step-of-28 counter and no skip cookie any more", () => {
+    const src = readFileSync(path.join(process.cwd(), "src", "components", "companion.tsx"), "utf8");
+    expect(src).not.toMatch(/guide-progress|progressbar|GUIDE_SKIP_COOKIE|Skip this step|Or follow the glowing dot/);
+    expect(src).toContain("onx:guide-next");
   });
 
   it("explains the page you're on, including deeper pages", () => {

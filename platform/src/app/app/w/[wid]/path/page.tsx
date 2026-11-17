@@ -1,221 +1,155 @@
 import Link from "next/link";
-import { ArrowRightIcon, CalendarRangeIcon, CheckIcon, ChevronDownIcon, FlagIcon, LockIcon, RouteIcon, TrendingUpIcon, TrophyIcon, type LucideIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, ChevronDownIcon, FlagIcon, TrendingUpIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
-import { computePath, stageBadge } from "@/server/path";
-import { getEntryTicket } from "@/server/unlocks";
+import { loadPath } from "@/server/path";
+import { startDayAction } from "@/actions/journey";
 import { cn } from "@/lib/utils";
-import { Flash, NextStep, PageHead, Panel } from "@/components/ui";
+import { fill, JOURNEY_COPY } from "@/lib/week";
+import { SubmitButton } from "@/components/client";
+import { Callout, Flash, PageHead, Panel } from "@/components/ui";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { JourneyHero } from "@/components/journey/journey-hero";
+import { StepRow } from "@/components/journey/step-row";
+import { Tick, TickLegend } from "@/components/journey/tick";
+import { WeekStrip } from "@/components/journey/week-strip";
 
 export const metadata = { title: "Your path" };
 
-/** Stage badges that are pictures, not numbers (see stageBadge). */
-const BADGE_ICON: Record<"calendar" | "flag", LucideIcon> = { calendar: CalendarRangeIcon, flag: FlagIcon };
+const C = JOURNEY_COPY.path;
 
 export default async function PathPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
-  const { workspace, user } = await requireWorkspace(wid);
-  const path = await computePath(workspace, user.id, { entryTicketOn: Boolean((await getEntryTicket())?.on) });
-  const pct = Math.round((path.done / path.total) * 100);
+  const { user } = await requireWorkspace(wid);
+  const path = await loadPath(wid, user.id);
+  const base = `/app/w/${wid}`;
+  const back = `${base}/path`;
   const loop = [
-    { label: "Skool link clicks", value: path.loop.clicks, sub: "last 30 days", href: `/app/w/${wid}/growth` },
-    { label: "Leads", value: path.loop.leads, sub: "last 30 days", href: `/app/w/${wid}/leads` },
-    { label: "New customers", value: path.loop.customers, sub: "from your Monday check-in", href: `/app/w/${wid}/growth` },
+    { label: C.loopClicks, value: path.loop.clicks, sub: C.last30, href: `${base}/growth` },
+    { label: C.loopLeads, value: path.loop.leads, sub: C.last30, href: `${base}/leads` },
+    { label: C.loopCustomers, value: path.loop.customers, sub: C.fromCheckin, href: `${base}/growth` },
   ];
-  const loopEmpty = loop.every((n) => n.value === 0);
-  const currentStage = path.today ? path.today.stage : path.stages.find((st) => st.steps.some((s) => s.key === path.next?.key))?.key;
-  // Days 2 to 7: today's lesson takes the big card. It's a card, not a step: never counted, never ticks.
-  const up = path.today
-    ? { eyebrow: path.today.eyebrow, title: path.today.title, body: path.today.body, href: path.today.href, icon: CalendarRangeIcon }
-    : path.next
-      ? { eyebrow: `Up next · ${path.next.lesson}`, title: path.next.title, body: path.next.why, href: path.next.href, icon: RouteIcon }
-      : null;
-  let n = 0;
+  const cur = path.current;
+  const curDay = cur ? path.days[cur.day - 1] : null;
+  const openInCurrent = curDay ? curDay.steps.filter((s) => !s.done).length : 0;
 
   return (
     <>
-      <PageHead
-        eyebrow="The Anti-Pete Week, inside your app"
-        title="Your path"
-        sub="The course, step by step. Every step ticks itself off when you do it, so you always know the one next thing. The days match your classroom."
-      />
+      <PageHead eyebrow={C.eyebrow} title={C.title} sub={C.sub} />
       <Flash searchParams={await searchParams} />
 
-      {up ? (
-        <NextStep eyebrow={up.eyebrow} title={up.title} body={up.body} href={up.href} cta="Do it now" icon={up.icon}>
-          {/* How far along: a glass strip on the night panel. */}
-          <div className="flex flex-col gap-2.5 rounded-2xl bg-white/[0.07] px-4 py-3.5 ring-1 ring-white/10 backdrop-blur-sm">
-            <div className="flex items-baseline justify-between gap-3 text-sm text-white/80">
-              <span>
-                <b className="font-semibold text-white">{path.done}</b> of {path.total} steps <span className="px-1 text-white/40">·</span> Growth Level{" "}
-                <b className="font-semibold text-white">{path.level}</b>
-              </span>
-              <span className="font-semibold text-white tabular-nums">{pct}%</span>
-            </div>
-            <Progress value={pct} aria-label="Path progress" className="h-1.5 bg-white/15 ring-0 *:data-[slot=progress-indicator]:bg-pink-300" />
-          </div>
-        </NextStep>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <WeekStrip days={path.days} current={cur?.day ?? null} size="lg" wid={wid} className="min-w-0 flex-1 basis-72" />
+          <span className="text-sm font-semibold text-muted-foreground tabular-nums">{fill(JOURNEY_COPY.strip.pathCount, { done: path.done, total: path.total })}</span>
+        </div>
+        <TickLegend />
+      </div>
+
+      {path.state === "veteran" ? (
+        <Callout
+          tone="info"
+          action={
+            <form action={startDayAction.bind(null, wid, 1)}>
+              <input type="hidden" name="back" value={back} />
+              <SubmitButton variant="outline" size="sm">
+                {C.veteranStart}
+              </SubmitButton>
+            </form>
+          }
+        >
+          {C.veteranLine}
+        </Callout>
       ) : (
-        <Card className="bg-success-soft ring-success/25 dark:ring-success/25">
-          <CardContent className="flex items-center gap-4">
-            <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-success text-white dark:text-background">
-              <TrophyIcon className="size-6" aria-hidden />
-            </span>
-            <div className="grid gap-0.5">
-              <span className="font-display text-[28px] leading-tight">{path.done >= path.total ? "Every step done." : "Every to-do done."}</span>
-              <span className="text-sm text-foreground/75">
-                {path.done >= path.total ? "" : "The rest tick themselves as your Skool numbers grow. "}Keep the weekly rhythm: Monday check-in, one new ad, one Unlock.
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+        <JourneyHero path={path} wid={wid} back={back} />
       )}
 
-      <section aria-labelledby="stages" className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 id="stages" className="eyebrow">
-            Every stage
-          </h2>
-          <span className="text-xs text-muted-foreground">Open a stage to see its steps. Each one links to where you do it.</span>
-        </div>
-        <ol className="flex flex-col gap-3">
-          {path.stages.map((stage) => {
-            const done = stage.steps.filter((s) => s.done).length;
-            const complete = done === stage.steps.length;
-            const isCurrent = stage.key === currentStage;
-            const badge = stageBadge(stage);
-            const BadgeIcon = BADGE_ICON[badge.icon ?? "flag"];
-            return (
-              <li key={stage.key}>
-                <details
-                  open={isCurrent}
-                  className={cn(
-                    "group/stage overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-ink/[0.06] transition-shadow duration-200 open:shadow-lift dark:ring-white/[0.07]",
-                    isCurrent && "ring-2 ring-primary/25 dark:ring-primary/45",
-                  )}
-                >
-                  <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-4 transition-colors select-none hover:bg-accent/40 md:px-5 [&::-webkit-details-marker]:hidden">
-                    <span
-                      className={cn(
-                        "grid size-11 shrink-0 place-items-center rounded-[14px] ring-1 ring-inset",
-                        complete
-                          ? "bg-success-soft text-success ring-success/15"
-                          : isCurrent
-                            ? "bg-primary text-primary-foreground shadow-press ring-white/10"
-                            : "bg-muted text-muted-foreground ring-ink/[0.04] dark:ring-white/[0.05]",
-                      )}
-                    >
-                      {complete ? (
-                        <CheckIcon className="size-5" strokeWidth={2.5} aria-hidden />
-                      ) : badge.num ? (
-                        <span className="font-display text-[24px] leading-none tabular-nums">{badge.num}</span>
-                      ) : (
-                        <BadgeIcon className="size-[18px]" aria-hidden />
-                      )}
+      <ol className="flex flex-col gap-3" aria-label={C.eyebrow}>
+        {path.days.map((day) => {
+          const isCurrent = day.day === cur?.day && path.state !== "dayDone";
+          // A day ahead of unfinished work opens as normal, with one quiet line about the earlier one.
+          const ahead = curDay && day.day > curDay.day && !day.complete && openInCurrent > 0;
+          return (
+            <li key={day.day} id={`day-${day.day}`} className="scroll-mt-20">
+              <details
+                open={isCurrent}
+                className={cn(
+                  "group/stage overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-ink/[0.06] transition-shadow duration-200 open:shadow-lift dark:ring-white/[0.07]",
+                  isCurrent && "ring-2 ring-primary/25 dark:ring-primary/45",
+                )}
+              >
+                <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-4 transition-colors select-none hover:bg-accent/40 md:px-5 [&::-webkit-details-marker]:hidden">
+                  <span
+                    className={cn(
+                      "grid size-11 shrink-0 place-items-center rounded-[14px] ring-1 ring-inset",
+                      day.complete
+                        ? "bg-success-soft text-success ring-success/15"
+                        : isCurrent
+                          ? "bg-primary text-primary-foreground shadow-press ring-white/10"
+                          : "bg-muted text-muted-foreground ring-ink/[0.04] dark:ring-white/[0.05]",
+                    )}
+                  >
+                    {day.complete ? <CheckIcon className="size-5" strokeWidth={2.5} aria-hidden /> : <span className="font-display text-[24px] leading-none tabular-nums">{day.day}</span>}
+                  </span>
+                  <span className="grid min-w-0 flex-1 gap-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-[11.5px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{fill(C.dayTag, { day: day.day })}</span>
+                      {isCurrent ? <Badge variant="soft">{C.youreHere}</Badge> : day.complete ? <Badge variant="success">{C.done}</Badge> : null}
                     </span>
-                    <span className="grid min-w-0 flex-1 gap-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11.5px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{stage.tag}</span>
-                        {isCurrent ? <Badge variant="soft">You&apos;re here</Badge> : complete ? <Badge variant="success">Done</Badge> : null}
-                      </span>
-                      <span className="text-[16.5px] leading-snug font-semibold tracking-[-0.011em]">{stage.title}</span>
-                    </span>
-                    <span className="hidden w-28 flex-col items-end gap-2 sm:flex">
-                      <span className={cn("text-xs font-semibold tabular-nums", complete ? "text-success" : "text-muted-foreground")}>
-                        {done} of {stage.steps.length}
-                      </span>
-                      <Progress value={(done / stage.steps.length) * 100} aria-hidden className={cn("h-1.5", complete && "*:data-[slot=progress-indicator]:bg-success")} />
-                    </span>
-                    <span className={cn("text-xs font-semibold tabular-nums sm:hidden", complete ? "text-success" : "text-muted-foreground")}>
-                      {done}/{stage.steps.length}
-                    </span>
-                    <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open/stage:rotate-180" aria-hidden />
-                  </summary>
-                  <ul className="flex flex-col gap-1 border-t border-border/80 bg-background/40 px-2 py-2.5 md:px-3">
-                    {stage.steps.map((step) => {
-                      n += 1;
-                      const isNext = !path.today && path.next?.key === step.key;
-                      return (
-                        <li key={step.key}>
-                          <Link
-                            href={step.href}
-                            className={cn(
-                              "flex items-start gap-3.5 rounded-xl px-3 py-3 text-sm text-foreground transition-colors duration-150 hover:bg-card hover:no-underline hover:shadow-xs",
-                              isNext && "bg-card shadow-card ring-1 ring-primary/20 hover:bg-card dark:ring-primary/40",
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "mt-px grid size-6 shrink-0 place-items-center rounded-full border text-[11.5px] font-semibold tabular-nums",
-                                step.done
-                                  ? "border-success bg-success text-white dark:text-background"
-                                  : isNext
-                                    ? "border-primary bg-primary text-primary-foreground shadow-press"
-                                    : "border-border-strong bg-card text-muted-foreground",
-                              )}
-                            >
-                              {step.done ? <CheckIcon className="size-3.5" strokeWidth={3} aria-hidden /> : n}
-                            </span>
-                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                              <span className={cn("font-medium", step.done && "text-muted-foreground line-through decoration-foreground/25", isNext && "font-semibold")}>{step.title}</span>
-                              <span className="text-[13px] leading-relaxed text-muted-foreground">{step.why}</span>
-                            </span>
-                            <span className="flex shrink-0 flex-col items-end gap-1.5">
-                              <span
-                                className={cn(
-                                  "rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
-                                  isNext ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground",
-                                )}
-                              >
-                                {step.lesson}
-                              </span>
-                              {step.locked && !step.done ? (
-                                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                  <LockIcon className="size-3" aria-hidden /> {step.locked}
-                                </span>
-                              ) : isNext ? (
-                                <span className="flex items-center gap-1 text-[11.5px] font-semibold text-primary dark:text-violet-300">
-                                  Up next <ArrowRightIcon className="size-3" aria-hidden />
-                                </span>
-                              ) : step.kind === "outcome" && !step.done ? (
-                                // Outcomes wait on Skool's numbers, so Up next walks past them.
-                                <span className="text-[11px] text-muted-foreground">Ticks itself</span>
-                              ) : null}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
+                    <span className="text-[16.5px] leading-snug font-semibold tracking-[-0.011em]">{day.title}</span>
+                  </span>
+                  <span className={cn("text-xs font-semibold tabular-nums", day.complete ? "text-success" : "text-muted-foreground")}>{fill(C.count, { done: day.done, total: day.total })}</span>
+                  <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open/stage:rotate-180" aria-hidden />
+                </summary>
+                <div className="flex flex-col gap-2 border-t border-border/80 bg-background/40 px-2 py-2.5 md:px-3">
+                  {ahead && curDay ? (
+                    <p className="px-2.5 pt-1 text-[13px] text-muted-foreground">
+                      {fill(JOURNEY_COPY.row.aheadNote, {
+                        day: curDay.day,
+                        open: openInCurrent === 1 ? JOURNEY_COPY.row.oneStep : fill(JOURNEY_COPY.row.manySteps, { n: openInCurrent }),
+                      })}
+                    </p>
+                  ) : null}
+                  <ul className="flex flex-col gap-1">
+                    {day.steps.map((step) => (
+                      <StepRow key={step.key} step={step} wid={wid} back={back} current={step.key === cur?.key && path.state !== "dayDone"} variant="path" />
+                    ))}
                   </ul>
-                </details>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
+                </div>
+              </details>
+            </li>
+          );
+        })}
+      </ol>
 
-      <Panel
-        icon={TrendingUpIcon}
-        tone="success"
-        title="The Skool Loop, live"
-        sub={
-          loopEmpty
-            ? "Ad → Skool link → lead → customer. The numbers fill in once your first ad runs."
-            : "Ad → Skool link → lead → customer. Each number opens where it comes from."
-        }
-      >
-        {loopEmpty ? (
-          <ol className="flex flex-wrap items-center gap-2 text-sm" aria-label="The Skool Loop">
-            {loop.map(({ label }, i) => (
-              <li key={label} className="flex items-center gap-2">
-                <span className="rounded-full border border-dashed border-border-strong bg-background/60 px-3.5 py-1.5 font-medium text-muted-foreground">{label}</span>
-                {i < loop.length - 1 ? <ArrowRightIcon className="size-3.5 text-subtle-foreground" aria-hidden /> : null}
-              </li>
-            ))}
-          </ol>
-        ) : (
+      <details className="group/after overflow-hidden rounded-2xl bg-card shadow-card ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
+        <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-4 transition-colors select-none hover:bg-accent/40 md:px-5 [&::-webkit-details-marker]:hidden">
+          <span className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-muted text-muted-foreground ring-1 ring-ink/[0.04] ring-inset dark:ring-white/[0.05]">
+            <FlagIcon className="size-[18px]" aria-hidden />
+          </span>
+          <span className="grid min-w-0 flex-1 gap-0.5">
+            <span className="text-[16.5px] leading-snug font-semibold tracking-[-0.011em]">{C.afterTitle}</span>
+            <span className="text-[13px] text-muted-foreground">{C.afterSub}</span>
+          </span>
+          <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open/after:rotate-180" aria-hidden />
+        </summary>
+        <ul className="flex flex-col gap-1 border-t border-border/80 bg-background/40 px-2 py-2.5 md:px-3">
+          {path.after.map((step) => (
+            <li key={step.key}>
+              <Link href={step.href} className="flex items-start gap-3 rounded-xl px-2.5 py-2.5 text-sm text-foreground transition-colors duration-150 hover:bg-card hover:no-underline">
+                <Tick tick={step.done ? "app" : null} className="mt-px" />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className={cn("font-medium", step.done && "text-foreground/80")}>{step.title}</span>
+                  <span className="text-[13px] leading-relaxed text-muted-foreground">{step.why}</span>
+                </span>
+                {step.done ? null : <span className="shrink-0 text-[11px] text-muted-foreground">{C.ticksItself}</span>}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      {loop.some((x) => x.value > 0) ? (
+        <Panel icon={TrendingUpIcon} tone="success" title={C.loopTitle} sub={C.loopSub}>
           <ol className="grid grid-cols-1 gap-3 @xl/main:grid-cols-3">
             {loop.map((node, i) => (
               <li key={node.label} className="relative">
@@ -239,8 +173,8 @@ export default async function PathPage({ params, searchParams }: { params: Promi
               </li>
             ))}
           </ol>
-        )}
-      </Panel>
+        </Panel>
+      ) : null}
     </>
   );
 }

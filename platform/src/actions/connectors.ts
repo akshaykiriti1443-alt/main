@@ -63,7 +63,8 @@ export async function saveAiKeyAction(wid: string, fd: FormData) {
       },
     })
     .where(eq(workspaces.id, wid));
-  go(back(wid), { ok: `Your ${label} key is on${model ? ` (model: ${model})` : ""}. AI features and "Ask my AI" steps now run on it, never your wallet.` });
+  // "works" only when this save really asked the provider; a re-save of the same key just says saved.
+  go(back(wid), { ok: `Your ${label} key ${checkKey ? "works" : "is saved"}${model ? ` (model: ${model})` : ""}. Every AI button here now runs on it.` });
 }
 
 export async function removeAiKeyAction(wid: string) {
@@ -71,7 +72,7 @@ export async function removeAiKeyAction(wid: string) {
   const { aiKeyEnc: _k, aiKeyHint: _h, aiProvider: _p, aiModel: _m, aiBaseUrl: _b, ...rest } = workspace.settings;
   const db = await getDb();
   await db.update(workspaces).set({ settings: rest }).where(eq(workspaces.id, wid));
-  go(back(wid), { ok: "Key removed. AI features use your plan allowance and wallet again." });
+  go(back(wid), { ok: "Key removed. The AI buttons use the runs your plan includes again." });
 }
 
 export type ConnectorState = { url?: string; error?: string };

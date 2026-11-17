@@ -81,7 +81,8 @@ export async function PublicPage({ site, path, searchParams }: { site: Site | nu
   if (row.workspace.status === "paused" || row.agency.status === "paused") {
     return <Notice title="This page is unavailable" body="Please check back soon." />;
   }
-  if (!site.published) return <Notice title="This page isn't live yet" body="The owner hasn't published it." />;
+  // Someone may have clicked an ad before the page went live: a calm note, never an error.
+  if (!site.published) return <Notice title="This page isn't open just yet" body="It's still being set up. Please come back a little later." />;
 
   const page = await loadPublicPage(site, path);
   if (!page || !page.publishedContent) notFound();
@@ -115,7 +116,7 @@ export async function PublicPage({ site, path, searchParams }: { site: Site | nu
         kind={page.kind}
         sections={page.publishedContent.sections}
         theme={site.theme}
-        vars={siteVars(site)}
+        vars={siteVars(site, row.workspace.settings.skoolUrl)}
         businessName={businessName}
         poweredBy={poweredBy}
         form={{ action: "/api/public/lead", pageId: page.id, eventId: crypto.randomUUID(), error }}

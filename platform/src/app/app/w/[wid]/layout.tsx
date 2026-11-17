@@ -9,24 +9,24 @@ import {
   listUserAgencies,
   listUserWorkspaces,
 } from "@/server/tenancy";
-import { hasFeature, PLANS } from "@/server/plans";
-import { membershipFor, pastChannels } from "@/server/access";
+import { PLANS } from "@/server/plans";
+import { accessGap, membershipFor } from "@/server/access";
 import { memberCheckoutConfigured } from "@/server/billing/stripe";
 import { workspaceOwnerEmail } from "@/server/email/send";
+import { loadPath } from "@/server/path";
 import { AppShell, type NavGroup, type Place } from "@/components/AppShell";
 import { checkAccessAction } from "@/actions/account";
 import { SubmitButton } from "@/components/client";
 import { Callout } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { ViewAsBar } from "@/components/view-as-bar";
+import { reelVaultConfigured } from "@/lib/reelvault";
 import { Companion, GuideButton } from "@/components/companion";
-import { companionSnapshot } from "@/server/companion";
-import {
-  GUIDE_COOKIE,
-  GUIDE_HELLO_COOKIE,
-  GUIDE_SKIP_COOKIE,
-  isGuideMode,
-} from "@/lib/guides";
+import { snapshotFromPath } from "@/server/companion";
+import { GUIDE_COOKIE, GUIDE_HELLO_COOKIE, isGuideMode } from "@/lib/guides";
+import { workspaceNav } from "./nav";
+
+const quietLink = "font-medium text-foreground underline underline-offset-2";
 
 export default async function WorkspaceLayout({
   children,
@@ -49,13 +49,17 @@ export default async function WorkspaceLayout({
     })
     .from(conversations)
     .where(eq(conversations.workspaceId, wid));
-  const growth = hasFeature(workspace.plan, "inbox");
   const base = `/app/w/${wid}`;
-
-  // In the order a beginner needs them (the course's order): connect your AI, build the shop,
-  // get members, keep them. The guide points at the next one. A paused account only shows what
-  // still opens, so nothing in the menu bounces you back.
   const paused = ctx.effectiveStatus === "paused";
+  // Worked out once per request (loadPath is cached): the menu, Penny and the page all read the same next step.
+  const path = paused ? null : await loadPath(wid, user.id).catch(() => null);
+  const mode = path?.mode ?? "week";
+  const nextHref =
+    path?.current && !path.current.external && path.current.href
+      ? path.current.href.split(/[?#]/)[0]
+      : null;
+
+  // A paused account only shows what still opens, so nothing in the menu bounces you back.
   const pausedGroups: NavGroup[] = [
     {
       items: [
@@ -73,73 +77,17 @@ export default async function WorkspaceLayout({
       ],
     },
   ];
-  const fullGroups: NavGroup[] = [
-    {
-      items: [
-        { href: base, label: "Dashboard", icon: "dashboard", exact: true },
-        { href: `${base}/path`, label: "Your path", icon: "route" },
-      ],
-    },
-    {
-      title: "Start here",
-      items: [
-        { href: `${base}/ai`, label: "Your AI", icon: "bot" },
-        { href: `${base}/launch`, label: "AI launch kit", icon: "sparkles" },
-        { href: `${base}/sites`, label: "Funnels & pages", icon: "globe" },
-      ],
-    },
-    {
-      title: "Get members",
-      items: [
-        { href: `${base}/ads/research`, label: "Ad research", icon: "search" },
-        { href: `${base}/ads/studio`, label: "Ad studio", icon: "palette" },
-        { href: `${base}/ads`, label: "Ad review", icon: "megaphone" },
-        { href: `${base}/growth`, label: "Growth ladder", icon: "ladder" },
-        { href: `${base}/leads`, label: "Leads", icon: "users" },
-        { href: `${base}/pipeline`, label: "Pipeline", icon: "pipeline", locked: !hasFeature(workspace.plan, "pipelines") },
-      ],
-    },
-    {
-      title: "Keep members",
-      items: [
-        {
-          href: `${base}/automations`,
-          label: "Automations",
-          icon: "workflow",
-          locked: !growth,
-        },
-        { href: `${base}/unlocks`, label: "Unlocks", icon: "gift" },
-        { href: `${base}/emails`, label: "Emails", icon: "mail" },
-      ],
-    },
-    {
-      title: "Talk",
-      items: [
-        {
-          href: `${base}/inbox`,
-          label: "Inbox",
-          icon: "inbox",
-          badge: unread || undefined,
-          locked: !growth,
-        },
-        {
-          href: `${base}/social`,
-          label: "Social planner",
-          icon: "calendar",
-          locked: !growth,
-        },
-        { href: `${base}/calendar`, label: "Calendar", icon: "booking", locked: !hasFeature(workspace.plan, "calendar") },
-      ],
-    },
-    {
-      title: "Account",
-      items: [
-        { href: `${base}/billing`, label: "Plan & wallet", icon: "billing" },
-        { href: `${base}/settings`, label: "Settings", icon: "settings" },
-      ],
-    },
-  ];
-  const groups = paused ? pausedGroups : fullGroups;
+  const groups = paused
+    ? pausedGroups
+    : workspaceNav({
+        base,
+        plan: workspace.plan,
+        unread,
+        reelVault: reelVaultConfigured(),
+        member: workspace.plan === "starter" && agency.isPlatform,
+        mode,
+        nextHref,
+      });
 
   const places: Place[] = [
     ...mine
@@ -167,18 +115,52 @@ export default async function WorkspaceLayout({
       : []),
   ];
 
+  // `banner` sits above the page and is only for something the member has to act on.
+  // `footnote` is the quiet line under the page: nothing there sits above the next step.
   let banner: React.ReactNode = null;
+  let footnote: React.ReactNode = null;
   const canBuy = memberCheckoutConfigured();
   if (ctx.effectiveStatus === "grace" && workspace.accessSource === "member") {
-    // Only the free welcome days so far: they never joined, so "rejoin" would be wrong.
-    const past = await pastChannels(
-      (await workspaceOwnerEmail(wid)) ?? user.email,
-    );
-    const join = past.every((c) => c === "welcome") ? "Join" : "Rejoin";
-    banner = (
+    // Only the free welcome days so far ("matching"): nearly always someone a few days into their
+    // Skool free trial, whom the app only hears about at the first charge or the next member
+    // update. That is a matching delay, not a lapse, so it gets calm words and no warning.
+    const ownerEmail = (await workspaceOwnerEmail(wid)) ?? user.email;
+    const gap = await accessGap(ownerEmail);
+    const join = gap === "matching" ? "Join" : "Rejoin";
+    banner =
+      gap === "matching" ? (
+        <Callout
+          tone="info"
+          action={
+            <form action={checkAccessAction.bind(null, wid)}>
+              <SubmitButton size="sm" variant="outline" pendingText="Checking…">
+                Check my membership
+              </SubmitButton>
+            </form>
+          }
+        >
+          We&apos;re still matching you to your Skool membership. Your app
+          stays fully on meanwhile. Joined Skool with {ownerEmail}? Nothing to
+          do: it switches over by itself when your trial turns paid, or at the
+          next member update. Not in the community yet?{" "}
+          {env.skoolGroupUrl ? (
+            <a
+              href={env.skoolGroupUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={quietLink}
+            >
+              Join here
+            </a>
+          ) : (
+            "Join on Skool"
+          )}
+          .
+        </Callout>
+      ) : (
       <Callout
         tone="warn"
-        title={`We can't see an active membership for ${user.email}`}
+        title={`We haven't matched ${ownerEmail} to a Skool membership yet`}
         action={
           <div className="flex flex-wrap gap-2">
             {env.skoolGroupUrl ? (
@@ -196,12 +178,19 @@ export default async function WorkspaceLayout({
           </div>
         }
       >
-        Your pages stay live until{" "}
-        {workspace.graceEndsAt?.toDateString() ?? "soon"}.{" "}
+        Joined the community with a different email? Tell us in Skool and
+        we&apos;ll match it by hand.{" "}
+        {/* One plain date or nothing, never "soon". */}
+        {workspace.graceEndsAt ? (
+          <>
+            Your pages stay live until {workspace.graceEndsAt.toDateString()}
+            .{" "}
+          </>
+        ) : null}
         {canBuy ? (
           <>
             {join}, or{" "}
-            <Link href={`/join?email=${encodeURIComponent(user.email)}`}>
+            <Link href={`/join?email=${encodeURIComponent(ownerEmail)}`}>
               buy access directly
             </Link>
             , and everything stays on.
@@ -210,7 +199,7 @@ export default async function WorkspaceLayout({
           `${join} the community with this email and everything stays on.`
         )}
       </Callout>
-    );
+      );
   } else if (
     workspace.accessSource === "member" &&
     workspace.accessVerifiedUntil &&
@@ -224,79 +213,89 @@ export default async function WorkspaceLayout({
     const until = workspace.accessVerifiedUntil.toDateString();
     const welcomeOnly =
       channels.length > 0 && channels.every((c) => c === "welcome");
-    banner = channels.includes("stripe") ? (
-      <Callout tone="info">Renews with your card on {until}.</Callout>
+    footnote = channels.includes("stripe") ? (
+      <p>
+        Your card renews this plan on {until}.{" "}
+        <Link href={`${base}/billing`} className={quietLink}>
+          Plan &amp; wallet
+        </Link>{" "}
+        has the details.
+      </p>
     ) : (
-      <Callout
-        tone="info"
-        action={
-          <form action={checkAccessAction.bind(null, wid)}>
-            <SubmitButton size="sm" variant="outline" pendingText="Checking…">
-              Check my membership
-            </SubmitButton>
-          </form>
-        }
-      >
-        {welcomeOnly ? (
-          <>
-            Your app is on while we match you to your Skool membership.
-            Joined with {ownerEmail}? Nothing to do. Not in the community yet?{" "}
-            {env.skoolGroupUrl ? (
-              <a href={env.skoolGroupUrl} target="_blank" rel="noreferrer">
-                Join here
-              </a>
-            ) : (
-              "Join on Skool"
-            )}
-            {canBuy ? (
-              <>
-                {" or "}
-                <Link href={`/join?email=${encodeURIComponent(ownerEmail)}`}>
-                  buy access
-                </Link>
-              </>
-            ) : null}
-            .
-          </>
-        ) : (
-          <>
-            You&apos;re in until {until}. Use the same email as your Skool
-            account ({ownerEmail}) and we confirm you automatically. Nothing to
-            type.
-          </>
-        )}
-      </Callout>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p className="min-w-0 flex-1 basis-72">
+          {welcomeOnly ? (
+            <>
+              Your app is on while we match you to your Skool membership.
+              Joined with {ownerEmail}? Nothing to do. Not in the community
+              yet?{" "}
+              {env.skoolGroupUrl ? (
+                <a
+                  href={env.skoolGroupUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={quietLink}
+                >
+                  Join here
+                </a>
+              ) : (
+                "Join on Skool"
+              )}
+              {canBuy ? (
+                <>
+                  {" or "}
+                  <Link
+                    href={`/join?email=${encodeURIComponent(ownerEmail)}`}
+                    className={quietLink}
+                  >
+                    buy access
+                  </Link>
+                </>
+              ) : null}
+              .
+            </>
+          ) : (
+            <>
+              You&apos;re in until {until}. Use the same email as your Skool
+              account ({ownerEmail}) and we confirm you automatically. Nothing
+              to type.
+            </>
+          )}
+        </p>
+        <form action={checkAccessAction.bind(null, wid)}>
+          <SubmitButton size="sm" variant="outline" pendingText="Checking…">
+            Check my membership
+          </SubmitButton>
+        </form>
+      </div>
     );
   } else if (ctx.effectiveStatus === "grace") {
     banner = (
       <Callout tone="warn">
         Your account pauses on {workspace.graceEndsAt?.toDateString() ?? "soon"}
-        . Contact support to keep it on.
+        . Email us at{" "}
+        <a href={`mailto:${env.emailReplyTo}`} className={quietLink}>
+          {env.emailReplyTo}
+        </a>{" "}
+        to keep it on.
       </Callout>
     );
   }
 
-  // Penny, the step-by-step guide: on for everyone until they turn it off.
+  // Penny, the step-by-step guide: on for everyone until they turn it off. She reads the same
+  // path as the menu, so her step and the glowing dot can't disagree.
   const jar = await cookies();
   const savedMode = jar.get(GUIDE_COOKIE)?.value;
   const guideMode = isGuideMode(savedMode) ? savedMode : "open";
-  const showGuide = ctx.effectiveStatus !== "paused";
+  const showGuide = !paused;
   const guide =
-    showGuide && guideMode !== "off"
-      ? await companionSnapshot(workspace, user.id).catch(() => null)
-      : null;
+    showGuide && guideMode !== "off" && path ? snapshotFromPath(path) : null;
   const companion = showGuide ? (
     <Companion
       wid={wid}
       initialMode={guideMode}
       firstVisit={!jar.get(GUIDE_HELLO_COOKIE)}
-      initialSkipped={decodeURIComponent(
-        jar.get(GUIDE_SKIP_COOKIE)?.value ?? "",
-      )
-        .split(",")
-        .filter(Boolean)
-        .slice(0, 40)}
-      initial={guide ?? { steps: [], done: 0, total: 0, level: 1, today: null }}
+      initial={guide}
     />
   ) : null;
 
@@ -324,6 +323,7 @@ export default async function WorkspaceLayout({
           banner
         )
       }
+      footnote={footnote}
     >
       {children}
     </AppShell>

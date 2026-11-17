@@ -1,12 +1,13 @@
 import * as z from "zod/v4";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { aiGenerations, sites, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 import { AD_ANGLES, AD_FRAMEWORK_RULES, ANGLE_LABEL, type AdAngle } from "./adFramework";
 import type { ResearchAd } from "./adResearch";
-import { latestCheckins, skoolLinkFor } from "../growth";
+import { dealFor, trialInOffer, type Deal, type LaunchKitInput } from "./launchKit";
+import { latestCheckins, skoolLinkFor, skoolTargetFor } from "../growth";
 import { siteBaseUrl } from "../sites";
 
 // The Ad studio: a beginner's first ads, the same day. Statics first (the safest bet). Four parts,
@@ -89,6 +90,49 @@ export const DESTINATION_LABEL: Record<StudioDestination, string> = { website: "
 /** Day 1's first pack goes to the website, when there is one. Everything after goes to the Skool link. */
 export const defaultDestination = (funnelPublished: boolean, earlierPack: boolean): StudioDestination => (funnelPublished && !earlierPack ? "website" : "skool");
 
+/**
+ * What a pack's ads offer, from where they send people: the website gives the free checklist,
+ * the Skool link gives the free trial. Only the member's own price and trial are used.
+ */
+export function offerFor(destination: StudioDestination, o: { checklist: string; deal: Deal | null; group: string }): string {
+  if (destination === "website") return o.checklist ? `Free checklist: ${o.checklist}` : "A free checklist";
+  const d = o.deal;
+  const price = d?.price ? `${d.price} a month` : "";
+  if (d && d.days !== 0) return `${d.days ? `${d.days}-day free trial` : "A free trial"} of ${o.group}${price ? `, then ${price}` : ""}`;
+  return `${o.group} on Skool${price ? `, ${price}` : ""}`;
+}
+
+export type StudioOffers = Record<StudioDestination, string> & { price: number };
+
+/** Both offers for this account, from the launch kit (checklist name, price, trial), else the account's saved offer. */
+export async function studioOffers(ws: Pick<WsRow, "id" | "name" | "settings">): Promise<StudioOffers> {
+  const db = await getDb();
+  const [kit] = await db
+    .select({ input: aiGenerations.input, output: aiGenerations.output })
+    .from(aiGenerations)
+    .where(and(eq(aiGenerations.workspaceId, ws.id), eq(aiGenerations.kind, "launch_kit")))
+    .orderBy(desc(aiGenerations.createdAt))
+    .limit(1);
+  let checklist = typeof kit?.output.leadMagnetName === "string" ? kit.output.leadMagnetName.trim() : "";
+  if (!checklist) {
+    const [site] = await db
+      .select({ name: sites.leadMagnetName })
+      .from(sites)
+      .where(and(eq(sites.workspaceId, ws.id), sql`${sites.leadMagnetName} <> ''`))
+      .orderBy(desc(sites.updatedAt))
+      .limit(1);
+    checklist = site?.name ?? "";
+  }
+  const input = (kit?.input ?? {}) as Partial<LaunchKitInput>;
+  const deal = kit ? dealFor({ offer: String(input.offer ?? ""), price: input.price, trialDays: input.trialDays }) : trialInOffer(ws.settings.offer ?? "");
+  const group = ws.settings.businessName || ws.name;
+  return {
+    website: offerFor("website", { checklist, deal, group }),
+    skool: offerFor("skool", { checklist, deal, group }),
+    price: Number(deal?.price?.replace(/[^\d.]/g, "")) || 0,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
@@ -113,6 +157,11 @@ export const adStudioInputSchema = z.object({
   /** Left out: the default for this workspace (see defaultDestination). */
   destination: z.enum(STUDIO_DESTINATIONS).optional(),
   competitorAds: z.array(researchAdSchema).max(10).default([]),
+  /** ReelVault hooks the owner ticked, re-read from ReelVault by the action (score = times that account's normal views). */
+  provenHooks: z
+    .array(z.object({ text: z.string().max(300), handle: z.string().max(60), score: z.number().min(0).max(1000), hookType: z.string().max(40) }))
+    .max(5)
+    .default([]),
 });
 export type AdStudioInput = z.infer<typeof adStudioInputSchema>;
 
@@ -195,7 +244,7 @@ export function numbersLines(n: StudioNumbers, opts: { price?: number; country?:
       ? `Our guess is ${money(ASSUMED_CPV.low)}–${money(ASSUMED_CPV.high)} per ${website ? "website" : "About-page"} visit, a normal range for a first ad. It's a planning guess, not a promise. On Day 6, Ad review gives you your real number and this page uses it.`
       : n.cpvSource === "ad_review"
         ? `Your real cost per visit is about ${money(n.cpvLow)} (from your Ad review${when ? ` on ${when}` : ""}), so these numbers use it.`
-        : `Your real cost per visit is about ${money(n.cpvLow)} (ad spend ÷ About-page visitors from your Monday check-in${when ? ` on ${when}` : ""}), so these numbers use it.`;
+        : `Your real cost per visit is about ${money(n.cpvLow)} (ad spend ÷ About-page visitors from your check-in${when ? ` on ${when}` : ""}), so these numbers use it.`;
   const short = !website && n.visitsPerMonth.low < LEVEL2_VISITORS;
   const level2 = [
     website
@@ -663,7 +712,7 @@ export function afterLaunch(): LaunchStep[] {
   return [
     { title: "Hands off till Day 6", detail: "Don't edit, pause or add anything to these ads. Every change restarts Meta's learning. If Meta rejects one, read the reason, fix that one line and resubmit." },
     { title: "Get your verdicts on Day 6", detail: "In Ads Manager, set the date range to Maximum and copy spend, impressions and link clicks into Ad review, for ads with 1,000 impressions or more. You get Keep, Fix, Kill or Too early." },
-    { title: "Kill ads go off on Day 6", detail: "Switch off the ones marked Kill with the toggle next to the ad. That's the only change that day. Too early hasn't lost anything, so leave those running." },
+    { title: "Day 6: change nothing, except a broken link", detail: "Too early hasn't lost anything, so leave those running. A Fix or a Keep goes on next week's list. A Skool ad marked Fix: Door is the link, not the ad, so fix that one the same day. Switching an ad off is always your call." },
     { title: "Refresh every 1–3 weeks", detail: "When clicks get dearer, come back here and make 5 new statics. Keep the winners. The video script is here for when you're ready." },
   ];
 }
@@ -824,6 +873,12 @@ ${
     ? `Long-running competitor ads the owner picked (days running, page, text). Study the rhythm of their hooks and their angles; never copy their wording, names, results or claims:
 ${ads.map((a, i) => `${i + 1}. [${a.daysRunning} days] ${a.page}: ${a.text.slice(0, 600)}`).join("\n")}`
     : "No competitor ads given."
+}${
+  input.provenHooks.length
+    ? `\nHooks that beat normal views for the owner's Instagram competitors (score = times that account's normal views). Borrow the pattern and rhythm of the opening line, never the words, names, results or claims:\n${input.provenHooks
+        .map((h, i) => `${i + 1}. [${h.score}x${h.hookType ? `, ${h.hookType}` : ""}] @${h.handle}: ${h.text}`)
+        .join("\n")}`
+    : ""
 }`;
 }
 
@@ -848,17 +903,25 @@ function ruleSummary(input: AdStudioInput) {
 
 type WsRow = typeof workspaces.$inferSelect;
 
-/** Blanks in the form are filled from the workspace, so a one-click run still knows the business. */
-function withWorkspace(input: AdStudioInput, ws: WsRow): AdStudioInput {
+/**
+ * Blanks in the form are filled from the workspace, so a one-click run still knows the business.
+ * A blank offer is the one for where the ads go, never yesterday's.
+ */
+function withWorkspace(input: AdStudioInput, ws: WsRow, offers: StudioOffers, destination: StudioDestination): AdStudioInput {
   const s = ws.settings;
   return {
     ...input,
     businessName: input.businessName || s.businessName || ws.name,
     niche: input.niche || s.niche || "",
-    offer: input.offer || s.offer || "",
+    offer: input.offer || offers[destination],
     audience: input.audience || s.audience || "",
+    price: input.price || offers.price,
   };
 }
+
+/** What a member reads when the next press can't use AI, so the quick pack is never a surprise. */
+export const STUDIO_NO_RUNS = "You've used your free AI runs for this month, so this is the quick pack, not written by AI. Add a free Gemini key in Your AI, then press Make my 5 statics again.";
+export const STUDIO_NO_AI = "No AI is connected yet, so this is the quick pack, not written by AI. Add a free Gemini key in Your AI, then press Make my 5 statics again.";
 
 export type MakePackResult = { ok: true; id: string; pack: AdStudioPack; model: string; warning?: string } | { ok: false; error: string };
 
@@ -880,8 +943,12 @@ export async function makeAdStudioPack(
   const websiteUrl = await publishedFunnelUrl(workspaceId);
   const destination = parsed.data.destination ?? defaultDestination(Boolean(websiteUrl), (await listAdStudioPacks(workspaceId, 1)).length > 0);
   // Before any AI run is spent: a plan with nowhere to send people is no use.
-  if (destination === "website" && !websiteUrl) return { ok: false, error: "Your website isn't published yet. Publish your funnel in Funnels & pages, or send these ads to your Skool link." };
-  const input: AdStudioInput = { ...withWorkspace(parsed.data, ws), destination };
+  if (destination === "website" && !websiteUrl) return { ok: false, error: "Your website isn't published yet. Publish it in Funnels & pages, or send these ads to your Skool link." };
+  // Without a saved group link, the Skool link sends paid clicks to this app instead of the group.
+  if (destination === "skool" && !(await skoolTargetFor(workspaceId, ws.settings.skoolUrl))) {
+    return { ok: false, error: "Save your Skool group link first (in the box on this page, or in Settings), then make your My Skool link pack." };
+  }
+  const input: AdStudioInput = { ...withWorkspace(parsed.data, ws, await studioOffers(ws), destination), destination };
   const hasProof = Boolean(input.proof);
   const link = skoolLinkFor(ws.slug);
   const numbers = studioNumbers(input.budget, await realCostPerVisit(workspaceId, destination));
@@ -900,7 +967,7 @@ export async function makeAdStudioPack(
     model = "connected AI app";
   } else if (opts.useAi !== false) {
     const charge = await chargeAi(workspaceId, "ai_generation", "AI Ad studio pack");
-    if (!charge && env.aiEnabled) warning = "You've used this month's AI generations, so this is the quick pack. Add a free AI key in Your AI to go unlimited.";
+    if (!charge) warning = env.aiEnabled ? STUDIO_NO_RUNS : STUDIO_NO_AI;
     if (charge) {
       try {
         const res = await generateStructured({
@@ -929,7 +996,7 @@ export async function makeAdStudioPack(
     statics,
     plan: launchPlan({ budget: numbers.budget, country: countryLabel(input.country), link, pixel: Boolean(ws.settings.metaPixelId), statics, destination, websiteUrl: websiteUrl ?? undefined }),
     video,
-    inspiration: firstLines(input.competitorAds),
+    inspiration: [...input.provenHooks.map((h) => clip(h.text, 120)), ...firstLines(input.competitorAds)].slice(0, 3),
     skoolLink: link,
     country: countryLabel(input.country),
     destination,
@@ -1024,11 +1091,12 @@ export async function adStudioDefaults(ws: WsRow): Promise<AdStudioInput> {
     ...base,
     businessName: String(prev.businessName || s.businessName || ws.name),
     niche: String(prev.niche || s.niche || ""),
-    offer: String(prev.offer || s.offer || ""),
+    // Blank on purpose: the pack fills in the offer for where its ads go (see studioOffers).
+    offer: "",
     audience: String(prev.audience || s.audience || kit?.input.audience || ""),
     promise: String(prev.promise || kit?.input.outcome || ""),
     proof: String(prev.proof || ""),
-    price: Number(prev.price) || 0,
+    price: (await studioOffers(ws)).price || Number(prev.price) || 0,
     budget: (sameKind && Number(prev.budget)) || (destination === "website" ? 10 : 5),
     country: typeof prev.country === "string" && /^[A-Z]{2}$/.test(prev.country) ? prev.country : "US",
     tone: STUDIO_TONES.includes(prev.tone as StudioTone) ? (prev.tone as StudioTone) : base.tone,

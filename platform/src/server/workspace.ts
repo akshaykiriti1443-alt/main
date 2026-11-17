@@ -13,6 +13,7 @@ import {
 import type { WorkspaceSettings } from "@/lib/db/types";
 import { shortId, slugify } from "@/lib/util";
 import { DEFAULT_SEQUENCE, RESERVED_SLUGS } from "./defaults";
+import { settingsKeepingJourney } from "./settingsWrite";
 import { getOrCreateWallet } from "./wallet";
 
 export async function uniqueWorkspaceSlug(name: string, db: DB) {
@@ -85,6 +86,7 @@ export async function updateWorkspaceSettings(workspaceId: string, patch: Partia
   const db = await getDb();
   const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
   const settings = { ...(ws?.settings ?? {}), ...patch };
-  await db.update(workspaces).set({ settings }).where(eq(workspaces.id, workspaceId));
+  // A patch that sets the journey itself writes it; any other keeps the journey the row has now.
+  await db.update(workspaces).set({ settings: patch.journey ? settings : settingsKeepingJourney(settings) }).where(eq(workspaces.id, workspaceId));
   return settings;
 }

@@ -41,7 +41,8 @@ export async function buildVars(ws: Workspace, contact: Contact | null, site?: S
     const db = await getDb();
     [s] = await db.select().from(sites).where(and(eq(sites.id, contact.sourceRef), eq(sites.workspaceId, ws.id))).limit(1);
   }
-  const fromSite = s ? siteVars(s) : {};
+  // The account's Skool link wins over a website's older copy, the same as on the website itself.
+  const fromSite = s ? siteVars(s, ws.settings.skoolUrl) : {};
   return {
     first_name: contact?.firstName || "there",
     business_name: ws.settings.businessName || ws.name,
@@ -65,6 +66,11 @@ export async function queueEmail(input: {
   runAt?: Date;
   /** e.g. a calendar invite (.ics). Small files only. */
   attachments?: EmailAttachment[];
+  /**
+   * For a single email someone is waiting on (a lead's free checklist): send it in this call
+   * instead of leaving it for the scheduler, which may not come round for hours.
+   */
+  sendNow?: boolean;
 }) {
   const db = await getDb();
   const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, input.workspaceId)).limit(1);
@@ -92,6 +98,15 @@ export async function queueEmail(input: {
       attachments: input.attachments?.length ? input.attachments : null,
     })
     .returning({ id: emailMessages.id });
+  if (input.sendNow && (!input.runAt || input.runAt.getTime() <= Date.now())) {
+    try {
+      await processEmailSend(msg.id);
+      return msg.id;
+    } catch (err) {
+      // Not this time (the mail service was slow, say). The queue retries it like any other email.
+      console.error("[email] direct send failed, queued for retry", err instanceof Error ? err.message : err);
+    }
+  }
   await enqueue("email.send", { emailMessageId: msg.id }, { runAt: input.runAt });
   return msg.id;
 }

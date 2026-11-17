@@ -38,8 +38,9 @@ function Submit({ pending, children, pendingText }: { pending: boolean; children
   );
 }
 
-export function LoginForm({ next }: { next?: string }) {
+export function LoginForm({ next, defaultEmail }: { next?: string; defaultEmail?: string }) {
   const [state, action, pending] = useActionState(loginAction, {});
+  const email = state.values?.email ?? defaultEmail;
   return (
     <form action={action}>
       <FieldGroup className="gap-5">
@@ -47,7 +48,7 @@ export function LoginForm({ next }: { next?: string }) {
         <input type="hidden" name="next" value={next ?? ""} />
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" name="email" type="email" autoComplete="email" required autoFocus defaultValue={state.values?.email} />
+          <Input id="email" name="email" type="email" autoComplete="email" required autoFocus={!email} defaultValue={email} />
         </Field>
         <Field>
           <div className="flex items-center justify-between">
@@ -56,7 +57,7 @@ export function LoginForm({ next }: { next?: string }) {
               Forgot it?
             </Link>
           </div>
-          <Input id="password" name="password" type="password" autoComplete="current-password" required />
+          <Input id="password" name="password" type="password" autoComplete="current-password" required autoFocus={Boolean(email)} />
         </Field>
         <Submit pending={pending} pendingText="Logging in…">
           Log in
@@ -93,7 +94,7 @@ export function SignupForm({ member, defaultEmail, setup }: { member: boolean; d
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={state.values?.email ?? defaultEmail} />
           {member ? (
-            <FieldDescription>Use the email from your Skool account (or the one you paid with). That&apos;s how we know it&apos;s you.</FieldDescription>
+            <FieldDescription>The same email as your Skool account (or the one you paid with). That&apos;s how the app knows you&apos;re a member.</FieldDescription>
           ) : null}
         </Field>
         <Field>

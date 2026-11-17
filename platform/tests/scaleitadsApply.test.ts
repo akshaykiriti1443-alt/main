@@ -232,8 +232,12 @@ describe("POST /api/scaleitads/apply", () => {
 
     const runs = await db.select().from(automationRuns).where(eq(automationRuns.workspaceId, ws.id));
     expect(runs.some((run) => (run.context as { type?: string }).type === "lead_created")).toBe(true);
-    // It never emails anyone itself.
-    expect(await db.select().from(emailMessages).where(eq(emailMessages.workspaceId, ws.id))).toHaveLength(0);
+    // It never emails anyone itself. The only email is the first step of the workspace's own
+    // "new lead" follow-up sequence, which now goes out in the same request instead of waiting
+    // for the scheduler (src/server/email/sequences.ts enrollContact).
+    const sent = await db.select().from(emailMessages).where(eq(emailMessages.workspaceId, ws.id));
+    expect(sent.filter((m) => !m.sequenceStepId)).toHaveLength(0);
+    expect(sent.length).toBeLessThanOrEqual(1);
   });
 
   it("takes the page's no-cors fallback (a text/plain body) too", async () => {

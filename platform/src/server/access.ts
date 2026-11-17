@@ -154,9 +154,24 @@ export async function revokeAccess(email: string, channel: MemberChannel, reason
 }
 
 /**
+ * Why an owner is in their grace days (or paused after them), so the screen can say it calmly.
+ * "matching": this email has only ever had the free welcome days. Nearly everyone here started a
+ * Skool free trial minutes before signing up, and the app only hears about them at the first
+ * charge (Zapier) or the next member export. The welcome window is shorter than the trial, so
+ * their grace days fall inside the free week: a matching delay, not a lapsed membership.
+ * "lapsed": a real membership (Skool, a card, a manual grant) was there and has ended.
+ */
+export type AccessGap = "matching" | "lapsed";
+
+export async function accessGap(email: string): Promise<AccessGap> {
+  const past = await pastChannels(email);
+  return past.every((c) => c === "welcome") ? "matching" : "lapsed";
+}
+
+/**
  * A brand-new signup who isn't confirmed yet gets a few days of access, once per email, so they can
  * start straight away. Zapier or the next Skool export then confirms them; if neither does, the
- * welcome window simply ends and the usual 7-day grace follows.
+ * welcome window simply ends and the usual 7-day grace follows (still fully on, see accessGap).
  */
 export async function grantWelcomeAccess(email: string, name = "", opts: { ip?: string | null } = {}): Promise<boolean> {
   const days = env.welcomeAccessDays;

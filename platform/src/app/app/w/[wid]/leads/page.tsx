@@ -43,7 +43,7 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
   const count = (t: string) => temps.find((x) => x.t === t)?.n ?? 0;
   const total = temps.reduce((n, x) => n + x.n, 0);
   const qs = (patch: Record<string, string>) => {
-    const p = new URLSearchParams({ ...Object.fromEntries(Object.entries(sp).filter(([k]) => !["ok", "error"].includes(k))), ...patch });
+    const p = new URLSearchParams({ ...Object.fromEntries(Object.entries(sp).filter(([k]) => !["ok", "error", "add"].includes(k))), ...patch });
     return `?${p.toString()}`;
   };
   const filtered = Boolean(sp.q || sp.temperature || sp.stage || sp.tag || page > 0);
@@ -51,35 +51,48 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
   const nobodyYet = list.length === 0 && !filtered;
   const temp = sp.temperature ?? "";
   const hotName = hottest ? contactName(hottest) : "";
+  // The Add contact button opens the form (and adding someone comes back to it, ready for the next).
+  const adding = sp.add === "1";
 
   const addByHand = (
     <MoreOptions
+      key={adding ? "adding" : "closed"}
+      id="add-contact"
+      defaultOpen={adding}
       icon={UserPlusIcon}
       title="Add a contact by hand"
-      sub="Friends, past clients, people who DM'd you once. Your first paying member is usually one of them."
+      sub="Someone who replied to your text, a past client, a person who DM'd you once. Your first paying member is usually one of them."
     >
       <form action={addContactAction.bind(null, wid)} className="grid gap-4 @2xl/main:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="firstName">First name</FieldLabel>
-          <Input id="firstName" name="firstName" />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="lastName">Last name</FieldLabel>
-          <Input id="lastName" name="lastName" />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" name="email" type="email" />
+          <Input id="firstName" name="firstName" autoFocus={adding} />
         </Field>
         <Field>
           <FieldLabel htmlFor="phone">Phone</FieldLabel>
           <Input id="phone" name="phone" type="tel" />
         </Field>
+        <Field>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <Input id="email" name="email" type="email" />
+          <FieldDescription>Optional. A phone number or an email is enough.</FieldDescription>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="lastName">Last name</FieldLabel>
+          <Input id="lastName" name="lastName" />
+        </Field>
         <Field className="@2xl/main:col-span-2">
           <FieldLabel htmlFor="tags">Tags</FieldLabel>
-          <Input id="tags" name="tags" placeholder="vip, dm" />
-          <FieldDescription>Comma separated.</FieldDescription>
+          <Input id="tags" name="tags" placeholder="friend" />
+          <FieldDescription>One word to tell them apart later, like friend. Put a comma between two.</FieldDescription>
         </Field>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-muted/50 px-4 py-3 text-sm ring-1 ring-ink/[0.03] ring-inset @2xl/main:col-span-2 dark:ring-white/[0.04]">
+          <input type="checkbox" name="welcome" className="mt-0.5" />
+          <span className="grid gap-0.5">
+            <span className="font-medium">Send them my follow-up emails</span>
+            <span className="text-muted-foreground">Only if they asked for your free guide. Leave it off for friends you texted: they never signed up for emails.</span>
+          </span>
+        </label>
         <div className="@2xl/main:col-span-2">
           <SubmitButton>Add contact</SubmitButton>
         </div>
@@ -93,10 +106,20 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
         lesson="Day 5"
         eyebrow="Leads CRM"
         title="Leads"
-        sub="Everyone who opted in on your pages or messaged you. Hot leads are the ones most likely to join soon."
-        first={nobodyYet ? "Share your funnel link. Sign-ups land here by themselves, already scored." : "Open a hot lead and send them a friendly, personal note."}
+        sub="Everyone who signed up on your website, claimed an Unlock, or you added yourself. Newest first."
+        first={
+          nobodyYet
+            ? "Someone replied to your text? Press Add contact. Sign-ups from your website land here by themselves."
+            : "Someone replied to your text? Press Add contact. Everyone else lands here by themselves."
+        }
         actions={
           <>
+            <Button asChild data-guide="add-contact">
+              <Link href={`/app/w/${wid}/leads?add=1#add-contact`}>
+                <UserPlusIcon data-icon="inline-start" />
+                Add contact
+              </Link>
+            </Button>
             {nobodyYet ? null : (
               <Button variant="outline" asChild>
                 <a href={`/app/w/${wid}/leads/export`} download>
@@ -115,6 +138,8 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
         }
       />
       <Flash searchParams={sp} />
+
+      {addByHand}
 
       {nobodyYet ? (
         <Card className="gap-0 py-0">
@@ -317,8 +342,6 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
           </Card>
         </>
       )}
-
-      {addByHand}
     </>
   );
 }

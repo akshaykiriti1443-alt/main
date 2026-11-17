@@ -41,11 +41,15 @@ export function parsePastedAds(raw: string): ResearchAd[] {
     .filter((a) => a.text.length > 10);
 }
 
+/** What a member reads when the next press can't use AI, so the quick read is never a surprise. */
+export const RESEARCH_NO_RUNS = "You've used your free AI runs for this month, so this is a quick read, not written by AI. Add a free Gemini key in Your AI, then press Analyse with AI again.";
+export const RESEARCH_NO_AI = "No AI is connected yet, so this is a quick read, not written by AI. Add a free Gemini key in Your AI, then press Analyse with AI again.";
+
 export function fallbackAnalysis(ads: ResearchAd[], offer: string): AdAnalysis {
   const sorted = [...ads].sort((a, b) => b.daysRunning - a.daysRunning);
   const firstLines = sorted.map((a) => a.text.split(/(?<=[.!?])\s/)[0]).filter(Boolean).slice(0, 5);
   return {
-    summary: "AI isn't on, so this is a quick read: the ads running longest are usually the ones that pay for themselves. Study their first line and their offer.",
+    summary: "A quick read, not written by AI: the ads running longest are usually the ones that pay for themselves. Study their first line and what the click gets you.",
     winners: sorted.slice(0, 3).map((a) => ({ page: a.page, daysRunning: a.daysRunning, why: "Still running after a long time, so it likely makes money." })),
     hooks: firstLines,
     angles: [],
@@ -62,9 +66,9 @@ export function fallbackAnalysis(ads: ResearchAd[], offer: string): AdAnalysis {
       },
       {
         angle: "dream",
-        hook: `Picture ${offer || "the result"}, done.`,
+        hook: "Picture the result you want, a month from now.",
         turn: "The people who get there follow a plan, with people who check in on them.",
-        door: "That's what's inside. Tap Learn more.",
+        door: `That's what's inside${offer ? ` (${offer})` : ""}. Tap Learn more.`,
         headline: "Join us",
         creativeIdea: "One photo of the after, with the Hook as big text.",
       },
@@ -91,7 +95,7 @@ export async function analyzeCompetitorAds(workspaceId: string, input: { ads: Re
   let warning: string | undefined;
 
   const charge = await chargeAi(workspaceId, "ai_generation", "AI competitor ad research");
-  if (!charge && env.aiEnabled) warning = "You've used this month's AI generations, so this is the quick read. Add your own AI key in Your AI to go unlimited.";
+  if (!charge) warning = env.aiEnabled ? RESEARCH_NO_RUNS : RESEARCH_NO_AI;
   if (charge) {
     try {
       const res = await generateStructured({

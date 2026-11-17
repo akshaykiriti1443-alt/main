@@ -15,8 +15,8 @@ const ASIDE = (canBuy: boolean): AuthAside => ({
   title: "Everything you need to fill your Skool group.",
   points: [
     "Ad research, then 5 static ads in your voice from Ad studio",
-    "An AI launch kit: landing page, free guide and follow-up emails",
-    "A leads CRM with automations that follow up for you",
+    "An AI launch kit: your website, free checklist and follow-up emails",
+    "Your leads in one list, with follow-up emails sent for you",
     "Your Skool link and the Growth ladder, with Penny guiding each step",
   ],
 });
@@ -27,7 +27,7 @@ export default async function JoinPage({ searchParams }: { searchParams: Promise
   const canBuy = memberCheckoutConfigured();
   return (
     <AuthShell
-      title="Get your funnel account"
+      title="Get your account"
       sub={
         checkout === "cancelled"
           ? "No charge was made. Pick up where you left off."

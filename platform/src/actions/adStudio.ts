@@ -2,16 +2,17 @@
 
 import { requireWorkspace } from "@/server/tenancy";
 import { updateWorkspaceSettings } from "@/server/workspace";
+import { setAccountSkoolUrl } from "@/server/sites";
 import { isSkoolUrl } from "@/server/growth";
-import { safeUrl } from "@/lib/html";
 import { isUuid } from "@/lib/util";
 import { parsePastedAds, type ResearchAd } from "@/server/ai/adResearch";
 import { latestResearchAds, makeAdStudioPack, STUDIO_DESTINATIONS, type StudioDestination } from "@/server/ai/adStudio";
+import { provenHooksFromForm } from "@/server/reelvault";
 import { field, go } from "./helpers";
 
 /** "Make my 5 statics": the Ad studio form. */
 export async function adStudioAction(wid: string, fd: FormData) {
-  const { workspace } = await requireWorkspace(wid);
+  const { workspace, user } = await requireWorkspace(wid);
   const back = `/app/w/${wid}/ads/studio`;
 
   // $5, $10 or their own amount.
@@ -31,6 +32,9 @@ export async function adStudioAction(wid: string, fd: FormData) {
     .map((a) => ({ page: a.page.slice(0, 80), text: a.text.replace(/\s+/g, " ").trim().slice(0, 1200), daysRunning: Math.max(0, Math.min(5000, Math.round(a.daysRunning) || 0)) }))
     .slice(0, 10);
 
+  // ReelVault hooks the member ticked, re-read from ReelVault ([] when off, unconfirmed or nothing ticked).
+  const provenHooks = await provenHooksFromForm(fd, user);
+
   const answers = {
     businessName: field(fd, "businessName", 80),
     niche: field(fd, "niche", 160),
@@ -44,18 +48,21 @@ export async function adStudioAction(wid: string, fd: FormData) {
     tone: field(fd, "tone", 10) || "friendly",
     destination: STUDIO_DESTINATIONS.find((d): d is StudioDestination => d === field(fd, "destination", 10)),
     competitorAds,
+    provenHooks,
   };
 
-  // First time they tell us these, keep them, so every other page knows too.
+  // First time they tell us these, keep them, so every other page knows too. The offer isn't kept:
+  // the account's offer is the paid deal from the launch kit, and a pack's offer follows where its ads go.
   const s = workspace.settings;
   const skoolUrl = field(fd, "skoolUrl", 300);
+  if (skoolUrl && !isSkoolUrl(skoolUrl)) go(back, { error: "Your Skool link must be a skool.com link, like https://www.skool.com/your-group" });
   const patch = {
     ...(!s.niche && answers.niche ? { niche: answers.niche } : {}),
     ...(!s.audience && answers.audience ? { audience: answers.audience } : {}),
-    ...(!s.offer && answers.offer ? { offer: answers.offer } : {}),
-    ...(!s.skoolUrl && skoolUrl && isSkoolUrl(skoolUrl) ? { skoolUrl: safeUrl(skoolUrl) } : {}),
   };
   if (Object.keys(patch).length) await updateWorkspaceSettings(wid, patch);
+  // One link per account: the Join buttons on their website use it too.
+  if (!s.skoolUrl && skoolUrl) await setAccountSkoolUrl(wid, skoolUrl);
 
   const res = await makeAdStudioPack(wid, answers, { researchId: competitorAds.length && isUuid(researchId) ? researchId : undefined });
   if (!res.ok) go(back, { error: res.error });

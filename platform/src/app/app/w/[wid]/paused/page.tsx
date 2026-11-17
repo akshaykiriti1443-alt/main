@@ -2,10 +2,16 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowUpRightIcon, CreditCardIcon, GraduationCapIcon, LockKeyholeIcon, MailIcon, MailOpenIcon, PauseCircleIcon, RefreshCwIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
+import { requestHost } from "@/server/auth";
+import { agencyForHost } from "@/server/agency";
+import { accessGap } from "@/server/access";
+import { VERIFY_HOURS, VERIFY_SUBJECT, verifyWaitTicket } from "@/server/emailVerify";
+import { emailSendingOn, isLiveSite } from "@/server/email/providers";
 import { checkAccessAction, resendVerifyAction } from "@/actions/account";
 import { memberCheckoutConfigured } from "@/server/billing/stripe";
 import { env } from "@/lib/env";
-import { EmptyArt, Flash, IconTile, StepDot } from "@/components/ui";
+import { Callout, EmptyArt, Flash, IconTile, StepDot } from "@/components/ui";
+import { VerifyWatch } from "./verify-watch";
 import { SubmitButton } from "@/components/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,44 +48,95 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
 
   // Just signed up: the email has to be confirmed before any membership can turn the account on.
   if (workspace.pauseReason === "verify") {
+    const brand = await agencyForHost(await requestHost());
+    const fromName = brand?.brand.name || env.platformName;
+    // Only claim "we sent it" when it really went out: sending switched on, and the first send worked.
+    const sendingOn = emailSendingOn();
+    const unsent = sp.unsent === "1" && !sp.ok;
+    const resend = (
+      <form action={resendVerifyAction.bind(null, wid)}>
+        <SubmitButton variant={unsent ? "cta" : "outline"} pendingText="Sending…" className="w-full sm:w-auto">
+          Send the link again
+        </SubmitButton>
+      </form>
+    );
     return (
       <div className="mx-auto flex w-full max-w-xl flex-col gap-6 md:py-6">
         <Head
           art={<EmptyArt icon={MailOpenIcon} />}
           title="Confirm your email"
           sub={
-            <>
-              We sent a link to <strong className="text-foreground">{user.email}</strong>. Click it and your account opens. Your access follows your email, so this proves it&apos;s yours.
-            </>
+            sendingOn && !unsent ? (
+              <>
+                We sent a link to <strong className="text-foreground">{user.email}</strong>. Click it, press Confirm, and you&apos;re in. It proves the email is yours, because your access follows it.
+              </>
+            ) : (
+              <>
+                Your account is made. Next we email a link to <strong className="text-foreground">{user.email}</strong> to prove it&apos;s yours.
+              </>
+            )
           }
         />
         <Flash searchParams={sp} />
-        <Card>
-          <CardContent className="flex flex-col gap-5">
-            <ol className="flex flex-col gap-4">
-              <li className="flex items-start gap-3">
-                <StepDot n={1} active />
-                <span className="pt-0.5">
-                  <b className="font-semibold">Open your inbox.</b> <span className="text-muted-foreground">Look for an email from us called &ldquo;Confirm your email&rdquo;.</span>
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <StepDot n={2} />
-                <span className="pt-0.5">
-                  <b className="font-semibold">Click the link, then press Confirm.</b> <span className="text-muted-foreground">You land straight back in your account.</span>
-                </span>
-              </li>
-            </ol>
-            <div className="flex flex-col gap-3 border-t border-dashed border-border-strong pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">Not there? Check spam or promotions. The link works for 3 days.</p>
-              <form action={resendVerifyAction.bind(null, wid)}>
-                <SubmitButton variant="outline" pendingText="Sending…" className="w-full sm:w-auto">
-                  Send the link again
-                </SubmitButton>
-              </form>
-            </div>
-          </CardContent>
-        </Card>
+        {!sendingOn ? (
+          <Callout tone="warn">
+            {isLiveSite()
+              ? "Our emails aren't going out right now, so the link can't reach you yet. Nothing is wrong with your account. Come back a little later and press Send the link again."
+              : "This copy of the app only writes emails to its log, so the confirm link is there, not in your inbox."}
+          </Callout>
+        ) : unsent ? (
+          <Callout tone="warn" title="The email didn't go out">
+            Something got in the way just now. Press Send the link again to try once more.
+          </Callout>
+        ) : null}
+        <VerifyWatch ticket={verifyWaitTicket(user.id)} wid={wid} email={user.email}>
+          <Card>
+            <CardContent className="flex flex-col gap-5">
+              <ol className="flex flex-col gap-4">
+                <li className="flex items-start gap-3">
+                  <StepDot n={1} active />
+                  <span className="grid gap-1.5 pt-0.5">
+                    <span>
+                      <b className="font-semibold">Open your inbox.</b> <span className="text-muted-foreground">Look for &ldquo;{VERIFY_SUBJECT}&rdquo; from:</span>
+                    </span>
+                    <span className="inline-flex w-fit max-w-full items-center gap-2 rounded-lg bg-muted px-2.5 py-1 text-sm">
+                      <MailIcon className="size-3.5 shrink-0 text-primary dark:text-violet-300" aria-hidden />
+                      <span className="min-w-0 truncate">
+                        <b className="font-semibold">{fromName}</b> <span className="text-muted-foreground">{env.emailFrom}</span>
+                      </span>
+                    </span>
+                    <span className="text-sm text-muted-foreground">Not there in a minute? Check Promotions and Spam. Gmail often files it under Promotions.</span>
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <StepDot n={2} />
+                  <span className="pt-0.5">
+                    <b className="font-semibold">Click the link, then press Confirm.</b>{" "}
+                    <span className="text-muted-foreground">If it asks you to log in, use this email and the password you just chose.</span>
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <StepDot n={3} />
+                  <span className="pt-0.5">
+                    <b className="font-semibold">Opened it on your phone?</b>{" "}
+                    <span className="text-muted-foreground">That&apos;s fine. Confirm there, then come back to this screen. It notices and asks you to log in once more here.</span>
+                  </span>
+                </li>
+              </ol>
+              <div className="flex flex-col gap-3 border-t border-dashed border-border-strong pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">Still nothing? Ask for a fresh one. Each link works for {VERIFY_HOURS / 24} days.</p>
+                {resend}
+              </div>
+            </CardContent>
+          </Card>
+        </VerifyWatch>
+        <form action="/logout" method="post" className="text-center text-sm text-muted-foreground">
+          Typed the wrong email?{" "}
+          <button type="submit" className="font-semibold text-primary underline-offset-4 hover:underline dark:text-violet-300">
+            Log out
+          </button>{" "}
+          and sign up again with the right one.
+        </form>
       </div>
     );
   }
@@ -95,14 +152,20 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
     </p>
   );
 
+  // Someone who only ever had the free welcome days never lost a membership: we just haven't
+  // matched them to one yet. They get the calm "unlock" wording, never "paused".
+  const matching = memberGate && !neverActive && (await accessGap(user.email)) === "matching";
+  const fresh = neverActive || matching;
   const head = (
     <Head
-      art={<EmptyArt icon={neverActive ? LockKeyholeIcon : PauseCircleIcon} tone={neverActive ? "primary" : "warning"} />}
-      title={neverActive ? "Unlock your account" : `${workspace.name} is paused`}
+      art={<EmptyArt icon={fresh ? LockKeyholeIcon : PauseCircleIcon} tone={fresh ? "primary" : "warning"} />}
+      title={fresh ? "Unlock your account" : `${workspace.name} is paused`}
       sub={
         neverActive
           ? "Your account is ready and waiting. It switches on by itself the moment we see you as an active member. No code needed."
-          : "Your pages are offline and automations are stopped. Your funnels, leads and emails are all saved, and come back the moment access returns."
+          : matching
+            ? "We haven't matched your email to a membership yet. Until we do, your website is offline and automatic emails are paused, so pause any ads that point to it. Everything you made is saved and switches back on by itself once we see you as a member."
+            : "Your website is offline and automatic emails are stopped, so pause any ads that point to it. Your website, leads and emails are all saved, and come back the moment access returns."
       }
       email={memberGate ? user.email : undefined}
     />
@@ -119,7 +182,7 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
             <p className="pt-1.5 text-[15px]">
               {viaAgency
                 ? `Contact ${agency.brand.name || agency.name} to turn your account back on.`
-                : "The platform team paused this account. Reply to any email from us and we'll sort it out."}
+                : <>We paused this account. Email us at <a href={`mailto:${env.emailReplyTo}`}>{env.emailReplyTo}</a> and we&apos;ll sort it out.</>}
             </p>
           </CardContent>
         </Card>
@@ -144,7 +207,7 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
             <div className="flex min-w-0 flex-1 items-start gap-3.5">
               <IconTile icon={GraduationCapIcon} className="size-11 rounded-2xl" />
               <div className="grid min-w-0 gap-1">
-                <h2 className="text-lg">{neverActive ? "Join the Skool community" : "Rejoin the Skool community"}</h2>
+                <h2 className="text-lg">{fresh ? "Join the Skool community" : "Rejoin the Skool community"}</h2>
                 <p className="text-sm text-muted-foreground">Use this same email. Your account turns on by itself, no forms.</p>
               </div>
             </div>
@@ -187,7 +250,8 @@ export default async function PausedPage({ params, searchParams }: { params: Pro
             I&apos;m a member, check again
           </SubmitButton>
           <p className="text-xs text-muted-foreground">
-            Used a different email on Skool? Put this email in the community&apos;s membership question, or reply to any email from us.
+            Used a different email on Skool? Put this email in the community&apos;s membership question, or email us at{" "}
+            <a href={`mailto:${env.emailReplyTo}`}>{env.emailReplyTo}</a>.
           </p>
         </form>
       </div>

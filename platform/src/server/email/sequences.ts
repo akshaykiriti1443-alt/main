@@ -48,6 +48,16 @@ export async function enrollContact(workspaceId: string, sequenceId: string, con
     .orderBy(asc(emailSequenceSteps.position))
     .limit(1);
   if (!first) return enrollment;
+  // A first email with no delay is the free checklist someone just asked for. It goes out in
+  // this call, so it never waits for the scheduler. If that can't finish, the queue retries it.
+  if (first.delayMinutes <= 0) {
+    try {
+      await processSequenceStep(enrollment.id);
+      return enrollment;
+    } catch (err) {
+      console.error("[email] first sequence email failed, queued for retry", err instanceof Error ? err.message : err);
+    }
+  }
   await enqueue("email.sequence_step", { enrollmentId: enrollment.id }, { runAt: addMinutes(enrollment.createdAt, first.delayMinutes) });
   return enrollment;
 }
@@ -89,6 +99,7 @@ export async function processSequenceStep(enrollmentId: string) {
     body: step.body,
     vars: await buildVars(ws, contact),
     sequenceStepId: step.id,
+    sendNow: true,
   });
 
   const next = steps[enrollment.nextPosition + 1];

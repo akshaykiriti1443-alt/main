@@ -10,7 +10,7 @@ import { scheduleCampaign } from "@/server/email/campaigns";
 import { buildVars, queueEmail } from "@/server/email/send";
 import { deleteAutomation, saveAutomation } from "@/server/automations";
 import { cancelPost, schedulePost } from "@/server/social";
-import { runAdReview } from "@/server/ai/adReview";
+import { runAdReview, spendFrom } from "@/server/ai/adReview";
 import { hasFeature, type Feature } from "@/server/plans";
 import type { CampaignAudience } from "@/lib/db/types";
 import { errMsg, field, go } from "./helpers";
@@ -164,6 +164,13 @@ export async function cancelPostAction(wid: string, postId: string) {
 export async function adReviewAction(wid: string, fd: FormData) {
   await requireWorkspace(wid);
   const res = await runAdReview(wid, Object.fromEntries(fd.entries()));
-  if (!res.ok) go(`/app/w/${wid}/ads`, { error: res.error });
-  go(`/app/w/${wid}/ads?review=${res.id}`, { ok: "Your custom plan is ready.", ...(res.warning ? { warn: res.warning } : {}) });
+  // Keep "Your two prices" on screen: the two Amount spent totals ride along with the verdict.
+  const keep = new URLSearchParams();
+  for (const k of ["web", "skool"] as const) {
+    const n = spendFrom(fd.get(`keep_${k}`));
+    if (n !== null) keep.set(k, String(n));
+  }
+  const kept = keep.toString();
+  if (!res.ok) go(`/app/w/${wid}/ads${kept ? `?${kept}` : ""}`, { error: res.error });
+  go(`/app/w/${wid}/ads?review=${res.id}${kept ? `&${kept}` : ""}`, { ok: "Your custom plan is ready.", ...(res.warning ? { warn: res.warning } : {}) });
 }

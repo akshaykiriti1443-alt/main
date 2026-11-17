@@ -110,6 +110,16 @@ export type WorkspaceSettings = {
   // The entry ticket: the intro post that unlocked this account (when the platform asks for one).
   entryPostUrl?: string;
   entryClaimedAt?: string;
+  // The week checklist (Your path): what the member ticked by hand. Written in place with jsonb_set.
+  journey?: Journey;
+};
+
+/** ISO times. `ticks` holds the member's own word; `as: "waiting"` is a clock, not a done to-do. */
+export type Journey = {
+  ticks?: Record<string, { at: string; as?: "waiting" }>;
+  later?: Record<string, string>;
+  started?: Record<string, string>;
+  metaOk?: string;
 };
 
 export type BrandSettings = {

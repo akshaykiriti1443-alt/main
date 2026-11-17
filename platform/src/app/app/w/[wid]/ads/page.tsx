@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { and, desc, eq, gte } from "drizzle-orm";
 import {
+  CalculatorIcon,
   ClipboardListIcon,
   FileInputIcon,
   GaugeIcon,
@@ -18,14 +19,16 @@ import { getDb } from "@/lib/db";
 import { aiGenerations } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
 import { skoolLinkFor } from "@/server/growth";
-import { computeMetrics, type AdCall, type AdReview } from "@/server/ai/adReview";
+import { launchDay } from "@/server/path";
+import { adTotals, computeMetrics, doNextNote, spendFrom, twoSums, type AdCall, type AdReview, type PriceLine } from "@/server/ai/adReview";
 import { adReviewAction } from "@/actions/marketing";
 import { isUuid } from "@/lib/util";
 import { cn } from "@/lib/utils";
 import { Callout, Empty, Flash, MoreOptions, PageHead, Panel, StepDot } from "@/components/ui";
 import { Kicker } from "@/components/crm-ui";
-import { SubmitButton } from "@/components/client";
+import { CopyButton, SubmitButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -51,18 +54,20 @@ const CALL_TONE: Record<AdCall, { badge: "success" | "warning" | "destructive" |
   too_early: { badge: "secondary", panel: "bg-muted ring-ink/[0.05] dark:ring-white/[0.06]", text: "text-foreground/80", icon: HourglassIcon },
 };
 
-/** The numbers Meta shows you, in the order the course quotes them. Leads: 0 is fine. */
+/** The numbers Meta shows you, in the order the course quotes them. Leads: blank means "not known". */
 const MAIN: { name: string; label: string; step: string; required?: boolean; placeholder?: string; hint?: string }[] = [
-  { name: "spend", label: "Spend ($)", step: "0.01", required: true },
+  { name: "spend", label: "Spend ($)", step: "0.01", required: true, hint: "Amount spent, in Ads Manager." },
   { name: "days", label: "Days running", step: "1", required: true },
   { name: "impressions", label: "Impressions", step: "1", required: true },
   { name: "linkClicks", label: "Link clicks", step: "1", required: true },
-  { name: "leads", label: "Leads", step: "1", placeholder: "0", hint: "0 is fine on a Skool-link ad. On an opt-in page, it's your Leads count." },
+  { name: "leads", label: "Leads", step: "1", placeholder: "Not sure", hint: "Website ads: this ad's own leads (Results, on a Leads campaign). Not sure? Leave it blank." },
   { name: "members", label: "New members", step: "1", placeholder: "Not sure", hint: "Joins in Skool since your ads went live." },
 ];
 
 const CHOICE =
   "flex cursor-pointer items-center gap-3 rounded-xl border border-border-strong bg-card px-3.5 py-3 text-sm shadow-xs transition-colors duration-150 select-none hover:border-violet-200 hover:bg-accent/60 has-checked:border-primary has-checked:bg-accent has-checked:ring-1 has-checked:ring-primary has-focus-visible:ring-3 has-focus-visible:ring-ring/40 dark:bg-white/[0.03] dark:hover:border-white/20";
+
+const WELL = "rounded-xl bg-muted/50 px-4 py-3.5 ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]";
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
@@ -72,7 +77,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
   const { workspace } = await requireWorkspace(wid);
   const db = await getDb();
   const cols = { id: aiGenerations.id, createdAt: aiGenerations.createdAt, input: aiGenerations.input, output: aiGenerations.output, model: aiGenerations.model };
-  const [[row], recent] = await Promise.all([
+  const [[row], recent, totals] = await Promise.all([
     db
       .select(cols)
       .from(aiGenerations)
@@ -85,11 +90,18 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
       .where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_review"), gte(aiGenerations.createdAt, new Date(Date.now() - 7 * 86_400_000))))
       .orderBy(desc(aiGenerations.createdAt))
       .limit(40),
+    adTotals(wid),
   ]);
   const review = row?.output as unknown as AdReview | undefined;
   const last = row?.input as Record<string, number | string> | undefined;
   const link = skoolLinkFor(workspace.slug);
   const destination = last?.destination === "optin" ? "optin" : "skool";
+  // Week one is hands-off: whatever a verdict says to change waits for next week.
+  const firstWeek = launchDay(workspace.createdAt) <= 7;
+  const doNext = review ? doNextNote(review, firstWeek) : null;
+  const webSpend = spendFrom(sp.web);
+  const skoolSpend = spendFrom(sp.skool);
+  const sums = twoSums({ webSpend, skoolSpend, ...totals });
 
   // This week's verdicts: the latest review of each ad (by name), so Day 6 ends with one per ad.
   const seen = new Set<string>();
@@ -130,17 +142,63 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
         lesson="Day 6"
         eyebrow="Get members"
         title="Ad review"
-        sub="One ad at a time: its spend, impressions and link clicks in, keep, fix or kill out, with the one room to fix."
-        first="In Ads Manager, set the date range to Maximum and copy one ad's numbers below."
+        sub="Your two prices first, then a verdict for each ad: Keep, Fix, Kill or Too early."
+        first="Any ad under 1,000 impressions is Too early: leave it running, no form needed. Type in the ones over 1,000."
       />
       <Flash searchParams={sp} />
 
+      <Panel icon={CalculatorIcon} tone="success" title="Your two prices" sub="What each campaign spent, divided by what your app counted. They're your own numbers, so there's nothing to pass or fail.">
+        <form method="get" className="flex flex-col gap-4">
+          {isUuid(sp.review) ? <input type="hidden" name="review" value={sp.review} /> : null}
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            In <b className="font-semibold text-foreground">Meta Ads Manager</b>, set the date range to <b className="font-semibold text-foreground">Maximum</b> and read each campaign&apos;s{" "}
+            <b className="font-semibold text-foreground">Amount spent</b>. Leave a box empty if you don&apos;t run that kind of ad.
+          </p>
+          <div className="grid items-start gap-4 @xl/main:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="web">Website ads: Amount spent ($)</FieldLabel>
+              <Input id="web" name="web" type="number" min={0} step="0.01" defaultValue={webSpend ?? ""} className="tabular-nums" />
+              <FieldDescription>
+                Divided by your Leads from your ads: <b className="font-semibold text-foreground tabular-nums">{totals.adLeads.toLocaleString()}</b> so far.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="skool">Skool ads: Amount spent ($)</FieldLabel>
+              <Input id="skool" name="skool" type="number" min={0} step="0.01" defaultValue={skoolSpend ?? ""} className="tabular-nums" />
+              <FieldDescription>
+                Divided by your Skool link&apos;s visits from ads: <b className="font-semibold text-foreground tabular-nums">{totals.adVisits.toLocaleString()}</b> so far.
+              </FieldDescription>
+            </Field>
+          </div>
+          <Button type="submit" variant="outline" className="self-start">
+            <CalculatorIcon data-icon="inline-start" />
+            Work out my prices
+          </Button>
+        </form>
+        {sums.lead || sums.visit ? (
+          <>
+            <dl className="grid gap-3 @xl/main:grid-cols-2">
+              {sums.lead ? <Price label="Cost per lead" none="No leads yet" p={sums.lead} /> : null}
+              {sums.visit ? <Price label="Cost per Skool visit" none="No visits yet" p={sums.visit} /> : null}
+            </dl>
+            <div className="flex flex-wrap items-center gap-3">
+              <CopyButton text={sums.post} label="Copy for my post" />
+              <span className="text-xs text-muted-foreground">The lines above, ready to paste.</span>
+            </div>
+          </>
+        ) : null}
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Leads from your ads counts sign-ups that arrived through a Facebook or Instagram link, which is nearly always your ads. Friends you added by hand aren&apos;t in it. 0 so far is an answer too. Skool ads with clicks in Ads Manager but 0 visits here? Review one below and it checks the link.
+        </p>
+      </Panel>
+
       <div className="grid items-start gap-6 @4xl/main:grid-cols-2">
         <form action={adReviewAction.bind(null, wid)} data-guide="ad-review">
+          {/* So the two prices above are still there after Get my verdict. */}
+          {webSpend !== null ? <input type="hidden" name="keep_web" value={webSpend} /> : null}
+          {skoolSpend !== null ? <input type="hidden" name="keep_skool" value={skoolSpend} /> : null}
           <Panel step={1} title="One ad's numbers" sub="First round: Day 6, then weekly. Copy one ad at a time, for ads with 1,000 impressions or more.">
-            <Callout tone="tip">
-              Where to look: <b className="font-semibold">Ads Manager › Ads</b>, date range <b className="font-semibold">Maximum</b>. Spend is the Amount spent column.
-            </Callout>
+            <WhereToFind />
 
             <fieldset className="flex flex-col">
               <legend className="mb-2.5 text-[13.5px] font-medium">Where does this ad send people?</legend>
@@ -161,8 +219,8 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
                     <FileInputIcon className="size-4" aria-hidden />
                   </span>
                   <span className="grid min-w-0 gap-0.5">
-                    <span className="font-semibold">An opt-in page</span>
-                    <span className="truncate text-xs text-muted-foreground">A page that asks for an email</span>
+                    <span className="font-semibold">My website</span>
+                    <span className="truncate text-xs text-muted-foreground">The page that asks for an email</span>
                   </span>
                 </label>
               </div>
@@ -171,7 +229,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
             <div className="grid grid-cols-2 items-start gap-4">
               <Field>
                 <FieldLabel htmlFor="adName">Which ad?</FieldLabel>
-                <Input id="adName" name="adName" placeholder="S1 Notes app" maxLength={80} />
+                <Input id="adName" name="adName" placeholder="Web S1" maxLength={80} />
               </Field>
               <Field>
                 <FieldLabel htmlFor="fixes">Fixed it before?</FieldLabel>
@@ -218,12 +276,16 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
             <Empty
               icon={ClipboardListIcon}
               title="Keep, fix or kill"
-              body="Each ad gets a verdict, a traffic light for every number and the one room to fix: Hook, Door or About page."
+              body="Each ad gets a verdict, a traffic light for every number and the one room to fix: Hook, Door or About page. In week one, most say Too early, and that's fine."
             />
           </Panel>
         ) : (
           <Panel step={2} title="Your verdict" sub={`Reviewed ${row?.createdAt.toDateString()} · ${row?.model === "rules" ? "rule-based" : "AI"}`}>
-            <Callout tone="tip">First round? Day 6 is verdict day. Switch off any ad marked Kill with the toggle next to it in Ads Manager, and change nothing else today. Too early hasn&apos;t lost anything, so leave those running.</Callout>
+            <Callout tone="tip">
+              {firstWeek
+                ? "Week one: change nothing today. Too early means leave it running, and a Fix or a Keep goes on next week's list. A broken link is the one thing to fix today. Switching an ad off is always your call."
+                : "Switch off any ad marked Kill, fix one room at a time, and leave Too early running."}
+            </Callout>
             {review.call ? (
               <SkoolVerdict review={review} />
             ) : (
@@ -264,6 +326,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
                 <ListChecksIcon className="size-4 text-primary dark:text-violet-300" aria-hidden />
                 Do this next
               </span>
+              {doNext ? <p className="text-xs text-muted-foreground">{doNext}</p> : null}
               <ol className="flex flex-col gap-3.5">
                 {review.actions.map((a, i) => (
                   <li key={i} className="flex gap-3">
@@ -277,7 +340,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
             </div>
 
             {review.mode === "skool" && review.call ? (
-              <BudgetNote review={review} />
+              <BudgetNote review={review} firstWeek={firstWeek} />
             ) : (
               <div className="flex items-center justify-between gap-3 rounded-2xl bg-success-soft px-5 py-4 ring-1 ring-success/15 ring-inset">
                 <span className="grid gap-0.5">
@@ -285,7 +348,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
                     <WalletIcon className="size-3.5" aria-hidden />
                     Next daily budget
                   </Kicker>
-                  <span className="text-xs text-muted-foreground">What to spend tomorrow, per day.</span>
+                  <span className="text-xs text-muted-foreground">{firstWeek ? "Per day, from next week. Today, leave it as it is." : "What to spend tomorrow, per day."}</span>
                 </span>
                 <span className="font-display text-[36px] leading-none tracking-[-0.01em] text-success tabular-nums">${review.nextBudgetUsdPerDay.toFixed(2)}</span>
               </div>
@@ -333,7 +396,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
                 <>
                   {" "}
                   Cost per visit: <b className="font-semibold text-foreground tabular-nums">{usd(weekCounted.costPerVisit)}</b> ({usd(weekCounted.totalSpend)} spent ÷ {weekCounted.adVisits.toLocaleString()} visits). Early verdicts: five days at $5 is thin data.
-                  {weekCounted.spendTyped ? null : " Only reviewed some of your ads? This reads low. Use Ads Manager's total ÷ your meta-ad clicks."}
+                  {weekCounted.spendTyped ? null : " Only reviewed some of your ads? This reads low. Your two prices at the top use the whole campaign's spend."}
                 </>
               ) : null}
             </p>
@@ -341,6 +404,47 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
         </Panel>
       ) : null}
     </>
+  );
+}
+
+/** The three numbers the course names, and where they live in Ads Manager, in plain words. */
+function WhereToFind() {
+  const steps = [
+    <>
+      Open <b className="font-semibold text-foreground">Meta Ads Manager</b> on a computer, click <b className="font-semibold text-foreground">Ads</b>, and set the date range (top right) to{" "}
+      <b className="font-semibold text-foreground">Maximum</b>.
+    </>,
+    <>
+      On the ad&apos;s row, read <b className="font-semibold text-foreground">Impressions</b> (how many times Meta showed it), <b className="font-semibold text-foreground">Link clicks</b> (people who tapped through) and{" "}
+      <b className="font-semibold text-foreground">Amount spent</b> (it goes in Spend).
+    </>,
+    <>
+      Under 1,000 impressions? It&apos;s <b className="font-semibold text-foreground">Too early</b>: leave it running and skip the form.
+    </>,
+  ];
+  return (
+    <div className="flex flex-col gap-3 rounded-xl bg-accent/60 p-4 ring-1 ring-violet-200/60 ring-inset dark:bg-accent/50 dark:ring-white/[0.05]">
+      <span className="text-sm font-semibold">The three numbers, and where they are</span>
+      <ol className="flex flex-col gap-2.5 text-sm leading-relaxed">
+        {steps.map((s, i) => (
+          <li key={i} className="flex gap-3">
+            <StepDot n={i + 1} className="size-6 text-[11.5px]" />
+            <span className="pt-0.5 text-foreground/85">{s}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="text-xs text-muted-foreground">No Link clicks column? Press Columns and pick Performance and clicks. A label reads a little differently on your screen? Go with the closest match.</p>
+    </div>
+  );
+}
+
+function Price({ label, none, p }: { label: string; none: string; p: PriceLine }) {
+  return (
+    <div className={cn("flex min-w-0 flex-col gap-1.5", WELL)}>
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className={cn("font-display leading-none tracking-[-0.01em] tabular-nums", p.cost === null ? "text-[24px] text-foreground/70" : "text-[30px]")}>{p.cost === null ? none : usd(p.cost)}</dd>
+      <dd className="text-xs text-subtle-foreground">{p.line}</dd>
+    </div>
   );
 }
 
@@ -353,12 +457,15 @@ function SkoolVerdict({ review }: { review: AdReview }) {
         <tone.icon className="size-7 shrink-0" strokeWidth={1.75} aria-hidden />
         {review.verdict}
       </p>
+      {review.call === "too_early" ? (
+        <p className="mt-3 w-fit rounded-full bg-card px-3 py-1 text-[13px] font-medium ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">Too early to tell, leave it running. A normal answer, not a bad one.</p>
+      ) : null}
       <p className="mt-3 text-[15px] leading-relaxed text-foreground/85">{review.why}</p>
     </div>
   );
 }
 
-function BudgetNote({ review }: { review: AdReview }) {
+function BudgetNote({ review, firstWeek }: { review: AdReview; firstWeek: boolean }) {
   const keep = review.call === "keep";
   const b = review.budget;
   return (
@@ -374,7 +481,13 @@ function BudgetNote({ review }: { review: AdReview }) {
           {keep ? "Feed it slowly" : "Daily budget"}
         </Kicker>
         <span className="text-xs text-muted-foreground">
-          {keep ? "About 20% more, then wait 2 to 3 days." : review.call === "too_early" ? "Hold it steady while Meta learns." : "Hold it steady. Fix one room at a time."}
+          {keep
+            ? firstWeek
+              ? "About 20% more from next week, then wait 2 to 3 days. Today, leave it."
+              : "About 20% more, then wait 2 to 3 days."
+            : review.call === "too_early"
+              ? "Hold it steady while Meta learns."
+              : "Hold it steady. Fix one room at a time."}
         </span>
       </span>
       <span className={cn("font-display text-[30px] leading-none tracking-[-0.01em] tabular-nums", keep ? "text-success" : "text-foreground/80")}>

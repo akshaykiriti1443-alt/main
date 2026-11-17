@@ -3,23 +3,15 @@
 // Client-safe: no server imports.
 
 export const GUIDE_COOKIE = "onx_guide"; // "open" | "min" | "off"; missing = first visit (open, with a hello)
-export const GUIDE_SKIP_COOKIE = "onx_guide_skip"; // comma list of step keys the member skipped
+/** Deprecated, unused: "Skip this step" became "Do this later", saved on the server. Kept so older layouts compile. */
+export const GUIDE_SKIP_COOKIE = "onx_guide_skip";
 export const GUIDE_HELLO_COOKIE = "onx_guide_hi"; // set once the member has read Penny's hello
 export type GuideMode = "open" | "min" | "off";
 export const isGuideMode = (v: unknown): v is GuideMode =>
   v === "open" || v === "min" || v === "off";
 
-/**
- * Can this step be "Up next"? Only a to-do the member can do right now. Optional steps, outcomes
- * (they wait on Skool's numbers) and steps locked to another plan never hold Up next; they still
- * show on Your path, with their lock, and tick themselves off. Your path, the dashboard and Penny
- * all use this one rule.
- */
-export const canBeUpNext = (s: { done: boolean; kind?: string; locked?: string }) =>
-  !s.done && !s.kind && !s.locked;
-
 export type StepHowTo = {
-  /** Numbered "how to do it" lines, shown when you're on the right page. */
+  /** Numbered "how to do it" lines, shown when you're on the right page. 1 to 4 lines. */
   how: string[];
   /** The element on that page to glow ("click here"), by its data-guide attribute. */
   target?: string;
@@ -29,8 +21,9 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   ai: {
     target: "ai-key",
     how: [
-      "Get a free Google Gemini key (I want it free › Get a free Gemini key), paste it into API key and press Save key. Only a key lifts the 3-run cap.",
-      "Pay for Claude or ChatGPT? A connector lets that app work on your account from its own chat. Give it a name, press Create connector URL and paste the link into your AI app's connectors.",
+      "Press Open Google AI Studio and sign in with any Google account. It opens in a new tab.",
+      "Press Create API key, then copy the key.",
+      "Paste it into Your Gemini key here and press Save key. It's free, and every AI button runs on it. You'll see Your key works.",
     ],
   },
   hello: {
@@ -38,18 +31,22 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "Post your intro in the Skool Community tab, copy the post's link and paste it here.",
     ],
   },
+  skool: {
+    target: "skool-link",
+    how: [
+      "Press Start my group on your home page, or use the link in your Day 1 lesson. Skool opens in a new tab.",
+      "Name your group, set your price and switch on the 7-day free trial in its settings.",
+      "Copy your group's address from the top of the browser, like https://www.skool.com/your-group.",
+      "Paste it into Your group's link and press Save link.",
+    ],
+  },
   kit: {
     target: "kit-build",
     how: [
       "Answer the questions. Unsure? Guess: you can edit every word once it's built.",
-      "Paste your Skool group link (skool.com/your-group/about).",
+      "Type what you'll charge a month and pick your free trial. Both are needed for your thank-you page.",
+      "Have your Skool group link? Paste it. No group yet? Leave it blank.",
       "Press Build my launch kit, once. It takes about a minute.",
-    ],
-  },
-  skool: {
-    target: "skool-link",
-    how: [
-      "Paste your Skool group link (skool.com/your-group/about) and save. Every Join button and your Skool link use it.",
     ],
   },
   publish: {
@@ -58,23 +55,7 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "Open your opt-in page (the one asking for an email).",
       "Change three lines: the headline, who it's for and the button.",
       "Open your Thank-you page and check it states the deal in plain words: 7 days free, then your price a month.",
-      "Press Publish. Your Meta Pixel is the very next step, before you test it.",
-    ],
-  },
-  lead1: {
-    how: [
-      "Open your live funnel on your phone (its link is in Funnels & pages).",
-      "Sign up with your own email, like a stranger would.",
-      "Come back here to Leads: there you are. Email 1 lands within minutes (check spam once).",
-      "Give Meta a couple of minutes, then look in Events Manager for your PageView and your Lead.",
-    ],
-  },
-  research: {
-    target: "research-analyse",
-    how: [
-      'Search a keyword from your niche, like "fat loss for dads".',
-      "🔥 means the ad has run 30+ days. Not proof, but the best free clue going.",
-      "Press Analyse with AI, once. Read What's working in your niche and Gaps nobody uses yet.",
+      "Press Publish. Your Meta Pixel is the very next step.",
     ],
   },
   pixel: {
@@ -86,36 +67,101 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "Paste both into Meta Pixel & Conversions API here and press Save.",
     ],
   },
+  research: {
+    target: "research-analyse",
+    how: [
+      "Press Search in Meta Ad Library and pick 3 ads that started running a month or more ago.",
+      "Copy each ad's words and paste them into Competitor ads.",
+      "Press Analyse with AI, once. Read What's working in your niche and Gaps nobody uses yet.",
+    ],
+  },
   statics: {
     target: "ad-studio-make",
     how: [
       "Check your answers: where these ads go (Day 1 is My website), $10 a day, country, who it's for and the result you promise.",
-      'Open Fine-tune and put "Free checklist:" and its name in Your offer, then press Make my 5 statics.',
-      "Paste each image prompt into ChatGPT or Gemini, then follow Your launch plan in Ads Manager.",
+      "Press Make my 5 statics. Your ads offer your free checklist by themselves.",
+      "Paste each image prompt into ChatGPT or Gemini to make the images. Your Skool post comes next, before Your launch plan.",
     ],
   },
   clicks: {
     how: [
       "Open Your launch plan and follow it in Meta Ads Manager, one click at a time.",
       "Day 1's ads go to your website as a Leads campaign, with your Pixel under Dataset and Lead as the event.",
-      "This ticks off at your first lead from an ad, or your first ad click on your Skool link. Your own test doesn't count.",
+      "Press Publish in Ads Manager, then come back and press I pressed Publish.",
+      "Meta checks new ads before they run. There's nothing for you to do while it does.",
+    ],
+  },
+  refresh: {
+    target: "ad-studio-make",
+    how: [
+      "Read Gaps nobody uses yet in Ad research first, so this set is genuinely new.",
+      "Pick My Skool link and $5 a day. Your ads offer your free trial by themselves.",
+      "Press Make my 5 statics. This step ticks when the pack is saved.",
+    ],
+  },
+  live2: {
+    how: [
+      "Open Your launch plan for the Skool-link pack and follow it in Ads Manager.",
+      "Make it a new Traffic campaign, so yesterday's website ads stay untouched.",
+      "Press Publish, then come back and press I pressed Publish.",
+    ],
+  },
+  lead1: {
+    how: [
+      "Open your website on your phone. The button opens it.",
+      "Sign up with your own email, like a stranger would.",
+      "Come back to Leads: there you are. Your first email is on its way too (check spam once).",
+    ],
+  },
+  skoolvisit: {
+    how: [
+      "On Growth ladder, find Your Skool link.",
+      "Open it once in a new tab. It goes to your About page and counts the click.",
+    ],
+  },
+  events: {
+    how: [
+      "Open Events Manager and pick your Pixel.",
+      "Look for a PageView and a Lead from your own sign-up. They can take a little while to show up.",
+      "See both? Come back and press I can see PageView and Lead. Can't? Press Stuck?",
+    ],
+  },
+  welcome: {
+    how: [
+      "Open your own group and start a new post.",
+      "Say who the group is for and ask one easy question anyone can answer.",
+      "Post it, pin it from the three dots on the post, then come back and press I pinned it.",
+    ],
+  },
+  unlock: {
+    target: "unlock-create",
+    how: [
+      "Your first one is filled in: your free guide, for one post of their own. Check it and press Create unlock.",
+      "Press the big Copy Skool post, paste it in your group and pin it.",
+      "Members do it, paste their link and get the reward by email.",
+    ],
+  },
+  lesson: {
+    how: [
+      "In your group, open Classroom and add a course.",
+      "Add one lesson with one quick win a new member can do straight away.",
+      "Come back and press It's in my Classroom.",
+    ],
+  },
+  warm: {
+    how: [
+      "List 20 people who have the problem you solve, or know someone who does.",
+      "Text five, one at a time, in your own words. No link until they ask.",
+      "Anyone who asks gets Copy link for texts from Growth ladder: it has ?src=text on the end. Anyone who replies goes in with Add contact at the top of Leads.",
     ],
   },
   review: {
     target: "ad-review",
     how: [
-      "First round: Day 6, hands off till then. After that, weekly.",
-      "Only ads with 1,000+ impressions. None over? Review your biggest spender once.",
+      "Only ads with 1,000 impressions or more. None yet? Press None at 1,000 yet. That's a normal answer.",
       "Copy each ad's spend, impressions and link clicks from Ads Manager, date range Maximum.",
-      "Paste them here, one ad at a time, and say where it goes: An opt-in page or My Skool link. You get keep, fix or kill, and the one room to fix.",
-      "Switch off anything marked Kill on Day 6, and change nothing else that day. Too early is a normal answer, so leave those running.",
-    ],
-  },
-  customer: {
-    how: [
-      "List 20 people who have the problem you solve, or know someone who does, then text five.",
-      "Follow up once, three days later, with anyone who replied. Just once.",
-      "Ticks off when your Monday check-in says 1 new customer.",
+      "Paste them here, one ad at a time, and say where it goes: My website or My Skool link. You get keep, fix or kill.",
+      "Day 6: change nothing, except a broken Skool link. Too early means leave it running, and fixes go on next week's list.",
     ],
   },
   checkin: {
@@ -124,13 +170,36 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "First one: Day 7, whatever the weekday. Zeros count.",
       "In Skool, open Settings › Growth.",
       "Copy your level, About-page visitors, new customers and Skool Network sign-ups.",
-      "Type them into the Monday check-in here and save.",
+      "Type them into Check-in here and press Save check-in.",
+    ],
+  },
+  decide: {
+    how: [
+      "Read what the app can see of your week, on the card.",
+      "Decide in private whether this is for you. The app doesn't ask which way.",
+      "Press I've decided. Only the time is saved, never your choice.",
+    ],
+  },
+  /** Shared by every day's Skool post. {section} is that day's section name (see howFor). */
+  post: {
+    how: [
+      "Open Skool and find the section called {section}.",
+      "Press Copy my post here, paste it there and fill in the blanks.",
+      'Review the post right before yours, then comment "Reviewed @their name" on your own post.',
+      "Come back and tick both. The owner's audit comes as a reply on your post.",
+    ],
+  },
+  customer: {
+    how: [
+      "List 20 people who have the problem you solve, or know someone who does, then text five.",
+      "Follow up once, three days later, with anyone who replied. Just once.",
+      "Ticks off when your check-in says 1 new customer.",
     ],
   },
   l2: {
     target: "checkin",
     how: [
-      "Keep doing your Monday check-in. Level 2 needs 100 About-page visitors, 1 new customer and paid pricing.",
+      "Keep doing your weekly check-in. Level 2 needs 100 About-page visitors, 1 new customer and paid pricing.",
     ],
   },
   visitors: {
@@ -143,7 +212,7 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
     target: "checkin",
     how: [
       "Put your plain skool.com link in your bio (Instagram, TikTok or YouTube).",
-      "Then tick the bio box in your Monday check-in.",
+      "Then open A few extra numbers in your check-in and tick the bio box.",
     ],
   },
   network: {
@@ -163,29 +232,6 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
     target: "checkin",
     how: [
       "10,000 visitors and 30 Network sign-ups. Keep your best ads running and your members happy.",
-    ],
-  },
-  refresh: {
-    target: "ad-studio-make",
-    how: [
-      "Read Gaps nobody uses yet in Ad research first, so this set is genuinely new.",
-      'Pick My Skool link and $5 a day. In Fine-tune, put "7-day free trial of" and your group\'s name in Your offer.',
-      "Press Make my 5 statics, then launch them as their own Traffic campaign. Leave your website ads alone.",
-      "This ticks at your second pack.",
-    ],
-  },
-  tracking: {
-    how: [
-      "Sign up on your live page with a different email, and check you're in Leads.",
-      "In Meta Events Manager, look for both PageView and Lead.",
-      "Open Your Skool link once from Growth ladder, so you can see it counting.",
-    ],
-  },
-  warm: {
-    how: [
-      "List 20 people who have the problem you solve, or know someone who does.",
-      "Text five, one at a time, in your own words. No link until they ask.",
-      "Anyone who replies goes in with Add contact. Anyone who asks gets your Skool link with ?src=text on the end.",
     ],
   },
   claim1: {
@@ -210,14 +256,6 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "Switch it on and press Save.",
     ],
   },
-  unlock: {
-    target: "unlock-create",
-    how: [
-      "Name a small reward and add its link. Pick what they have to do: Comment on a post, or Make their own post.",
-      "Press Create unlock, then Copy Skool post. Publish it in your group and pin it.",
-      "Members do it, paste their link and get the reward by email.",
-    ],
-  },
   agency: {
     target: "agency-new",
     how: [
@@ -228,10 +266,18 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   weeks: {
     target: "checkin",
     how: [
-      "Every Monday: check-in here (5 minutes). Four Mondays and it's a habit.",
+      "Once a week, any day: check-in here (5 minutes). Four and it's a habit.",
     ],
   },
 };
+
+/** The how-to for a step. Every day's post shares one entry, with that day's section filled in. */
+export function howFor(key: string, section?: string): StepHowTo | undefined {
+  const isPost = /^post\d$/.test(key);
+  const h = STEP_HOWTO[isPost ? "post" : key];
+  if (!h || !isPost) return h;
+  return { ...h, how: h.how.map((l) => l.replaceAll("{section}", section || "today's section")) };
+}
 
 export type PageGuide = { title: string; what: string; tips: string[] };
 
@@ -239,26 +285,26 @@ export type PageGuide = { title: string; what: string; tips: string[] };
 export const PAGE_GUIDES: Record<string, PageGuide> = {
   "": {
     title: "Dashboard",
-    what: "Your home base. Your next step is always at the top.",
+    what: "Your one next step is the big card. Everything else can wait.",
     tips: [
-      "Numbers show up here once your funnel is live.",
+      "Your numbers show up here once real visits come in.",
       "Lost? Follow me, one step at a time.",
     ],
   },
   path: {
     title: "Your path",
-    what: "The whole course as a checklist that ticks itself off when you do things.",
+    what: "The seven days as a checklist, in the same order as your lessons in Skool.",
     tips: [
       "The big card is your one next thing.",
-      "The days match your classroom in Skool.",
+      "Nothing locks. Working ahead is fine.",
     ],
   },
   ai: {
     title: "Your AI",
     what: "Plug in the AI you already use, so it writes and runs things for you on your plan.",
     tips: [
-      "Claude or ChatGPT subscription: use the connector.",
-      "Want free? A Google Gemini key works.",
+      "A free Google Gemini key is all your week needs.",
+      "Pay for Claude or ChatGPT? A connector lets that app work on your account from its own chat.",
     ],
   },
   launch: {
@@ -272,16 +318,14 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   sites: {
     title: "Funnels & pages",
     what: "Your website. A stranger gives their email here, gets your free checklist and sees your Skool offer.",
-    tips: ["Change three lines, then Publish.",
-      "Want yourname.com? Get a domain from the Custom domain section of your funnel.", "Sign up yourself to test it."],
+    tips: ["Change three lines, then Publish.", "Sign up yourself to test it."],
   },
   leads: {
     title: "Leads",
     what: "Everyone who signed up or messaged you, hottest first.",
     tips: [
-      "Sign up on your own page first: you're lead #1.",
+      "Sign up on your own page once, to see your form work.",
       "Open a lead to see their whole story.",
-      "On the Growth plan, AI drafts your replies in Inbox.",
     ],
   },
   pipeline: {
@@ -306,7 +350,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     title: "Growth ladder",
     what: "Your Skool growth level, what's missing for the next one, and your Skool link.",
     tips: [
-      "Do the Monday check-in every week.",
+      "Do the check-in once a week, any day you like.",
       "Skool-link ads use Your Skool link, so every click gets counted.",
     ],
   },
@@ -341,7 +385,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     what: "Paste your ad numbers on Day 6, then weekly, and get keep, fix or kill.",
     tips: [
       "Fix one room at a time: Hook, Door or About page.",
-      "First round: verdicts on Day 6, and Kill ads go off then.",
+      "First round: verdicts on Day 6. Change nothing that day, except a broken Skool link.",
       "Too early isn't a bad verdict. Nobody's opened that ad yet.",
     ],
   },
@@ -375,7 +419,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   },
   settings: {
     title: "Settings",
-    what: "Your business details, Skool link, Meta Pixel and domain.",
+    what: "Your business details, Skool link and Meta Pixel.",
     tips: ["Most steps send you here once, then never again."],
   },
   billing: {

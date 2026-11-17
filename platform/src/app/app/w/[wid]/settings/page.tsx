@@ -17,6 +17,7 @@ import {
   saveBusinessAction,
   saveTrackingAction,
   searchNumbersAction,
+  testTrackingAction,
 } from "@/actions/account";
 import { saveTemplateFromWorkspaceAction } from "@/actions/agency";
 
@@ -33,6 +34,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SubmitButton } from "@/components/client";
 import { WhatsAppConnect } from "@/components/WhatsAppConnect";
 import { listMembers } from "@/server/team";
+import { accountSkoolUrl } from "@/server/sites";
+import { PIXEL_TEST_EVENT, pixelStatus, type PixelStatus } from "@/server/meta/capi";
+import { relativeTime } from "@/lib/util";
 import { OpenOnHash } from "./open-on-hash";
 
 const KIND: Record<string, string> = { facebook_page: "Facebook Page", instagram: "Instagram", whatsapp: "WhatsApp", sms: "SMS number" };
@@ -47,6 +51,58 @@ function FieldStep({ n, children }: { n: number; children: React.ReactNode }) {
       <StepDot n={n} className="mt-0.5 size-6 text-xs" />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
+  );
+}
+
+/** The small word beside the Pixel ID box. Green only when Meta took a test sent with these exact details. */
+function PixelBadge({ status }: { status: PixelStatus }) {
+  if (status.state === "none") return null;
+  if (status.state === "accepted") {
+    return (
+      <Badge variant="success">
+        <CircleCheckIcon data-icon="inline-start" /> Meta accepted it
+      </Badge>
+    );
+  }
+  if (status.state === "rejected") return <Badge variant="destructive">Meta said no</Badge>;
+  return <Badge variant="secondary">{status.state === "saved" ? "Saved" : "Saved, not tested"}</Badge>;
+}
+
+/** What we know about the Pixel, said plainly, with the button that asks Meta. Sits outside the Save form. */
+function PixelCheck({ wid, status, highlight }: { wid: string; status: PixelStatus; highlight: boolean }) {
+  if (status.state === "none") return null;
+  const test = (label: string, variant: "cta" | "outline") => (
+    <form action={testTrackingAction.bind(null, wid)}>
+      <SubmitButton variant={variant} size="sm" pendingText="Asking Meta…">
+        {label}
+      </SubmitButton>
+    </form>
+  );
+  if (status.state === "saved") {
+    return (
+      <Callout tone="info" title="Pixel ID saved. Not tested yet.">
+        Your pages now carry your Pixel. Add the access token below and press Save. We then send Meta one test, so you know it works.
+      </Callout>
+    );
+  }
+  if (status.state === "untested") {
+    return (
+      <Callout tone="warn" title="Saved, but not tested yet" action={test("Send a test to Meta", highlight ? "cta" : "outline")}>
+        We haven&apos;t checked these details with Meta. One press sends a test and shows Meta&apos;s answer.
+      </Callout>
+    );
+  }
+  if (status.state === "rejected") {
+    return (
+      <Callout tone="error" title="Meta said no" action={test("Test again", "outline")}>
+        {status.reason} Fix it below and press Save. We test it again for you.
+      </Callout>
+    );
+  }
+  return (
+    <Callout tone="ok" title="Meta accepted it" action={test("Send another test", "outline")}>
+      We sent Meta one test with your Pixel ID and token, and Meta took it. Tested {relativeTime(status.at)}. In Events Manager it shows as &quot;{PIXEL_TEST_EVENT}&quot;. It isn&apos;t a lead.
+    </Callout>
   );
 }
 
@@ -65,15 +121,24 @@ export default async function SettingsPage({ params, searchParams }: { params: P
   const showTemplate = Boolean(user.isPlatformAdmin || (myAgency && agency.plan === "agency"));
   const activeChannels = connections.filter((c) => c.status === "active").length;
 
-  const first = !s.skoolUrl
+  // One Skool link per account. Older accounts kept it on their website only: show that one, so
+  // pressing Save here never wipes it.
+  const skoolLink = await accountSkoolUrl(wid, s.skoolUrl);
+  const pixel = pixelStatus(s);
+
+  const first = !skoolLink
     ? "Paste your Skool group link in Business details and press Save."
-    : !s.metaPixelId
+    : pixel.state === "none"
       ? "Add your Meta Pixel ID so your ads learn who lands on your pages."
-      : undefined;
-  // One dominant button: the Save of whichever card is the next step. While it's the step,
-  // that Save is the screen's one pink button.
-  const pixelIsNext = Boolean(s.skoolUrl) && !s.metaPixelId;
-  const businessSave = !s.skoolUrl ? "cta" : pixelIsNext ? "outline" : "default";
+      : pixel.state === "rejected"
+        ? "Meta said no to your Pixel details. The reason is in card 2."
+        : pixel.state === "untested"
+          ? "Press Send a test to Meta in card 2, so you know your Pixel works."
+          : undefined;
+  // One dominant button: the Save of whichever card is the next step (or the Pixel test, when
+  // that is what's left). While it's the step, it is the screen's one pink button.
+  const pixelIsNext = Boolean(skoolLink) && pixel.state === "none";
+  const businessSave = !skoolLink ? "cta" : pixelIsNext || pixel.state === "untested" ? "outline" : "default";
   const pixelSave = pixelIsNext ? "cta" : "outline";
 
   return (
@@ -91,21 +156,24 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         <Panel
           step={1}
           title="Business details"
-          sub="Every Join button on your pages points at your Skool group link."
+          sub="One Skool group link for your whole account. Every Join button on your websites goes to it, and so do your Skool-link ads."
           action={<LessonTag lesson="Day 1" />}
         >
           <div className="grid gap-5 @2xl/main:grid-cols-2">
             <Field data-guide="skool-link" className="@2xl/main:col-span-2">
               <FieldLabel htmlFor="skoolUrl" className="flex items-center gap-2">
                 Skool group link
-                {s.skoolUrl ? (
+                {skoolLink ? (
                   <Badge variant="success">
                     <CircleCheckIcon data-icon="inline-start" /> Saved
                   </Badge>
                 ) : null}
               </FieldLabel>
-              <Input id="skoolUrl" name="skoolUrl" type="url" defaultValue={s.skoolUrl ?? ""} placeholder="https://www.skool.com/your-group/about" className="h-12 rounded-xl px-4 text-[15px]" />
-              <FieldDescription>Open your group in Skool, go to its About page and copy the address bar.</FieldDescription>
+              <Input id="skoolUrl" name="skoolUrl" type="url" defaultValue={skoolLink} placeholder="https://www.skool.com/your-group/about" className="h-12 rounded-xl px-4 text-[15px]" />
+              <FieldDescription>
+                Open your group in Skool, go to its About page and copy the address bar.{" "}
+                {skoolLink ? "Change it here and every website follows." : "Until it's saved, the Join button stays hidden on your pages."}
+              </FieldDescription>
             </Field>
             <Field>
               <FieldLabel htmlFor="businessName">Business or community name</FieldLabel>
@@ -140,31 +208,35 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         </Panel>
       </form>
 
-      <form action={saveTrackingAction.bind(null, wid)} id="tracking" data-guide="pixel" className="scroll-mt-20">
-        <Panel
-          step={2}
-          title="Meta Pixel & Conversions API"
-          sub="A Day 1 step, right after you publish. Your website ads need it, so Meta can see who gave you their email and find more people like them. Works on Skool's $9 plan too."
-          action={<LessonTag lesson="Day 1" />}
-        >
+      {/* The card holds two forms side by side (Save, and the test button), so the card carries the anchor. */}
+      <Panel
+        id="tracking"
+        data-guide="pixel"
+        className="scroll-mt-20"
+        step={2}
+        title="Meta Pixel & Conversions API"
+        sub="A Day 1 step, right after you publish. Your website ads need it, so Meta can see who gave you their email and find more people like them. Works on Skool's $9 plan too."
+        action={<LessonTag lesson="Day 1" />}
+      >
+        <PixelCheck wid={wid} status={pixel} highlight={Boolean(skoolLink)} />
+        <form action={saveTrackingAction.bind(null, wid)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-5">
             <FieldStep n={1}>
               <Field>
-                <FieldLabel htmlFor="metaPixelId" className="flex items-center gap-2">
+                <FieldLabel htmlFor="metaPixelId" className="flex flex-wrap items-center gap-2">
                   Pixel (dataset) ID
-                  {s.metaPixelId ? (
-                    <Badge variant="success">
-                      <CircleCheckIcon data-icon="inline-start" /> Connected
-                    </Badge>
-                  ) : null}
+                  <PixelBadge status={pixel} />
                 </FieldLabel>
                 <Input id="metaPixelId" name="metaPixelId" defaultValue={s.metaPixelId ?? ""} placeholder="123456789012345" inputMode="numeric" className="@2xl/main:max-w-sm" />
-                <FieldDescription>Meta Events Manager › your Pixel › Settings tab. Copy the Dataset ID.</FieldDescription>
+                <FieldDescription>Meta Events Manager › your Pixel › Settings tab. Copy the Dataset ID. It&apos;s a long number, about 15 digits.</FieldDescription>
               </Field>
             </FieldStep>
             <FieldStep n={2}>
               <Field>
-                <FieldLabel htmlFor="metaCapiToken">Conversions API access token</FieldLabel>
+                <FieldLabel htmlFor="metaCapiToken" className="flex flex-wrap items-center gap-2">
+                  Conversions API access token
+                  {s.metaCapiTokenEnc ? <Badge variant="secondary">Saved</Badge> : null}
+                </FieldLabel>
                 <Input
                   id="metaCapiToken"
                   name="metaCapiToken"
@@ -172,7 +244,9 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                   placeholder={s.metaCapiTokenEnc ? "Saved. Paste a new one to replace it." : "From Events Manager › Settings › Generate access token"}
                   autoComplete="off"
                 />
-                <FieldDescription>Same Settings tab, scroll to Conversions API › Generate access token. We send each Lead from our server too, so ad blockers can&apos;t hide it.</FieldDescription>
+                <FieldDescription>
+                  Same Settings tab, scroll to Conversions API and press Generate access token. With it we can test your Pixel for you, and we tell Meta about each sign-up ourselves, so ad blockers can&apos;t hide it.
+                </FieldDescription>
                 {s.metaCapiTokenEnc ? (
                   <Label className="font-normal">
                     <input type="checkbox" name="clearToken" className="size-4 accent-primary" /> Remove saved token
@@ -180,28 +254,31 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                 ) : null}
               </Field>
             </FieldStep>
-            <FieldStep n={3}>
-              <Field>
-                <FieldLabel htmlFor="metaTestEventCode">
-                  Test event code <span className="font-normal text-muted-foreground">(optional)</span>
-                </FieldLabel>
-                <Input id="metaTestEventCode" name="metaTestEventCode" defaultValue={s.metaTestEventCode ?? ""} placeholder="TEST12345" className="@2xl/main:max-w-sm" />
-                <FieldDescription>From the Test events tab. Remove it when you finish testing.</FieldDescription>
-              </Field>
-            </FieldStep>
           </div>
-          <div>
-            <SubmitButton variant={pixelSave}>Save</SubmitButton>
+          <MoreOptions title="Have a test event code?" sub="Only for watching Meta's Test events tab. Most people skip this." className={INNER_MORE} defaultOpen={Boolean(s.metaTestEventCode)}>
+            <Field>
+              <FieldLabel htmlFor="metaTestEventCode">
+                Test event code <span className="font-normal text-muted-foreground">(optional)</span>
+              </FieldLabel>
+              <Input id="metaTestEventCode" name="metaTestEventCode" defaultValue={s.metaTestEventCode ?? ""} placeholder="TEST12345" className="@2xl/main:max-w-sm" />
+              <FieldDescription>From the Test events tab. Remove it when you finish testing, or Meta keeps filing your real sign-ups under tests.</FieldDescription>
+            </Field>
+          </MoreOptions>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <SubmitButton variant={pixelSave} pendingText="Saving…">
+              Save
+            </SubmitButton>
+            <span className="text-[13px] text-muted-foreground">With a token saved, Save also sends Meta one test.</span>
           </div>
-        </Panel>
-      </form>
+        </form>
+      </Panel>
 
       <Card id="ai" size="sm" className="scroll-mt-20">
         <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <IconTile icon={BotIcon} />
           <div className="grid min-w-0 flex-1 basis-60 gap-0.5">
             <span className="text-[15px] font-semibold">Your AI</span>
-            <span className="text-sm text-muted-foreground">Connect the AI you already use (Claude, ChatGPT, Gemini…), or add your own API key, so AI never touches your wallet.</span>
+            <span className="text-sm text-muted-foreground">Add your free Gemini key, or connect the AI you already use (Claude, ChatGPT, Gemini…). Your AI runs on your own key.</span>
           </div>
           <Button asChild variant="outline">
             <Link href={`/app/w/${wid}/ai`}>
@@ -244,21 +321,14 @@ export default async function SettingsPage({ params, searchParams }: { params: P
           <p className="text-sm text-muted-foreground">Folded away until the day you want them. Nothing here is needed to launch.</p>
         </div>
 
-        <MoreOptions
-          id="channels"
-          icon={InboxIcon}
-          title="Inbox channels"
-          sub={growth ? (activeChannels ? `${activeChannels} connected. Messages land in your Inbox.` : "Instagram, Facebook, WhatsApp and SMS in one inbox.") : "On the Growth plan: Instagram, Facebook, WhatsApp and SMS in one inbox."}
-        >
-          {!growth ? (
-            <Callout tone="info">
-              Connect Instagram, Facebook, WhatsApp and SMS on the{" "}
-              <a href={`/app/w/${wid}/billing`} className="font-medium underline underline-offset-4">
-                Growth plan
-              </a>
-              .
-            </Callout>
-          ) : (
+        {/* Only for accounts that have the inbox: nothing to sell here to an account that doesn't. */}
+        {growth ? (
+          <MoreOptions
+            id="channels"
+            icon={InboxIcon}
+            title="Inbox channels"
+            sub={activeChannels ? `${activeChannels} connected. Messages land in your Inbox.` : "Instagram, Facebook, WhatsApp and SMS in one inbox."}
+          >
             <>
               {connections.length ? (
                 <Table>
@@ -305,14 +375,14 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                 {metaConfigured() && env.metaWaConfigId ? (
                   <WhatsAppConnect appId={env.metaAppId} configId={env.metaWaConfigId} graphVersion={env.metaGraphVersion} workspaceId={wid} />
                 ) : (
-                  <span className="text-sm text-muted-foreground">WhatsApp: the platform owner needs to finish Meta Tech Provider setup.</span>
+                  <span className="text-sm text-muted-foreground">WhatsApp isn&apos;t available yet.</span>
                 )}
               </div>
               <Separator className="my-1" />
               <div id="sms" className="flex scroll-mt-20 flex-col gap-3">
                 <h3 className="font-semibold">SMS number</h3>
                 {!smsConfigured() ? (
-                  <p className="text-sm text-muted-foreground">SMS isn&apos;t switched on for this platform yet.</p>
+                  <p className="text-sm text-muted-foreground">SMS isn&apos;t available yet.</p>
                 ) : (
                   <>
                     <form action={searchNumbersAction.bind(null, wid)} className="flex flex-wrap items-center gap-2">
@@ -351,8 +421,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                 )}
               </div>
             </>
-          )}
-        </MoreOptions>
+          </MoreOptions>
+        ) : null}
 
         <MoreOptions
           id="team"
@@ -442,7 +512,7 @@ export default async function SettingsPage({ params, searchParams }: { params: P
       <p className="flex items-center gap-2.5 text-[13px] text-muted-foreground">
         <IconTile icon={BriefcaseIcon} tone="muted" className="size-7 rounded-lg [&_svg]:size-3.5" />
         <span>
-          Looking for your plan or wallet? It&apos;s in <Link href={`/app/w/${wid}/billing`}>Plan & wallet</Link>.
+          Looking for your plan? It&apos;s in <Link href={`/app/w/${wid}/billing`}>Plan & wallet</Link>.
         </span>
       </p>
     </>

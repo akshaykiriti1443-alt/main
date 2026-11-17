@@ -6,7 +6,11 @@ export function go(path: string, msg?: { ok?: string; error?: string; warn?: str
   if (msg.ok) q.set("ok", msg.ok);
   if (msg.error) q.set("error", msg.error);
   if (msg.warn) q.set("warn", msg.warn);
-  redirect(`${path}${path.includes("?") ? "&" : "?"}${q.toString()}`);
+  // The message goes before any #hash, or the page never sees it.
+  const at = path.indexOf("#");
+  const base = at === -1 ? path : path.slice(0, at);
+  const hash = at === -1 ? "" : path.slice(at);
+  redirect(`${base}${base.includes("?") ? "&" : "?"}${q.toString()}${hash}`);
 }
 
 export const field = (fd: FormData, k: string, max = 5000) => String(fd.get(k) ?? "").trim().slice(0, max);

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
-import { ArrowRightIcon, ClipboardPasteIcon, ExternalLinkIcon, FlameIcon, LightbulbIcon, SearchIcon, SparklesIcon, TargetIcon, type LucideIcon } from "lucide-react";
+import { ArrowRightIcon, ExternalLinkIcon, FlameIcon, LightbulbIcon, SearchIcon, SparklesIcon, TargetIcon, type LucideIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { aiGenerations } from "@/lib/db/schema";
 import { isUuid, relativeTime, truncate } from "@/lib/util";
@@ -18,6 +18,8 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { aiRunsFor, needsKey } from "../../ai/runs";
+import { OutOfRunsCard, RunsNote } from "../../ai/runs-card";
 
 export const metadata = { title: "Ad research" };
 export const maxDuration = 300;
@@ -48,7 +50,7 @@ const CARD = "rounded-2xl bg-card ring-1 ring-ink/[0.06] shadow-xs dark:ring-whi
 export default async function AdResearchPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
   const sp = await searchParams;
-  const { workspace, user } = await requireWorkspace(wid);
+  const { workspace } = await requireWorkspace(wid);
   const q = (sp.q ?? "").slice(0, 100);
   const pageIdRaw = (sp.pageId ?? "").trim();
   const pageId = /^\d{3,30}$/.test(pageIdRaw) ? pageIdRaw : "";
@@ -67,6 +69,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
     }
   }
 
+  const runs = await aiRunsFor(workspace);
   const db = await getDb();
   const [row] = await db
     .select()
@@ -94,20 +97,19 @@ export default async function AdResearchPage({ params, searchParams }: { params:
       {hidden}
       <input type="hidden" name="source" value="paste" />
       <Field>
-        <FieldLabel htmlFor="paste" className="sr-only">
-          Competitor ads
-        </FieldLabel>
+        <FieldLabel htmlFor="paste">Competitor ads</FieldLabel>
         <Textarea
           id="paste"
           name="paste"
           rows={7}
           className="min-h-40 rounded-xl font-mono text-[13px] leading-relaxed"
           placeholder={"[62 days] Tired of guessing what to eat? Inside our group…\n\n[14 days] Dads: 20 minutes, 3 times a week…"}
-          aria-label="Competitor ads"
         />
-        <FieldDescription>Leave a blank line between ads. We study the patterns; your new ads are always written fresh, never copied.</FieldDescription>
+        <FieldDescription>
+          Leave a blank line between ads. Know how long one has run? Put it in front, like [45 days]. Not sure? Leave it out. We study the patterns; your own ads are always written fresh, never copied.
+        </FieldDescription>
       </Field>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {libraryAnalyse ? (
           <SubmitButton variant="outline" pendingText="Reading the ads…">
             Analyse pasted ads
@@ -120,8 +122,39 @@ export default async function AdResearchPage({ params, searchParams }: { params:
             </SubmitButton>
           </span>
         )}
-        <span className="text-xs text-muted-foreground">Three or more ads gives the AI something to chew on.</span>
+        <span className="grid gap-0.5">
+          <RunsNote runs={runs} wid={wid} />
+          <span className="text-xs text-muted-foreground">{needsKey(runs) ? "Press it now and you get a quick read, not written by AI." : "Three or more ads gives the AI something to work with."}</span>
+        </span>
       </div>
+    </form>
+  );
+
+  // Meta's own search, in a new tab: it works for every country, so it's the main route, with live search as an extra.
+  const metaSearch = (
+    <form className="grid gap-3 @2xl/main:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)_auto] @2xl/main:items-end" action="https://www.facebook.com/ads/library/" method="get" target="_blank" rel="noreferrer">
+      <input type="hidden" name="active_status" value="active" />
+      <input type="hidden" name="ad_type" value="all" />
+      <input type="hidden" name="media_type" value="all" />
+      <input type="hidden" name="search_type" value="keyword_unordered" />
+      <Field>
+        <FieldLabel htmlFor="metaQ">Keyword from your niche</FieldLabel>
+        <Input id="metaQ" name="q" defaultValue={q || workspace.settings.niche || ""} placeholder="e.g. fat loss for dads" />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="metaCountry">Country</FieldLabel>
+        <NativeSelect id="metaCountry" name="country" defaultValue={country} className="w-full">
+          {COUNTRIES.map(([c, label]) => (
+            <NativeSelectOption key={c} value={c}>
+              {label}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+      </Field>
+      <Button type="submit" variant="outline">
+        Search in Meta Ad Library
+        <ExternalLinkIcon data-icon="inline-end" />
+      </Button>
     </form>
   );
 
@@ -131,87 +164,74 @@ export default async function AdResearchPage({ params, searchParams }: { params:
         lesson="Days 1 and 2"
         eyebrow="Get members"
         title="Ad research"
-        sub="Find the ads your competitors keep paying for, then let AI show you what's working in your niche and the gaps nobody uses yet."
-        first={configured ? "Search a keyword from your niche, then press Analyse with AI." : "Search the Meta Ad Library, copy a few long-running ads, paste them below and press Analyse with AI."}
+        sub="Copy a few ads your competitors keep paying for, paste them here, and AI shows you what's working in your niche and the gaps nobody uses yet."
+        first="Open Meta's Ad Library, copy 3 ads that have run a month or more, paste them below and press Analyse with AI."
       />
       <Flash searchParams={sp} />
+      <OutOfRunsCard runs={runs} wid={wid} then="come back and press Analyse with AI" />
 
-      <Panel
-        step={1}
-        title="Find ads that have run a long time"
-        sub="Search a keyword from your niche (“fat loss for dads”). Ads running for 30+ days are usually the ones making money."
-      >
-        {!configured ? (
-          <Callout tone="tip" title="Live search isn't switched on yet">
-            No problem. The button below opens the same search on Meta&apos;s website. Copy the ads you like and paste them in step 2.
-            {user.isPlatformAdmin ? " (Platform admin: set META_AD_LIBRARY_TOKEN to turn it on.)" : ""}
-          </Callout>
-        ) : null}
-        {/* Without live search the form opens the same search on Meta's website in a new tab. */}
-        <form
-          className={cn("grid gap-3 @2xl/main:items-end", configured ? "@2xl/main:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(10rem,auto)_auto]" : "@2xl/main:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)_auto]")}
-          {...(configured ? {} : { action: "https://www.facebook.com/ads/library/", method: "get", target: "_blank", rel: "noreferrer" })}
+      <Panel step={1} title="Copy 3 ads that have run a month or more" sub="Ads that keep running for a month or more are usually the ones making money. It's the best free clue there is.">
+        {metaSearch}
+        <ol className="grid gap-2 text-sm leading-relaxed @2xl/main:grid-cols-3">
+          {[
+            "Press Search in Meta Ad Library. It opens in a new tab.",
+            "Each ad says when it started running. Pick ones that started a month ago or more.",
+            "Select the ad's words, copy them and paste them in step 2. Do this for 3 ads.",
+          ].map((t, i) => (
+            <li key={t} className="flex gap-2.5 rounded-xl bg-muted/50 p-3 ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
+              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground tabular-nums">{i + 1}</span>
+              <span className="min-w-0 text-muted-foreground">{t}</span>
+            </li>
+          ))}
+        </ol>
+      </Panel>
+
+      <Panel step={2} title="Paste them here, then press Analyse with AI" sub="The words of each ad, with one blank line between ads.">
+        {pasteForm}
+      </Panel>
+
+      {configured ? (
+        <MoreOptions
+          icon={SearchIcon}
+          title="Or search from here (optional)"
+          sub="Live search inside the app. It only shows ads that reached Europe, so your country may show few. The Meta Ad Library route above always works."
+          defaultOpen={Boolean(q || pageId)}
         >
-          {configured ? null : (
-            <>
-              <input type="hidden" name="active_status" value="active" />
-              <input type="hidden" name="ad_type" value="all" />
-              <input type="hidden" name="media_type" value="all" />
-              <input type="hidden" name="search_type" value="keyword_unordered" />
-            </>
-          )}
-          <Field>
-            <FieldLabel htmlFor="q">Keyword</FieldLabel>
-            <Input id="q" name="q" defaultValue={q} placeholder={workspace.settings.niche || "e.g. skool community for coaches"} />
-          </Field>
-          {configured ? (
+          <form className="grid gap-3 @2xl/main:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(10rem,auto)_auto] @2xl/main:items-end">
+            <Field>
+              <FieldLabel htmlFor="q">Keyword</FieldLabel>
+              <Input id="q" name="q" defaultValue={q} placeholder={workspace.settings.niche || "e.g. skool community for coaches"} />
+            </Field>
             <Field>
               <FieldLabel htmlFor="pageId">Competitor Page ID</FieldLabel>
               <Input id="pageId" name="pageId" defaultValue={pageIdRaw} inputMode="numeric" placeholder="Optional" aria-invalid={pageIdError ? true : undefined} />
             </Field>
-          ) : null}
-          <Field>
-            <FieldLabel htmlFor="country">Country</FieldLabel>
-            <NativeSelect id="country" name="country" defaultValue={country} className="w-full">
-              {COUNTRIES.map(([c, label]) => (
-                <NativeSelectOption key={c} value={c}>
-                  {label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          {configured ? (
+            <Field>
+              <FieldLabel htmlFor="country">Country</FieldLabel>
+              <NativeSelect id="country" name="country" defaultValue={country} className="w-full">
+                {COUNTRIES.map(([c, label]) => (
+                  <NativeSelectOption key={c} value={c}>
+                    {label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
             <Button type="submit">
               <SearchIcon data-icon="inline-start" />
               Search
             </Button>
-          ) : (
-            <Button type="submit" variant="outline">
-              Search in Meta Ad Library
-              <ExternalLinkIcon data-icon="inline-end" />
-            </Button>
-          )}
-        </form>
-        {configured ? (
-          <>
-            <p className="text-xs text-muted-foreground">
-              Competitor Page ID: in the Ad Library, open their ads; the number after view_all_page_id= in the address bar is it. Meta&apos;s API returns ads that reached the EU, plus political ads. For ads shown only in your country, use{" "}
-              <a href={webUrl} target="_blank" rel="noreferrer">
-                the Ad Library website
-              </a>{" "}
-              and paste them below.
-            </p>
-          </>
-        ) : null}
-        {pageIdError ? <Callout tone="error">{pageIdError}</Callout> : null}
-        {searchError ? <Callout tone="error">{searchError}</Callout> : null}
-      </Panel>
+          </form>
+          <p className="text-xs text-muted-foreground">Competitor Page ID is optional: in the Ad Library, open their ads, and it&apos;s the number after view_all_page_id= in the address bar.</p>
+          {pageIdError ? <Callout tone="error">{pageIdError}</Callout> : null}
+          {searchError ? <Callout tone="error">{searchError}</Callout> : null}
+        </MoreOptions>
+      ) : null}
 
       {showResults ? (
         <Panel
-          step={2}
+          icon={SearchIcon}
           title={`${ads.length} active ad${ads.length === 1 ? "" : "s"}${ads.length > 30 ? " (showing 30)" : ""}`}
-          sub="Longest-running first. The flame means it has run 30+ days."
+          sub="From your search here. Longest-running first. The flame means it has run 30+ days."
           action={
             ads.length ? (
               <form action={adResearchAction.bind(null, wid)} data-guide="research-analyse">
@@ -229,7 +249,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
             <Empty
               icon={SearchIcon}
               title="Nothing found"
-              body="Try a broader keyword, or search the Ad Library website and paste what you find."
+              body="That's common outside Europe. Use Search in Meta Ad Library in step 1 and paste what you find."
               action={
                 <Button asChild variant="outline">
                   <a href={webUrl} target="_blank" rel="noreferrer">
@@ -263,16 +283,6 @@ export default async function AdResearchPage({ params, searchParams }: { params:
           )}
         </Panel>
       ) : null}
-
-      {configured ? (
-        <MoreOptions icon={ClipboardPasteIcon} title="Or paste ads you found yourself" sub="Copy each ad's text from the Ad Library website. Add how long it ran, like [45 days], if you can see it.">
-          {pasteForm}
-        </MoreOptions>
-      ) : (
-        <Panel step={2} title="Paste them here, then let AI read them" sub="Copy each ad's text from the Ad Library. Add how long it has run, like [45 days], if you can see it.">
-          {pasteForm}
-        </Panel>
-      )}
 
       {analysis && row ? (
         <>

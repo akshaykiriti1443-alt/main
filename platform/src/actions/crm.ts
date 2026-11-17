@@ -7,6 +7,7 @@ import { draftReply } from "@/server/ai/replies";
 import { scoreContact } from "@/server/ai/scoring";
 import { getConversation, markRead, sendReply, setConversationStatus } from "@/server/inbox";
 import { emitEvent } from "@/server/events";
+import { startAutomationsForEvent } from "@/server/automations";
 import { hasFeature } from "@/server/plans";
 import type { Stage } from "@/lib/db/schema";
 import { isEmail } from "@/lib/util";
@@ -16,10 +17,12 @@ const STAGES: Stage[] = ["new", "engaged", "trial", "member", "lost"];
 
 export async function addContactAction(wid: string, fd: FormData) {
   await requireWorkspace(wid);
+  // Back to Leads with the form still open, so the next person who replied is one press away.
+  const back = `/app/w/${wid}/leads?add=1`;
   const email = field(fd, "email", 200);
   const phone = field(fd, "phone", 40);
-  if (!email && !phone) go(`/app/w/${wid}/leads`, { error: "Add an email or a phone number." });
-  if (email && !isEmail(email)) go(`/app/w/${wid}/leads`, { error: "That email doesn't look right." });
+  if (!email && !phone) go(back, { error: "Add a phone number or an email." });
+  if (email && !isEmail(email)) go(back, { error: "That email doesn't look right." });
   const { contact, created } = await upsertContact({
     workspaceId: wid,
     email: email || null,
@@ -29,8 +32,14 @@ export async function addContactAction(wid: string, fd: FormData) {
     source: "manual",
     tags: field(fd, "tags", 300).split(",").map((t) => t.trim().toLowerCase()).filter(Boolean),
   });
-  if (created) await emitEvent({ type: "lead_created", workspaceId: wid, contactId: contact.id });
-  go(`/app/w/${wid}/leads/${contact.id}`, { ok: created ? "Contact added." : "That contact already existed. We updated it." });
+  // Someone typed in by hand never signed up, so the follow-up emails only start when the member
+  // ticks the box (a friend from a text never asked for them). New-lead automations still run.
+  if (created) {
+    const event = { type: "lead_created", workspaceId: wid, contactId: contact.id } as const;
+    if (fd.get("welcome") === "on") await emitEvent(event);
+    else await startAutomationsForEvent(event);
+  }
+  go(back, { ok: created ? "Contact added." : "That contact already existed. We updated it." });
 }
 
 export async function addTagAction(wid: string, contactId: string, fd: FormData) {

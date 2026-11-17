@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
-  ArrowDownIcon,
+  ArrowRightIcon,
   BotIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
@@ -10,6 +10,7 @@ import {
   KeyRoundIcon,
   MessageSquareTextIcon,
   PlugIcon,
+  RefreshCwIcon,
   SparklesIcon,
 } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
@@ -31,6 +32,8 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { NewConnector } from "../settings/connector";
+import { checkAiKeyAction } from "./actions";
+import { aiRunsFor, type AiRuns } from "./runs";
 
 export const metadata = { title: "Your AI" };
 
@@ -142,7 +145,7 @@ function AppSteps({ app, open }: { app: App; open?: boolean }) {
   );
 }
 
-/** A numbered step inside one of the two paths. */
+/** A numbered step in a short list of steps. */
 function PathStep({ n, title, children, last }: { n: number; title: string; children: ReactNode; last?: boolean }) {
   return (
     <li className="relative flex gap-3.5">
@@ -160,17 +163,17 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
   const { wid } = await params;
   const { workspace, role } = await requireWorkspace(wid);
   const s = workspace.settings;
-  const [connectors, pending, done, pendingCount] = await Promise.all([
+  const [connectors, pending, done, pendingCount, runs] = await Promise.all([
     listConnectorTokens(wid),
     listAiTasks(wid, { status: "pending", limit: 20 }),
     listAiTasks(wid, { status: "done", limit: 8 }),
     pendingAiTaskCount(wid),
+    aiRunsFor(workspace),
   ]);
   const briefs = await Promise.all(pending.map((r) => (r.task.contactId ? contactBrief(wid, r.task.contactId) : Promise.resolve(null))));
   const provider = s.aiKeyEnc && s.aiProvider ? (s.aiProvider as AiProvider) : null;
   const isAdmin = role !== "user";
   const base = `/app/w/${wid}`;
-  const connected = connectors.length > 0 || Boolean(provider);
   const firstPlaybook = PLAYBOOKS[0];
 
   const tasksPanel = (
@@ -253,239 +256,190 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
     </section>
   );
 
+  // Saving a key checks it with the provider first, so a saved key is a key that worked.
+  const keyForm = (
+    <form data-guide="ai-key" action={saveAiKeyAction.bind(null, wid)} className="flex flex-col">
+      <ol className="flex flex-col">
+        <PathStep n={1} title="Open Google AI Studio">
+          <p className="text-sm leading-relaxed text-muted-foreground">Sign in with any Google account. A Gmail address works. It opens in a new tab, so keep this one open.</p>
+          <Button variant="outline" asChild className="self-start">
+            <a href={AI_PROVIDERS.gemini.keyUrl} target="_blank" rel="noreferrer">
+              Open Google AI Studio
+              <ExternalLinkIcon data-icon="inline-end" />
+            </a>
+          </Button>
+        </PathStep>
+        <PathStep n={2} title="Press Create API key, then copy it">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            If Google asks you to pick a project, pick any one or make a new one. The name doesn&apos;t matter. Your key is one long line of letters and numbers, usually starting with <b className="font-semibold text-foreground">AIza</b>. Press the copy button next to it.
+          </p>
+        </PathStep>
+        <PathStep n={3} title="Paste it here and press Save key" last>
+          <Field>
+            <FieldLabel htmlFor="aiKey">Your Gemini key</FieldLabel>
+            <Input id="aiKey" name="aiKey" type="password" autoComplete="off" className="h-10" placeholder={s.aiKeyHint ? `Saved (${s.aiKeyHint})` : "Paste your key"} />
+            <FieldDescription>We check it with Google before saving, then keep it locked away. {AI_PROVIDERS.gemini.note}</FieldDescription>
+          </Field>
+          <MoreOptions title="Use a different AI" sub="Groq, OpenRouter, Claude or ChatGPT, or your own." icon={SparklesIcon} className="bg-transparent">
+            <Field>
+              <FieldLabel htmlFor="aiProvider">Which AI</FieldLabel>
+              <NativeSelect id="aiProvider" name="aiProvider" defaultValue={provider ?? "gemini"}>
+                <NativeSelectOptGroup label="Free to start">
+                  {(["gemini", "groq", "openrouter"] as const).map((k) => (
+                    <NativeSelectOption key={k} value={k}>
+                      {AI_PROVIDERS[k].label}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelectOptGroup>
+                <NativeSelectOptGroup label="Paid">
+                  {(["anthropic", "openai", "custom"] as const).map((k) => (
+                    <NativeSelectOption key={k} value={k}>
+                      {AI_PROVIDERS[k].label}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelectOptGroup>
+              </NativeSelect>
+              <FieldDescription>
+                Get a key:{" "}
+                {(["gemini", "groq", "openrouter", "anthropic", "openai"] as const).map((k, i) => (
+                  <span key={k}>
+                    {i ? " · " : ""}
+                    <a href={AI_PROVIDERS[k].keyUrl} target="_blank" rel="noreferrer">
+                      {AI_PROVIDERS[k].label}
+                    </a>
+                  </span>
+                ))}
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="aiModel">Model (optional)</FieldLabel>
+              <Input id="aiModel" name="aiModel" defaultValue={s.aiModel ?? ""} placeholder="We pick a good one for you" />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="aiBaseUrl">Web address (only for Other)</FieldLabel>
+              <Input id="aiBaseUrl" name="aiBaseUrl" type="url" defaultValue={s.aiBaseUrl ?? ""} placeholder="https://api.mistral.ai/v1" />
+            </Field>
+            <ul className="grid gap-1.5 text-xs text-muted-foreground">
+              {(Object.keys(AI_PROVIDERS) as AiProvider[]).map((k) => (
+                <li key={k}>
+                  <b className="text-foreground">{AI_PROVIDERS[k].label}:</b> {AI_PROVIDERS[k].note}
+                </li>
+              ))}
+            </ul>
+          </MoreOptions>
+          {isAdmin ? (
+            <SubmitButton variant={provider ? "default" : "cta"} size="lg" className="self-start" pendingText="Checking your key with Google…">
+              <KeyRoundIcon data-icon="inline-start" />
+              Save key
+            </SubmitButton>
+          ) : (
+            <Callout tone="info">Ask the account owner or an admin to add the key.</Callout>
+          )}
+        </PathStep>
+      </ol>
+    </form>
+  );
+
   return (
     <>
       <PageHead
-        lesson="Day 2"
+        lesson="Day 1"
         title="Your AI"
-        sub="Plug in the AI you already use, free plans included. It does the writing and busywork in this account, and the AI bill is yours, never your wallet here."
-        first={connected ? "You're connected. Try a playbook line in your AI app." : "Pick the path that sounds like you. One is plenty."}
+        sub="Add a free Google Gemini key and every AI button in this app runs on it: your launch kit, ad research and your ads. It's free, takes about two minutes, and you never count AI runs again."
+        first={provider ? "Your key works. Head back to Your path for the next step." : "Follow the three steps below. Have your Google account ready."}
       />
       <Flash searchParams={await searchParams} />
 
-      {connected ? (
-        <Callout tone="ok" title="Your AI is plugged in">
-          {[
-            connectors.length ? `${connectors.length} connected ${connectors.length === 1 ? "app" : "apps"}` : null,
-            provider ? `API key on: ${AI_PROVIDERS[provider].label}${s.aiKeyHint ? ` ${s.aiKeyHint}` : ""}` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-          . Say <b>&ldquo;{firstPlaybook?.say ?? "Run my Monday check-in in OneX."}&rdquo;</b> to see it work.
-        </Callout>
-      ) : null}
-
       {pending.length ? tasksPanel : null}
 
-      {/* The choice. On a narrow page the two paths stack, so these jump to the right one. */}
-      <nav aria-label="Choose your path" className="grid gap-3 @sm/main:grid-cols-2 @4xl/main:hidden">
-        {[
-          { href: "#connect", icon: PlugIcon, tone: "primary" as const, title: "I pay for Claude or ChatGPT", sub: "Connect it with a private link" },
-          { href: "#key", icon: KeyRoundIcon, tone: "success" as const, title: "I want it free", sub: "Use a free Google Gemini key" },
-        ].map((c) => (
-          <a
-            key={c.href}
-            href={c.href}
-            data-slot="choice"
-            className="group flex items-center gap-3 rounded-2xl bg-card p-3.5 text-foreground shadow-card ring-1 ring-ink/[0.06] transition-shadow duration-150 hover:no-underline hover:shadow-lift hover:ring-primary/30 dark:ring-white/[0.07]"
-          >
-            <IconTile icon={c.icon} tone={c.tone} />
-            <span className="grid min-w-0 flex-1">
-              <span className="text-[14.5px] font-semibold">{c.title}</span>
-              <span className="text-xs text-muted-foreground">{c.sub}</span>
-            </span>
-            <ArrowDownIcon className="size-4 text-muted-foreground transition-transform group-hover:translate-y-0.5" aria-hidden />
-          </a>
-        ))}
-      </nav>
-
-      <div className="grid items-start gap-5 @4xl/main:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        {/* Path 1: a paid AI app, connected with a private link. */}
-        <Card id="connect" className="relative scroll-mt-20 shadow-lift ring-2 ring-primary/20 dark:ring-primary/40">
-          {/* The recommended path carries a faint violet glow along its top edge. */}
+      {provider ? (
+        <>
+          <KeyWorks wid={wid} provider={provider} hint={s.aiKeyHint} model={s.aiModel} isAdmin={isAdmin} />
+          <MoreOptions icon={KeyRoundIcon} title="Use a different key" sub="Paste a new key to replace the one you have. It's checked before it's saved.">
+            {keyForm}
+          </MoreOptions>
+        </>
+      ) : (
+        <Card id="key" className="relative scroll-mt-20 shadow-lift ring-2 ring-primary/20 dark:ring-primary/40">
+          {/* The one thing to do here carries a faint violet glow along its top edge. */}
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(70%_100%_at_25%_0%,var(--accent),transparent_75%)] dark:bg-[radial-gradient(70%_100%_at_25%_0%,rgb(118_85_245/0.12),transparent_75%)]" />
           <CardContent className="relative flex flex-col gap-7">
             <div className="flex items-start gap-3.5">
-              <IconTile icon={PlugIcon} className="size-11 rounded-2xl [&_svg]:size-5" />
+              <IconTile icon={KeyRoundIcon} tone="success" className="size-11 rounded-2xl [&_svg]:size-5" />
               <div className="grid min-w-0 flex-1 gap-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-[19px] tracking-[-0.015em]">I pay for Claude or ChatGPT</h2>
-                  <Badge variant="soft">Best results</Badge>
+                  <h2 className="text-[19px] tracking-[-0.015em]">Get your free Gemini key</h2>
+                  <Badge variant="success">Free · about 2 minutes</Badge>
                 </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  Connect it once with a private link. Then your AI can read your leads, write ads, fix pages, switch on automations and do AI tasks. Nothing is deleted, and it never touches your Skool login.
-                </p>
+                <p className="text-sm leading-relaxed text-muted-foreground">Three steps. You only need a Google account: the free tier doesn&apos;t ask for a card.</p>
               </div>
             </div>
-            <ol className="flex flex-col">
-              <PathStep n={1} title="Make your private link">
-                {isAdmin ? <NewConnector wid={wid} cta={!connected} /> : <Callout tone="info">Ask the account owner or an admin to create a connector URL.</Callout>}
-                {connectors.length ? (
-                  <ul className="flex flex-col divide-y divide-border/80 overflow-hidden rounded-xl bg-background/60 ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
-                    {connectors.map((c) => (
-                      <li key={c.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm">
-                        <span className="flex min-w-0 items-center gap-2.5">
-                          <span className={cn("size-2 shrink-0 rounded-full", c.lastUsedAt ? "bg-success ring-3 ring-success/15" : "bg-border-strong")} aria-hidden />
-                          <span className="min-w-0">
-                            <span className="font-medium">{c.name}</span>
-                            <span className="block text-xs text-muted-foreground">
-                              Created {relativeTime(c.createdAt)}
-                              {c.createdByName || c.createdByEmail ? ` by ${c.createdByName || c.createdByEmail}` : ""} · {c.lastUsedAt ? `used ${relativeTime(c.lastUsedAt)}` : "never used"}
-                            </span>
-                          </span>
-                        </span>
-                        {isAdmin ? (
-                          <form action={revokeConnectorAction.bind(null, wid, c.id)}>
-                            <SubmitButton variant="ghost" size="sm" confirm="Remove this connector? The URL stops working.">
-                              Remove
-                            </SubmitButton>
-                          </form>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </PathStep>
-              <PathStep n={2} title="Paste it into your app">
-                <div className="flex flex-col gap-2">
-                  {FEATURED.map((app, i) => (
-                    <AppSteps key={app.name} app={app} open={i === 0 && connectors.length > 0} />
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Using something else? VS Code, Cursor, LM Studio and more are under <a href="#more">More apps &amp; playbooks</a>. Plans and menus change often: if a step looks different, search your app&apos;s help for &ldquo;custom MCP connector&rdquo;.
-                </p>
-              </PathStep>
-              <PathStep n={3} title="Ask it for a job" last>
-                <div className="flex flex-wrap items-center gap-2.5 rounded-2xl rounded-bl-md bg-accent p-2 pl-3.5 ring-1 ring-violet-200/70 ring-inset dark:ring-white/[0.06]">
-                  <MessageSquareTextIcon className="size-4 shrink-0 text-primary dark:text-violet-300" aria-hidden />
-                  <span className="min-w-0 flex-1 text-[14px] font-medium text-accent-foreground">&ldquo;{firstPlaybook?.say ?? "Run my Monday check-in in OneX."}&rdquo;</span>
-                  <CopyButton text={firstPlaybook?.say ?? "Run my Monday check-in in OneX."} />
-                </div>
-              </PathStep>
-            </ol>
+            <RunsStatus runs={runs} />
+            {keyForm}
           </CardContent>
         </Card>
-
-        {/* Path 2: free, with an API key. The form id stays "key": saving comes back to #key. */}
-        <form id="key" data-guide="ai-key" action={saveAiKeyAction.bind(null, wid)} className="scroll-mt-20">
-          <Card>
-            <CardContent className="flex flex-col gap-7">
-              <div className="flex items-start gap-3.5">
-                <IconTile icon={KeyRoundIcon} tone="success" className="size-11 rounded-2xl [&_svg]:size-5" />
-                <div className="grid min-w-0 flex-1 gap-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-[19px] tracking-[-0.015em]">I want it free</h2>
-                    <Badge variant="success">Free</Badge>
-                  </div>
-                  <p className="text-sm leading-relaxed text-muted-foreground">Paste a free Google Gemini key. Every AI button here (launch kit, ad research, lead scores, reply drafts) and every Ask my AI step then runs by itself on your key.</p>
-                </div>
-              </div>
-
-              {provider ? (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-success-soft px-3.5 py-2.5 text-sm text-success ring-1 ring-success/15 ring-inset">
-                  <CheckCircle2Icon className="size-4" aria-hidden />
-                  <span className="flex-1 font-medium">
-                    On · {AI_PROVIDERS[provider].label} {s.aiKeyHint}
-                    {s.aiModel ? ` · ${s.aiModel}` : ""}
-                  </span>
-                  {isAdmin ? (
-                    <Button formAction={removeAiKeyAction.bind(null, wid)} variant="ghost" size="sm" className="text-success hover:text-success">
-                      Remove key
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <ol className="flex flex-col">
-                <PathStep n={1} title="Get a free key">
-                  <p className="text-sm text-muted-foreground">Sign in with your Google account and press Create API key. Takes about a minute.</p>
-                  <Button variant="outline" asChild className="self-start">
-                    <a href={AI_PROVIDERS.gemini.keyUrl} target="_blank" rel="noreferrer">
-                      Get a free Gemini key
-                      <ExternalLinkIcon data-icon="inline-end" />
-                    </a>
-                  </Button>
-                </PathStep>
-                <PathStep n={2} title="Paste it here and save" last>
-                  <Field>
-                    <FieldLabel htmlFor="aiKey">API key</FieldLabel>
-                    <Input id="aiKey" name="aiKey" type="password" autoComplete="off" className="h-10" placeholder={s.aiKeyHint ? `Saved (${s.aiKeyHint})` : "Paste your key"} />
-                    <FieldDescription>Checked before saving, then stored encrypted. {AI_PROVIDERS.gemini.note}</FieldDescription>
-                  </Field>
-                  <MoreOptions title="Use a different provider" sub="Groq, OpenRouter, Claude or ChatGPT API, or your own." icon={SparklesIcon} className="bg-transparent">
-                    <Field>
-                      <FieldLabel htmlFor="aiProvider">Provider</FieldLabel>
-                      <NativeSelect id="aiProvider" name="aiProvider" defaultValue={provider ?? "gemini"}>
-                        <NativeSelectOptGroup label="Free to start">
-                          {(["gemini", "groq", "openrouter"] as const).map((k) => (
-                            <NativeSelectOption key={k} value={k}>
-                              {AI_PROVIDERS[k].label}
-                            </NativeSelectOption>
-                          ))}
-                        </NativeSelectOptGroup>
-                        <NativeSelectOptGroup label="Paid">
-                          {(["anthropic", "openai", "custom"] as const).map((k) => (
-                            <NativeSelectOption key={k} value={k}>
-                              {AI_PROVIDERS[k].label}
-                            </NativeSelectOption>
-                          ))}
-                        </NativeSelectOptGroup>
-                      </NativeSelect>
-                      <FieldDescription>
-                        Get a key:{" "}
-                        {(["gemini", "groq", "openrouter", "anthropic", "openai"] as const).map((k, i) => (
-                          <span key={k}>
-                            {i ? " · " : ""}
-                            <a href={AI_PROVIDERS[k].keyUrl} target="_blank" rel="noreferrer">
-                              {AI_PROVIDERS[k].label}
-                            </a>
-                          </span>
-                        ))}
-                      </FieldDescription>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="aiModel">Model (optional)</FieldLabel>
-                      <Input id="aiModel" name="aiModel" defaultValue={s.aiModel ?? ""} placeholder="We pick a good one for you" />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="aiBaseUrl">Base URL (only for Other)</FieldLabel>
-                      <Input id="aiBaseUrl" name="aiBaseUrl" type="url" defaultValue={s.aiBaseUrl ?? ""} placeholder="https://api.mistral.ai/v1" />
-                    </Field>
-                    <ul className="grid gap-1.5 text-xs text-muted-foreground">
-                      {(Object.keys(AI_PROVIDERS) as AiProvider[]).map((k) => (
-                        <li key={k}>
-                          <b className="text-foreground">{AI_PROVIDERS[k].label}:</b> {AI_PROVIDERS[k].note}
-                        </li>
-                      ))}
-                    </ul>
-                  </MoreOptions>
-                  {isAdmin ? (
-                    <SubmitButton className="self-start" pendingText="Checking your key…">
-                      <KeyRoundIcon data-icon="inline-start" />
-                      Save key
-                    </SubmitButton>
-                  ) : (
-                    <Callout tone="info">Ask the account owner or an admin to add a key.</Callout>
-                  )}
-                </PathStep>
-              </ol>
-            </CardContent>
-          </Card>
-        </form>
-      </div>
+      )}
 
       <MoreOptions
-        id="more"
-        title="More apps & playbooks"
-        sub="Other AI apps, ready-made jobs to ask for, and the AI task queue."
-        icon={SparklesIcon}
-        defaultOpen={false}
+        id="connect"
+        icon={PlugIcon}
+        title="Pay for Claude or ChatGPT? Chat with your account from there (optional)"
+        sub="A private link lets that app read and work on your account from its own chat. The buttons in this app still use your key above."
       >
+        <ol className="flex flex-col">
+          <PathStep n={1} title="Make your private link">
+            {isAdmin ? <NewConnector wid={wid} /> : <Callout tone="info">Ask the account owner or an admin to make the link.</Callout>}
+            {connectors.length ? (
+              <ul className="flex flex-col divide-y divide-border/80 overflow-hidden rounded-xl bg-background/60 ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
+                {connectors.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-sm">
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span className={cn("size-2 shrink-0 rounded-full", c.lastUsedAt ? "bg-success ring-3 ring-success/15" : "bg-border-strong")} aria-hidden />
+                      <span className="min-w-0">
+                        <span className="font-medium">{c.name}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          Created {relativeTime(c.createdAt)}
+                          {c.createdByName || c.createdByEmail ? ` by ${c.createdByName || c.createdByEmail}` : ""} · {c.lastUsedAt ? `used ${relativeTime(c.lastUsedAt)}` : "never used"}
+                        </span>
+                      </span>
+                    </span>
+                    {isAdmin ? (
+                      <form action={revokeConnectorAction.bind(null, wid, c.id)}>
+                        <SubmitButton variant="ghost" size="sm" confirm="Remove this link? It stops working.">
+                          Remove
+                        </SubmitButton>
+                      </form>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </PathStep>
+          <PathStep n={2} title="Paste it into your app">
+            <div className="flex flex-col gap-2">
+              {FEATURED.map((app, i) => (
+                <AppSteps key={app.name} app={app} open={i === 0 && connectors.length > 0} />
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Using something else? More apps are under <a href="#more">Playbooks and more apps</a>. Apps change their menus often: if a step looks different, search your app&apos;s help for &ldquo;custom connector&rdquo;.
+            </p>
+          </PathStep>
+          <PathStep n={3} title="Ask it for a job" last>
+            <div className="flex flex-wrap items-center gap-2.5 rounded-2xl rounded-bl-md bg-accent p-2 pl-3.5 ring-1 ring-violet-200/70 ring-inset dark:ring-white/[0.06]">
+              <MessageSquareTextIcon className="size-4 shrink-0 text-primary dark:text-violet-300" aria-hidden />
+              <span className="min-w-0 flex-1 text-[14px] font-medium text-accent-foreground">&ldquo;{firstPlaybook?.say ?? "Run my Monday check-in in OneX."}&rdquo;</span>
+              <CopyButton text={firstPlaybook?.say ?? "Run my Monday check-in in OneX."} />
+            </div>
+          </PathStep>
+        </ol>
+      </MoreOptions>
+
+      <MoreOptions id="more" title="Playbooks and more apps" sub="Ready-made jobs to ask your connected app for, other apps it works in, and AI tasks from your automations." icon={SparklesIcon} defaultOpen={false}>
         <section id="playbooks" className="flex scroll-mt-20 flex-col gap-3">
           <div className="grid gap-0.5">
             <h3>Playbooks</h3>
-            <p className="text-sm text-muted-foreground">Ready-made jobs. Say the line to your connected AI, or pick it from your app&apos;s prompts menu (in Claude and VS Code they show up as prompts or slash commands).</p>
+            <p className="text-sm text-muted-foreground">Ready-made jobs. Say the line to your connected app, or pick it from that app&apos;s prompts menu.</p>
           </div>
           <ul className="grid gap-2.5 @2xl/main:grid-cols-2">
             {PLAYBOOKS.map((p) => (
@@ -504,7 +458,7 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
         <section className="flex flex-col gap-3">
           <div className="grid gap-0.5">
             <h3>Other AI apps</h3>
-            <p className="text-sm text-muted-foreground">Same private link from step 1, pasted somewhere else.</p>
+            <p className="text-sm text-muted-foreground">The same private link, pasted somewhere else.</p>
           </div>
           <div className="grid gap-2 @3xl/main:grid-cols-2">
             {OTHER_APPS.map((app) => (
@@ -516,5 +470,63 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
         {pending.length ? null : tasksPanel}
       </MoreOptions>
     </>
+  );
+}
+
+/** Where the member stands before they have a key: how many included runs are left, in one line. */
+function RunsStatus({ runs }: { runs: AiRuns }) {
+  if (runs.kind === "free") {
+    const left = runs.total - runs.used;
+    return (
+      <Callout tone="info">
+        You have {left} of {runs.total} free AI {runs.total === 1 ? "run" : "runs"} left this month. With your own key you stop counting.
+      </Callout>
+    );
+  }
+  if (runs.kind === "out") return <Callout tone="warn">You&apos;ve used your {runs.total} free AI runs this month. Add your key below and every AI button works again.</Callout>;
+  if (runs.kind === "off") return <Callout tone="info">No AI is connected yet, so the AI buttons give a starter template. Add your key below and they write for you.</Callout>;
+  return null;
+}
+
+/** The confirmation: a saved key is one the provider said yes to. */
+function KeyWorks({ wid, provider, hint, model, isAdmin }: { wid: string; provider: AiProvider; hint?: string; model?: string; isAdmin: boolean }) {
+  const p = AI_PROVIDERS[provider];
+  return (
+    <Card id="key" className="scroll-mt-20 shadow-lift ring-2 ring-success/25">
+      <CardContent className="flex flex-col gap-5">
+        <div className="flex items-start gap-3.5">
+          <IconTile icon={CheckCircle2Icon} tone="success" className="size-11 rounded-2xl [&_svg]:size-5" />
+          <div className="grid min-w-0 flex-1 gap-1.5">
+            <h2 className="text-[19px] tracking-[-0.015em]">Your key works</h2>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {p.label} {hint}
+              {model ? ` · ${model}` : ""}. We checked it with {p.label} when you saved it. AI launch kit, Ad research, Ad studio and Ad review now run on your key, with no runs to count.
+              {p.free ? ` ${p.note}` : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild>
+            <Link href={`/app/w/${wid}/path`}>
+              Back to Your path
+              <ArrowRightIcon data-icon="inline-end" />
+            </Link>
+          </Button>
+          <form action={checkAiKeyAction.bind(null, wid)}>
+            <SubmitButton variant="outline" pendingText="Checking…">
+              <RefreshCwIcon data-icon="inline-start" />
+              Check my key
+            </SubmitButton>
+          </form>
+          {isAdmin ? (
+            <form action={removeAiKeyAction.bind(null, wid)}>
+              <SubmitButton variant="ghost" confirm="Remove your key? The AI buttons stop using it.">
+                Remove key
+              </SubmitButton>
+            </form>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { apiTokens, sessions, users, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { apiTokens, rateLimits, sessions, users, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { openState, sealState } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { grantWelcomeAccess, membershipFor, refreshOwnerAccess } from "./access";
+import { emailSendingOn, isLiveSite } from "./email/providers";
 import { EMAIL_SEND_LIMIT, takeRateLimit } from "./rateLimit";
 
 // Access follows the email address, so a self-signup has to prove it owns that address before a
@@ -11,7 +12,8 @@ import { EMAIL_SEND_LIMIT, takeRateLimit } from "./rateLimit";
 // waits, paused with reason "verify". The link is signed and stateless, like the password links,
 // and it only works for someone logged in to that account (see verifyEmail).
 
-const VERIFY_HOURS = 72;
+export const VERIFY_HOURS = 72;
+export const VERIFY_SUBJECT = "Confirm your email";
 
 export async function emailVerifyLinkFor(userId: string) {
   const db = await getDb();
@@ -21,24 +23,86 @@ export async function emailVerifyLinkFor(userId: string) {
   return `${env.appUrl}/verify?token=${encodeURIComponent(token)}`;
 }
 
-/** Throws when this address had a confirm email less than a minute ago, or five today. */
+export const VERIFY_EMAILS_OFF =
+  "Our emails aren't going out right now, so the link can't reach you yet. Nothing is wrong with your account. Come back a little later and try again.";
+export const VERIFY_SEND_FAILED = "The email didn't go out just now. Press Send the link again to try once more.";
+
+/**
+ * Throws when the email can't go out, or this address had a confirm email less than a minute ago,
+ * or five today. Only a link that really went out counts toward those limits, so the "we sent you
+ * a link" refusal is always true.
+ */
 export async function sendVerifyEmail(userId: string, brandName?: string) {
   const db = await getDb();
   const [u] = await db.select({ id: users.id, email: users.email, name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
   if (!u) return;
-  if (!(await takeRateLimit(`verify-email:${u.id}`, EMAIL_SEND_LIMIT))) {
-    throw new Error("We just sent you a link. Wait a minute and check spam, then try again (5 a day at most).");
+  if (isLiveSite() && !emailSendingOn()) throw new Error(VERIFY_EMAILS_OFF);
+  const key = `verify-email:${u.id}`;
+  if (!(await takeRateLimit(key, EMAIL_SEND_LIMIT))) {
+    if (await usedUpToday(key)) {
+      throw new Error("You've had 5 links today, the most we send in a day. The newest one works, so look for it in your inbox, Promotions and Spam. Or try again tomorrow.");
+    }
+    throw new Error("We sent you a link less than a minute ago. Give it a minute and check Promotions and Spam, then try again. You can ask 5 times a day.");
   }
   const link = await emailVerifyLinkFor(userId);
   // Local dev and the e2e run send no real email: print the link so it can be opened.
   if (env.emailProvider === "console") console.info(`[email:console] verify link for ${u.email}: ${link}`);
   const { sendSystemEmail } = await import("./email/send");
-  await sendSystemEmail({
-    to: u.email,
-    subject: "Confirm your email",
-    body: `Hi ${u.name.split(" ")[0] || "there"},\n\n[Confirm your email](${link})\n\nYour account opens once you click it. This link works for ${VERIFY_HOURS} hours. If you didn't sign up, ignore this email.`,
-    brandName,
-  });
+  try {
+    await sendSystemEmail({
+      to: u.email,
+      subject: VERIFY_SUBJECT,
+      body: `Hi ${u.name.split(" ")[0] || "there"},\n\n[Confirm your email](${link})\n\nClick it, then press Confirm on the page that opens. If it asks you to log in, use this email and the password you just chose.\n\nThe link works for ${VERIFY_HOURS / 24} days. If you didn't sign up, ignore this email.`,
+      brandName,
+    });
+  } catch (err) {
+    console.error("[auth] verify email failed", err);
+    await giveBackHit(key);
+    throw new Error(VERIFY_SEND_FAILED);
+  }
+}
+
+// takeRateLimit stores one row per window, keyed "<key>:<seconds>".
+const windowKeys = (key: string) => EMAIL_SEND_LIMIT.map((w) => `${key}:${w.seconds}`);
+
+/** A send that never left gives its hit back, so pressing "Send the link again" right away works. */
+async function giveBackHit(key: string) {
+  const db = await getDb();
+  await db
+    .update(rateLimits)
+    .set({ count: sql`greatest(${rateLimits.count} - 1, 0)` })
+    .where(inArray(rateLimits.key, windowKeys(key)));
+}
+
+async function usedUpToday(key: string) {
+  const day = EMAIL_SEND_LIMIT.reduce((a, b) => (b.seconds > a.seconds ? b : a));
+  const db = await getDb();
+  const [row] = await db.select().from(rateLimits).where(eq(rateLimits.key, `${key}:${day.seconds}`)).limit(1);
+  return Boolean(row && row.windowStart.getTime() > Date.now() - day.seconds * 1000 && row.count > day.max);
+}
+
+// The confirm-email wait screen asks "confirmed yet?" every few seconds, so it can move on by
+// itself. It holds a signed ticket for its own account and gets back a single word. The answer
+// never signs anyone in: confirming signs out every session (see markEmailVerified), so a laptop
+// left waiting while the phone confirms is told to log in again rather than let back in.
+
+export function verifyWaitTicket(userId: string) {
+  return sealState({ purpose: "verify-wait", uid: userId }, VERIFY_HOURS * 3600);
+}
+
+/**
+ * waiting: not confirmed yet. open: confirmed, and this browser is still signed in to the account.
+ * confirmed: confirmed somewhere else, which signed this browser out. signed-out: not confirmed,
+ * and this browser is no longer signed in to the account. stop: the ticket is bad or too old.
+ */
+export type VerifyWait = "waiting" | "open" | "confirmed" | "signed-out" | "stop";
+
+export async function verifyWaitState(ticket: string, currentUserId: string | null): Promise<VerifyWait> {
+  const data = openState<{ purpose?: string; uid?: string }>(ticket);
+  if (!data || data.purpose !== "verify-wait" || !data.uid) return "stop";
+  const verified = await isEmailVerified(data.uid);
+  if (currentUserId === data.uid) return verified ? "open" : "waiting";
+  return verified ? "confirmed" : "signed-out";
 }
 
 export async function isEmailVerified(userId: string) {

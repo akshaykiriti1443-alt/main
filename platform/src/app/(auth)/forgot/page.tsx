@@ -7,7 +7,7 @@ export const metadata = { title: "Reset password" };
 const ASIDE: AuthAside = {
   eyebrow: "Happens to everyone",
   title: "Back in two minutes, promise.",
-  points: ["The link works once, and only for you", "Your funnels, leads and emails stay exactly as they are", "Choosing a new password confirms your email too"],
+  points: ["The link works once, and only for you", "Your website, leads and emails stay exactly as they are", "Choosing a new password confirms your email too"],
 };
 
 export default function ForgotPage() {

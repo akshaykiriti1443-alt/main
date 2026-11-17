@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { agencies, contacts, platformSettings, unlockClaims, unlocks, workspaces, type UnlockAction } from "@/lib/db/schema";
+import { agencies, contacts, platformSettings, sites, unlockClaims, unlocks, workspaces, type UnlockAction } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { isPublicHttpsUrl, safeUrl } from "@/lib/html";
 import { isEmail, normalizeEmail, shortId, slugify } from "@/lib/util";
@@ -8,6 +8,7 @@ import { addTag, upsertContact } from "./contacts";
 import { logActivity } from "./activity";
 import { enqueue } from "./jobs/queue";
 import { takeRateLimit } from "./rateLimit";
+import { resolveSiteLink } from "./sites";
 
 // Unlocks: "post or comment in my Skool community, get this free thing". Engagement is what Skool's
 // Discovery ranks on, so rewarding it helps the community climb. How a claim works:
@@ -73,6 +74,43 @@ function cleanUnlockInput(input: UnlockInput) {
     instructions: input.instructions.trim().slice(0, 600),
     skoolPostUrl,
     zapierWebhookUrl: zapier,
+  };
+}
+
+/** What a first Unlock asks for, in the words of Day 4's lesson. */
+export const FIRST_UNLOCK_ASK = "Make a post with your name and the one thing you're stuck on.";
+
+export type UnlockDraft = Pick<UnlockInput, "title" | "reward" | "rewardUrl" | "action" | "instructions"> & {
+  /** The reward is the free guide on their own website. */
+  fromGuide: boolean;
+  /** That website is published, so the reward link opens for a member. */
+  guideLive: boolean;
+};
+
+/**
+ * The first Unlock, filled in so Day 4 is "check it, press Create". The reward is the free guide the
+ * launch kit already put on their website, for one post of their own. With no guide yet, only the
+ * action and the wording are filled in.
+ */
+export async function firstUnlockDraft(workspaceId: string): Promise<UnlockDraft> {
+  const db = await getDb();
+  // The published website first, then the newest one.
+  const [site] = await db
+    .select()
+    .from(sites)
+    .where(and(eq(sites.workspaceId, workspaceId), sql`${sites.leadMagnetName} <> ''`))
+    .orderBy(desc(sites.published), desc(sites.createdAt))
+    .limit(1);
+  const rewardUrl = site ? resolveSiteLink(site, site.leadMagnetUrl) : "";
+  if (!site || !rewardUrl) return { title: "", reward: "", rewardUrl: "", action: "post", instructions: FIRST_UNLOCK_ASK, fromGuide: false, guideLive: false };
+  return {
+    title: site.leadMagnetName.slice(0, 80),
+    reward: "My free guide, yours for one post.",
+    rewardUrl,
+    action: "post",
+    instructions: FIRST_UNLOCK_ASK,
+    fromGuide: true,
+    guideLive: site.published,
   };
 }
 
@@ -152,7 +190,7 @@ How to get it (takes 1 minute):
 2. Copy the link to your ${u.action === "comment" ? "comment (the ⋯ menu on your comment" : "post (the ⋯ menu"} › Copy link)
 3. Paste it here: ${claimUrlFor(u.slug)}
 
-It lands in your inbox in seconds. 👇`;
+You get it right away, on that page and by email. 👇`;
 }
 
 export type ClaimResult =

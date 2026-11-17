@@ -306,6 +306,9 @@ function SectionView({ s, ctx }: { s: Section; ctx: Ctx }): ReactNode {
       );
     case "cta": {
       const href = safeUrl(fill(s.buttonUrl));
+      // A button with nowhere to go is left off the live page: a dead Join button under paid ads
+      // is worse than none. The editor's preview keeps it, greyed, and says what is missing.
+      const waiting = Boolean(s.buttonText) && !href && Boolean(ctx.form.preview);
       const lead = ctx.index === 0;
       const Heading = lead ? "h1" : "h2";
       return (
@@ -320,11 +323,24 @@ function SectionView({ s, ctx }: { s: Section; ctx: Ctx }): ReactNode {
               ) : null}
               <Heading className="lp-cta-title">{fill(s.headline)}</Heading>
               {s.body ? <p className="lp-cta-body">{fill(s.body)}</p> : null}
-              {s.buttonText ? (
-                <a className="lp-btn lp-btn-lg" href={href || "#"} {...(href ? { rel: "noopener" } : {})}>
+              {s.buttonText && href ? (
+                <a className="lp-btn lp-btn-lg" href={href} rel="noopener">
                   <span>{fill(s.buttonText)}</span>
                   <Arrow />
                 </a>
+              ) : null}
+              {waiting ? (
+                <>
+                  <span className="lp-btn lp-btn-lg is-waiting" aria-disabled="true">
+                    <span>{fill(s.buttonText)}</span>
+                    <Arrow />
+                  </span>
+                  <p className="lp-cta-waiting">
+                    {/skool_url/.test(s.buttonUrl)
+                      ? "Visitors won't see this button yet. It appears once your Skool group link is saved in Settings."
+                      : "Visitors won't see this button yet. Give it a link and it appears."}
+                  </p>
+                </>
               ) : null}
             </div>
           </div>

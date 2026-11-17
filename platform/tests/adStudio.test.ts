@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { getDb } from "@/lib/db";
 import { aiGenerations, sites } from "@/lib/db/schema";
 import { pageGuideFor, STEP_HOWTO } from "@/lib/guides";
+import { WEEK_STEPS } from "@/lib/week";
 import {
   adStudioDefaults,
   adStudioInputSchema,
@@ -203,7 +204,7 @@ describe("Ad studio: launch plan and video", () => {
     expect(all).toContain("Pixel");
     expect(plan.steps.length).toBeGreaterThanOrEqual(8);
     expect(plan.destination).toBe("skool");
-    expect(plan.after.map((s) => s.title)).toEqual(["Hands off till Day 6", "Get your verdicts on Day 6", "Kill ads go off on Day 6", "Refresh every 1–3 weeks"]);
+    expect(plan.after.map((s) => s.title)).toEqual(["Hands off till Day 6", "Get your verdicts on Day 6", "Day 6: change nothing, except a broken link", "Refresh every 1–3 weeks"]);
     expect(all).not.toMatch(/Day 7|Day 8|Day 9/);
   });
 
@@ -251,14 +252,21 @@ describe("Ad studio: launch plan and video", () => {
 });
 
 describe("Ad studio: saving, Your path, Penny and the connector", () => {
-  it("saves a pack without AI, prefills the next one and ticks off the statics step right before clicks", async () => {
+  it("saves a pack without AI, prefills the next one and ticks off the statics step right before the Day 1 post", async () => {
     const { ws, user } = await makeWorkspace();
     const before = await computePath(ws, user.id);
     const steps = before.stages.flatMap((s) => s.steps);
     const at = steps.findIndex((s) => s.key === "statics");
-    expect(steps[at]).toMatchObject({ title: "Make your 5 statics", lesson: "Day 1", href: `/app/w/${ws.id}/ads/studio`, done: false });
-    expect(steps[at + 1].key).toBe("clicks");
-    expect(steps[at - 1]).toMatchObject({ key: "research", title: "Find ads that already work", lesson: "Day 1" });
+    // Step titles belong to Your path; here only the order, the day and the link matter.
+    expect(steps[at]).toMatchObject({ lesson: "Day 1", href: `/app/w/${ws.id}/ads/studio`, done: false });
+    // The ads get posted and reviewed in Skool before any money is spent, then Publish.
+    expect(steps[at + 1].key).toBe("post1");
+    expect(steps[at + 2].key).toBe("clicks");
+    expect(steps[at - 1]).toMatchObject({ key: "research", lesson: "Day 1" });
+    // Putting them live happens in Ads Manager, which the app can't see: the member's own tick,
+    // which turns solid at the first lead from an ad.
+    expect(before.days[0].steps.find((s) => s.key === "clicks")).toMatchObject({ where: "meta", href: `/app/w/${ws.id}/ads/studio#plan`, selfLabel: "I pressed Publish", tick: null });
+    expect(WEEK_STEPS.find((s) => s.key === "clicks")?.tick).toBe("you-upgrades");
 
     const res = await makeAdStudioPack(ws.id, { audience: "busy dads over 40", promise: "Feel fit again", budget: 10, country: "GB", competitorAds: [{ page: "Rival", text: "Tired of starting over? Here's what works.", daysRunning: 62 }] });
     expect(res.ok).toBe(true);
@@ -281,7 +289,7 @@ describe("Ad studio: saving, Your path, Penny and the connector", () => {
     expect(defaults).toMatchObject({ budget: 10, country: "GB", audience: "busy dads over 40", promise: "Feel fit again" });
 
     const after = await computePath(ws, user.id);
-    expect(after.stages.flatMap((s) => s.steps).find((s) => s.key === "statics")?.done).toBe(true);
+    expect(after.days.flatMap((d) => d.steps).find((s) => s.key === "statics")).toMatchObject({ done: true, tick: "app" });
 
     expect((await makeAdStudioPack(ws.id, { budget: 0 })).ok).toBe(false);
   });

@@ -9,7 +9,8 @@ import { isEmail, normalizeEmail } from "@/lib/util";
 import { safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { checkCredentials, createSession, createUser, findUserByEmail, getCurrentUser, requestHost } from "@/server/auth";
-import { sendVerifyEmail, verifyEmail } from "@/server/emailVerify";
+import { sendVerifyEmail, verifyEmail, verifyWaitState, type VerifyWait } from "@/server/emailVerify";
+import { emailSendingOn, isLiveSite } from "@/server/email/providers";
 import { clientIp } from "@/lib/ip";
 import { workspaceMembers, workspaces } from "@/lib/db/schema";
 import { grantWelcomeAccess, membershipFor, refreshOwnerAccess } from "@/server/access";
@@ -68,14 +69,14 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
     const ws = await createWorkspace({ agencyId: agency.id, name: businessName, ownerUserId: user.id, accessSource: "member", accessVerifiedUntil: null, isPlatformAgency: true, settings: { businessName } });
     if (!user.emailVerifiedAt) {
       await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "verify" }).where(eq(workspaces.id, ws.id));
-      const brand = await agencyForHost(await requestHost());
-      await sendVerifyEmail(user.id, brand?.brand.name).catch((err) => console.error("[auth] verify email failed", err));
-    } else {
-      // Already proven: access follows the email straight away, like after the confirm link.
-      await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "access" }).where(eq(workspaces.id, ws.id));
-      if ((await membershipFor(email)).active) await refreshOwnerAccess(email);
-      else await grantWelcomeAccess(email, user.name, { ip: clientIp(await headers()) });
+      const sent = await sendFirstVerifyEmail(user.id);
+      await createSession(user.id);
+      redirect(`/app/w/${ws.id}/paused${sent ? "" : "?unsent=1"}`);
     }
+    // Already proven: access follows the email straight away, like after the confirm link.
+    await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "access" }).where(eq(workspaces.id, ws.id));
+    if ((await membershipFor(email)).active) await refreshOwnerAccess(email);
+    else await grantWelcomeAccess(email, user.name, { ip: clientIp(await headers()) });
     await createSession(user.id);
     redirect(`/app/w/${ws.id}`);
   }
@@ -107,18 +108,43 @@ export async function signupAction(_prev: FormState, fd: FormData): Promise<Form
     isPlatformAgency: true,
     settings: { businessName },
   });
+  let sent = true;
   if (!firstUser) {
     await db.update(workspaces).set({ status: "paused", pausedAt: new Date(), pauseReason: "verify" }).where(sql`${workspaces.id} = ${ws.id}`);
-    const brand = await agencyForHost(await requestHost());
-    await sendVerifyEmail(user.id, brand?.brand.name).catch((err) => console.error("[auth] verify email failed", err));
+    sent = await sendFirstVerifyEmail(user.id);
   }
   await createSession(user.id);
-  redirect(firstUser ? `/app/w/${ws.id}/launch` : `/app/w/${ws.id}/paused`);
+  // The wait screen only says "we sent a link" when one really went out.
+  redirect(firstUser ? `/app/w/${ws.id}/launch` : `/app/w/${ws.id}/paused${sent ? "" : "?unsent=1"}`);
+}
+
+/** The confirm email, sent in this request (never queued). False when it didn't go out. */
+async function sendFirstVerifyEmail(userId: string) {
+  const brand = await agencyForHost(await requestHost());
+  return sendVerifyEmail(userId, brand?.brand.name).then(
+    () => true,
+    (err) => {
+      console.error("[auth] verify email failed", err);
+      return false;
+    },
+  );
+}
+
+/**
+ * The confirm-email wait screen calls this every few seconds with its ticket. One word back
+ * (see verifyWaitState); it never signs anyone in or changes anything.
+ */
+export async function verifyWaitAction(ticket: string): Promise<VerifyWait> {
+  if (typeof ticket !== "string" || ticket.length > 2000) return "stop";
+  const user = await getCurrentUser();
+  return verifyWaitState(ticket, user?.id ?? null);
 }
 
 export async function forgotAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const email = str(fd, "email");
   if (!isEmail(email)) return { error: "Enter a valid email." };
+  // Same answer for every address, so it still never says whether an account exists.
+  if (isLiveSite() && !emailSendingOn()) return { error: "We can't send emails right now, so no reset link can go out. Please try again later." };
   const user = await findUserByEmail(email);
   // One reset email a minute and five a day per address, so this form can't mail-bomb anyone.
   // The reply is the same either way, so it never says whether an account exists.

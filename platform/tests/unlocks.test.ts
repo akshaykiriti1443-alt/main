@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { activities, contacts, emailMessages, unlockClaims, workspaces } from "@/lib/db/schema";
+import { activities, contacts, emailMessages, sites, unlockClaims, workspaces } from "@/lib/db/schema";
 import {
   CLAIM_LIMITS,
+  FIRST_UNLOCK_ASK,
   checkPostLink,
   claimEntryTicket,
   claimUnlock,
   createUnlock,
   engagementLeaders,
   entryTicketPending,
+  firstUnlockDraft,
   getEntryTicket,
   needsEntryTicket,
   setEntryTicket,
@@ -159,5 +161,37 @@ describe("unlocks: engage in Skool, get the reward", () => {
     expect(needsEntryTicket(paused, ws)).toBe(false);
     await db.update(workspaces).set({ status: "active", pauseReason: null }).where(eq(workspaces.id, admin.ws.id));
     await setEntryTicket({ on: false, unlockId: intro.id, since: new Date().toISOString() });
+  });
+});
+
+describe("Day 4: the first Unlock arrives filled in", () => {
+  it("with no free guide yet, only what to post is filled in", async () => {
+    const { ws } = await makeWorkspace();
+    expect(await firstUnlockDraft(ws.id)).toEqual({ title: "", reward: "", rewardUrl: "", action: "post", instructions: FIRST_UNLOCK_ASK, fromGuide: false, guideLive: false });
+  });
+
+  it("rewards the free guide on their website for one post of their own, ready to create and paste", async () => {
+    const { ws } = await makeWorkspace();
+    const db = await getDb();
+    const site = (slug: string, published: boolean) => ({ workspaceId: ws.id, name: "Website", slug: `${slug}-${stamp()}`, theme: {} as never, published, leadMagnetName: "The 5-minute warm-up checklist", leadMagnetUrl: "/guide" });
+    await db.insert(sites).values(site("draft", false));
+    const unpublished = await firstUnlockDraft(ws.id);
+    expect(unpublished).toMatchObject({ title: "The 5-minute warm-up checklist", reward: "My free guide, yours for one post.", action: "post", instructions: FIRST_UNLOCK_ASK, fromGuide: true, guideLive: false });
+    expect(unpublished.rewardUrl).toMatch(/^https?:\/\/.+\/guide$/);
+
+    // The published website wins, so the reward link opens for a member.
+    const [live] = await db.insert(sites).values(site("live", true)).returning();
+    const draft = await firstUnlockDraft(ws.id);
+    expect(draft).toMatchObject({ fromGuide: true, guideLive: true });
+    expect(draft.rewardUrl).toContain(live.slug);
+
+    // Press Create unlock as it stands, then Copy Skool post: the post asks for their own post and carries the claim link.
+    const u = await createUnlock(ws.id, { ...draft, skoolPostUrl: "", zapierWebhookUrl: "" });
+    expect(u).toMatchObject({ action: "post", rewardUrl: draft.rewardUrl });
+    const post = unlockPostText(u);
+    expect(post).toContain(`🔓 FREE: The 5-minute warm-up checklist`);
+    expect(post).toContain(`1. ${FIRST_UNLOCK_ASK}`);
+    expect(post).toContain(`/u/${u.slug}`);
+    expect(post).not.toMatch(/in seconds|in a minute/);
   });
 });

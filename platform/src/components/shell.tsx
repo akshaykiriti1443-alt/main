@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -11,7 +11,10 @@ import {
   CalendarDaysIcon,
   CalendarClockIcon,
   SquareKanbanIcon,
+  ChevronDownIcon,
   ChevronsUpDownIcon,
+  ClapperboardIcon,
+  ExternalLinkIcon,
   CreditCardIcon,
   GlobeIcon,
   InboxIcon,
@@ -38,6 +41,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { matchNavItem } from "@/components/nav-match";
 import { THEMES, ThemeToggle } from "@/components/theme";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -73,10 +77,14 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { activeSubItem } from "@/components/reelvault/routes";
 
 /* Server layouts pass icon names (functions can't cross the server/client boundary). */
 const ICONS = {
@@ -107,25 +115,36 @@ const ICONS = {
   members: IdCardIcon,
   pipeline: SquareKanbanIcon,
   booking: CalendarClockIcon,
+  reel: ClapperboardIcon,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;
-export type NavItem = { href: string; label: string; icon: IconName; exact?: boolean; badge?: number; locked?: boolean };
-export type NavGroup = { title?: string; items: NavItem[] };
+/**
+ * `external`: a separate app, opened in a new tab (never the active page). `hint`: one plain line about it, shown on hover.
+ * `children`: sub-pages shown under the item while it is the active page (`also`: other address prefixes that light a child up).
+ */
+export type NavItem = {
+  href: string;
+  label: string;
+  icon: IconName;
+  exact?: boolean;
+  badge?: number;
+  locked?: boolean;
+  external?: boolean;
+  hint?: string;
+  children?: { href: string; label: string; also?: string[] }[];
+};
+/** `collapsible`: a quiet group that starts closed unless `defaultOpen`, or it holds the page you're on or Penny's next step. */
+export type NavGroup = { id?: string; title?: string; items: NavItem[]; collapsible?: boolean; defaultOpen?: boolean };
 /** Another workspace, agency or the admin area the user can jump to. */
 export type Place = { href: string; label: string; sub?: string; icon: IconName };
 export type ShellBrand = { name: string; sub?: string; logoUrl?: string | null; color?: string | null };
 export type ShellUser = { email: string; name?: string | null };
 
-function isActive(pathname: string, item: NavItem) {
-  return item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
-}
-
 /** The most specific nav item that matches the current path. */
 function useActiveItem(groups: NavGroup[]) {
   const pathname = usePathname();
-  const items = groups.flatMap((g) => g.items).filter((i) => isActive(pathname, i));
-  return items.sort((a, b) => b.href.length - a.href.length)[0];
+  return matchNavItem(groups.flatMap((g) => g.items), pathname);
 }
 
 function initials(text: string) {
@@ -249,9 +268,116 @@ function UserMenu({ user }: { user: ShellUser }) {
   );
 }
 
+function NavItems({ items, active }: { items: NavItem[]; active: NavItem | undefined }) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const pathname = usePathname();
+  return (
+    <SidebarMenu className="gap-px">
+      {items.map((item) => {
+        const Icon = ICONS[item.icon];
+        return (
+          <SidebarMenuItem key={item.href}>
+            <SidebarMenuButton
+              asChild
+              isActive={item === active}
+              tooltip={item.locked ? `${item.label} · Growth plan` : item.label}
+              className="h-9 gap-2.5 rounded-[10px] px-2.5 text-[13.5px] font-medium text-sidebar-foreground [&>svg]:size-[17px] [&>svg]:text-sidebar-foreground/55 [&>svg]:transition-colors hover:[&>svg]:text-sidebar-accent-foreground data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground data-active:shadow-[0_1px_2px_rgb(28_21_56/0.06),0_0_0_1px_rgb(28_21_56/0.05)] data-active:[&>svg]:text-primary dark:data-active:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)] dark:data-active:[&>svg]:text-violet-300"
+            >
+              {item.external ? (
+                <a href={item.href} target="_blank" rel="noopener" title={item.hint} data-nav={item.href} onClick={() => isMobile && setOpenMobile(false)}>
+                  <Icon />
+                  <span>{item.label}</span>
+                </a>
+              ) : (
+                <Link href={item.href} data-nav={item.href} onClick={() => isMobile && setOpenMobile(false)}>
+                  <Icon />
+                  <span>{item.label}</span>
+                </Link>
+              )}
+            </SidebarMenuButton>
+            {item.locked ? (
+              <SidebarMenuBadge aria-label="Growth plan">
+                <LockIcon className="size-3 text-sidebar-foreground/40" />
+              </SidebarMenuBadge>
+            ) : item.external ? (
+              <SidebarMenuBadge aria-label="Opens in a new tab">
+                <ExternalLinkIcon className="size-3 text-sidebar-foreground/40" />
+              </SidebarMenuBadge>
+            ) : item.badge ? (
+              <SidebarMenuBadge className="bg-accent text-accent-foreground peer-data-active/menu-button:bg-primary peer-data-active/menu-button:text-primary-foreground">{item.badge}</SidebarMenuBadge>
+            ) : null}
+            {item.children && item.children.length > 0 && item === active ? (
+              <SidebarMenuSub>
+                {item.children.map((c) => (
+                  <SidebarMenuSubItem key={c.href}>
+                    <SidebarMenuSubButton asChild isActive={c === activeSubItem(pathname, item.children!)}>
+                      <Link href={c.href} data-nav={c.href} onClick={() => isMobile && setOpenMobile(false)}>
+                        <span>{c.label}</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                ))}
+              </SidebarMenuSub>
+            ) : null}
+          </SidebarMenuItem>
+        );
+      })}
+    </SidebarMenu>
+  );
+}
+
+/**
+ * A group that folds away ("More"). It opens by itself for the page you're on and for Penny's next
+ * step, and otherwise stays how the member left it. The items stay in the page while closed (only
+ * hidden by CSS), so Penny can still find `a[data-nav]`, and the icon-only sidebar shows every icon.
+ */
+function CollapsibleNavGroup({ group, allItems, active }: { group: NavGroup; allItems: NavItem[]; active: NavItem | undefined }) {
+  const pathname = usePathname();
+  const holdsActive = Boolean(active && group.items.includes(active));
+  const [open, setOpen] = useState(Boolean(group.defaultOpen) || holdsActive);
+  const contentId = useId();
+
+  useEffect(() => {
+    if (holdsActive) setOpen(true);
+  }, [pathname, holdsActive]);
+
+  // The layout re-renders after an action: if the next step has just moved in here, show it.
+  useEffect(() => {
+    if (group.defaultOpen) setOpen(true);
+  }, [group.defaultOpen]);
+
+  useEffect(() => {
+    const onNext = (e: Event) => {
+      const href = (e as CustomEvent<{ href?: string | null } | null>).detail?.href;
+      const next = matchNavItem(allItems, href);
+      if (next && group.items.includes(next)) setOpen(true);
+    };
+    window.addEventListener("onx:guide-next", onNext);
+    return () => window.removeEventListener("onx:guide-next", onNext);
+  }, [allItems, group.items]);
+
+  const state = open ? "open" : "closed";
+  // A plain button and div, not Radix Collapsible: its content drops its children and sets
+  // `hidden` while closed, which would take the links (and Penny's dot) out of the page.
+  return (
+    <SidebarGroup className="py-1.5">
+      <SidebarGroupLabel asChild className="h-7 w-full cursor-pointer hover:text-sidebar-foreground/80 group-data-[collapsible=icon]:pointer-events-none">
+        <button type="button" aria-expanded={open} aria-controls={contentId} data-state={state} onClick={() => setOpen((o) => !o)}>
+          {group.title}
+          <ChevronDownIcon className="ml-auto transition-transform duration-200 [[data-state=open]>&]:rotate-180 motion-reduce:transition-none" />
+        </button>
+      </SidebarGroupLabel>
+      {/* `!` so the icon-only sidebar shows every icon even while the group is closed. */}
+      <div id={contentId} data-state={state} className="data-[state=closed]:hidden group-data-[collapsible=icon]:block!">
+        <NavItems items={group.items} active={active} />
+      </div>
+    </SidebarGroup>
+  );
+}
+
 export function AppSidebar({ brand, groups, places, user, attribution }: { brand: ShellBrand; groups: NavGroup[]; places: Place[]; user: ShellUser; attribution?: { label: string; href: string } | null }) {
   const active = useActiveItem(groups);
-  const { isMobile, setOpenMobile } = useSidebar();
+  const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader className="px-2.5 pt-3.5 pb-1">
@@ -262,38 +388,16 @@ export function AppSidebar({ brand, groups, places, user, attribution }: { brand
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-1 px-0.5 pb-2">
-        {groups.map((g, i) => (
-          <SidebarGroup key={g.title ?? i} className="py-1.5">
-            {g.title ? <SidebarGroupLabel className="h-7">{g.title}</SidebarGroupLabel> : null}
-            <SidebarMenu className="gap-px">
-              {g.items.map((item) => {
-                const Icon = ICONS[item.icon];
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={item === active}
-                      tooltip={item.locked ? `${item.label} · Growth plan` : item.label}
-                      className="h-9 gap-2.5 rounded-[10px] px-2.5 text-[13.5px] font-medium text-sidebar-foreground [&>svg]:size-[17px] [&>svg]:text-sidebar-foreground/55 [&>svg]:transition-colors hover:[&>svg]:text-sidebar-accent-foreground data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground data-active:shadow-[0_1px_2px_rgb(28_21_56/0.06),0_0_0_1px_rgb(28_21_56/0.05)] data-active:[&>svg]:text-primary dark:data-active:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)] dark:data-active:[&>svg]:text-violet-300"
-                    >
-                      <Link href={item.href} data-nav={item.href} onClick={() => isMobile && setOpenMobile(false)}>
-                        <Icon />
-                        <span>{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                    {item.locked ? (
-                      <SidebarMenuBadge aria-label="Growth plan">
-                        <LockIcon className="size-3 text-sidebar-foreground/40" />
-                      </SidebarMenuBadge>
-                    ) : item.badge ? (
-                      <SidebarMenuBadge className="bg-accent text-accent-foreground peer-data-active/menu-button:bg-primary peer-data-active/menu-button:text-primary-foreground">{item.badge}</SidebarMenuBadge>
-                    ) : null}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
-        ))}
+        {groups.map((g, i) =>
+          g.collapsible && g.title ? (
+            <CollapsibleNavGroup key={g.id ?? g.title} group={g} allItems={allItems} active={active} />
+          ) : (
+            <SidebarGroup key={g.id ?? g.title ?? i} className="py-1.5">
+              {g.title ? <SidebarGroupLabel className="h-7">{g.title}</SidebarGroupLabel> : null}
+              <NavItems items={g.items} active={active} />
+            </SidebarGroup>
+          ),
+        )}
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/70 px-2.5 py-2.5 group-data-[collapsible=icon]:border-t-0">
         <SidebarMenu>
@@ -314,6 +418,8 @@ export function AppSidebar({ brand, groups, places, user, attribution }: { brand
 
 export function AppHeader({ brand, groups, places, extra }: { brand: ShellBrand; groups: NavGroup[]; places: Place[]; extra?: ReactNode }) {
   const active = useActiveItem(groups);
+  const pathname = usePathname();
+  const child = active?.children ? activeSubItem(pathname, active.children) : undefined;
   const [open, setOpen] = useState(false);
   const [mod, setMod] = useState("Ctrl");
 
@@ -341,7 +447,13 @@ export function AppHeader({ brand, groups, places, extra }: { brand: ShellBrand;
         {active ? (
           <>
             <span aria-hidden className="hidden text-border-strong sm:inline">/</span>
-            <span className="truncate font-medium text-foreground">{active.label}</span>
+            <span className={child ? "hidden truncate text-muted-foreground sm:inline" : "truncate font-medium text-foreground"}>{active.label}</span>
+            {child ? (
+              <>
+                <span aria-hidden className="hidden text-border-strong sm:inline">/</span>
+                <span className="truncate font-medium text-foreground">{child.label}</span>
+              </>
+            ) : null}
           </>
         ) : null}
       </nav>
@@ -383,11 +495,19 @@ function CommandMenu({ open, onOpenChange, groups, places }: { open: boolean; on
                 {g.items.map((item) => {
                   const Icon = ICONS[item.icon];
                   return (
-                    <CommandItem key={item.href} value={`${g.title ?? ""} ${item.label}`} onSelect={() => run(() => router.push(item.href))}>
-                      <Icon />
-                      {item.label}
-                      {item.locked ? <LockIcon className="ml-auto size-3 text-muted-foreground" /> : null}
-                    </CommandItem>
+                    <Fragment key={item.href}>
+                      <CommandItem value={`${g.title ?? ""} ${item.label}`} onSelect={() => run(() => (item.external ? window.open(item.href, "_blank", "noopener") : router.push(item.href)))}>
+                        <Icon />
+                        {item.label}
+                        {item.locked ? <LockIcon className="ml-auto size-3 text-muted-foreground" /> : item.external ? <ExternalLinkIcon className="ml-auto size-3 text-muted-foreground" /> : null}
+                      </CommandItem>
+                      {item.children?.map((c) => (
+                        <CommandItem key={c.href} value={`${g.title ?? ""} ${item.label} ${c.label}`} onSelect={() => run(() => router.push(c.href))}>
+                          <Icon />
+                          {item.label} › {c.label}
+                        </CommandItem>
+                      ))}
+                    </Fragment>
                   );
                 })}
               </CommandGroup>

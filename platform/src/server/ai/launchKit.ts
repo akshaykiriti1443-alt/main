@@ -1,11 +1,11 @@
 import * as z from "zod/v4";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { aiGenerations, emailSequences, emailSequenceSteps, workspaces } from "@/lib/db/schema";
-import type { PageContent } from "@/lib/db/types";
+import { aiGenerations, emailSequences, emailSequenceSteps, pages, sites, workspaces, type PageKind } from "@/lib/db/schema";
+import { pageContentSchema, siteThemeSchema, type PageContent, type SiteTheme } from "@/lib/db/types";
 import { env } from "@/lib/env";
 import { DEFAULT_SEQUENCE } from "../defaults";
-import { createSite, newSectionId } from "../sites";
+import { createSite, getSite, newSectionId, type Site } from "../sites";
 import { AD_ANGLES, AD_FRAMEWORK_RULES } from "./adFramework";
 import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 import { isUuid } from "@/lib/util";
@@ -16,8 +16,13 @@ export const launchKitInputSchema = z.object({
   niche: z.string().min(3).max(160),
   audience: z.string().min(3).max(200),
   outcome: z.string().min(3).max(200),
+  /** The name the member gave their free checklist. Blank: the AI names it. */
   leadMagnetIdea: z.string().max(200).default(""),
   offer: z.string().max(200).default(""),
+  /** What they charge a month, as they typed it ("$29"). With trialDays it becomes the offer line. */
+  price: z.string().trim().max(20).optional(),
+  /** Days of free trial on their group. 0 means no free trial. */
+  trialDays: z.coerce.number().int().min(0).max(90).optional(),
   skoolUrl: z.string().max(300).default(""),
   tone: z.enum(["friendly", "bold", "calm"]).default("friendly"),
   brandColor: z
@@ -61,8 +66,9 @@ export const launchKitSchema = z.object({
 export type LaunchKit = z.infer<typeof launchKitSchema>;
 
 const SYSTEM = `You are a direct-response marketer who builds lead funnels for Skool community owners, coaches and personal trainers.
-You write a complete "launch kit" for one community: a free lead magnet, a landing page, a thank-you page that sends people to the Skool group, three follow-up emails, Meta ad copy, hooks, a Skool About page and a first-week ad plan.
-The owner grows with small paid ads, not social media. The first ads send people to the owner's website for the free lead magnet. The thank-you page then invites them into the Skool group.
+You write a complete "launch kit" for one community: a free checklist (the lead magnet), a landing page, a thank-you page that sends people to the Skool group, three follow-up emails, Meta ad copy, hooks and a Skool About page.
+The owner grows with small paid ads, not social media. The first ads send people to the owner's website for the free checklist. The thank-you page then invites them into the Skool group.
+The lead magnet is always a free checklist someone can tick off in a week, so leadMagnetType is "checklist".
 
 ${VOICE_RULES}
 
@@ -71,24 +77,66 @@ ${AD_FRAMEWORK_RULES}
 Formatting rules:
 - Email bodies and the lead magnet use plain text with blank lines between paragraphs. Use "- " for list items and **bold** for emphasis. No HTML.
 - In emails, use {{first_name}} for the reader's name, {{lead_magnet_url}} for the lead magnet link and {{skool_url}} for the group link. Sign emails with the owner's first name.
-- The Skool About page uses plain text with emojis as bullets. Skool has no bold, so keep structure with line breaks.
-- Ad plan: two small campaigns, up to $15 a day together. Campaign 1 is Leads to the owner's website at $10 a day, optimised for the Lead event. Campaign 2 is Traffic to the Skool About page (the owner's Skool link) at $5 a day, from Day 2, optimised for landing page views. No follower campaigns. $30 to $50 a day is for later, once members pay for it.`;
+- The Skool About page uses plain text with emojis as bullets. Skool has no bold, so keep structure with line breaks.`;
+
+/** days: null is a free trial of unstated length, 0 is no free trial at all. */
+export type Deal = { days: number | null; price: string | null };
+type DealSource = Pick<LaunchKitInput, "offer" | "price" | "trialDays">;
 
 /** The free trial the member's own offer mentions, if any. Only their words count: nothing is invented. */
-export function trialInOffer(offer: string): { days: number | null; price: string | null } | null {
+export function trialInOffer(offer: string): Deal | null {
   if (!/\bfree[- ]trial\b|\bdays? free\b|\bfree for \d/i.test(offer)) return null;
   const days = offer.match(/(\d+)[\s-]*days?\b/i);
   const price = offer.match(/[$£€₹]\s?\d[\d,.]*/) ?? offer.match(/\d[\d,.]*(?:\s*(?:usd|gbp|eur|aud|cad|inr|dollars?|pounds?|euros?))?(?=\s*(?:\/|a\b|per\b)\s*mo)/i);
   return { days: days ? Number(days[1]) : null, price: price ? price[0].replace(/\s+/g, " ").replace(/[.,]$/, "") : null };
 }
 
-/** The deal in plain words, for the thank-you page. */
-export function trialTerms(t: { days: number | null; price: string | null }): string {
-  return `${t.days ? `${t.days} days free` : "A free trial"}, then ${t.price ? `${t.price} a month` : "the monthly price on the group's page"}. Cancel before it bills and you pay nothing.`;
+/** "$29" from whatever they typed in the price box: "29", "$29/month", "£19 a month". Empty when there's no amount. */
+export function cleanPrice(raw: string): string {
+  const amount = raw.match(/\d[\d,]*(?:\.\d{1,2})?/)?.[0] ?? "";
+  if (!(Number(amount.replace(/,/g, "")) > 0)) return "";
+  return `${raw.match(/[$£€₹]/)?.[0] ?? "$"}${amount}`;
+}
+
+/** The deal the member told us: their price and trial boxes, else whatever their offer line says. */
+export function dealFor(input: DealSource): Deal | null {
+  const price = cleanPrice(input.price ?? "");
+  return price ? { days: input.trialDays ?? 0, price } : trialInOffer(input.offer);
+}
+
+/** Their deal as one line, the way they'd say it. Saved as their offer, so ads and replies use the same words. */
+export function offerLine(deal: Deal): string {
+  const price = deal.price ? `${deal.price} a month` : "A paid Skool group";
+  return deal.days === 0 ? price : `${price} with a ${deal.days ? `${deal.days}-day ` : ""}free trial`;
+}
+
+/** Where someone cancels. Kept general on purpose: Skool moves its menus, and this sits on live pages. */
+export const HOW_TO_CANCEL = "To cancel, open your settings on Skool.";
+
+/** The deal in plain words, for the thank-you page. `how` adds where to cancel. */
+export function trialTerms(t: Deal, opts: { how?: boolean } = {}): string {
+  const price = t.price ? `${t.price} a month` : "the monthly price on the group's page";
+  const deal =
+    t.days === 0
+      ? `${t.price ? price : "The monthly price is on the group's page"}, from the day you join. There is no free trial.`
+      : `${t.days ? `${t.days} ${t.days === 1 ? "day" : "days"} free` : "A free trial"}, then ${price}. Cancel before it bills and you pay nothing.`;
+  return opts.how ? `${deal} ${HOW_TO_CANCEL}` : deal;
+}
+
+/** Which parts of the deal a piece of page text states. */
+export function termsCheck(text: string, deal: Deal): { price: boolean; trial: boolean; cancel: boolean; how: boolean } {
+  return {
+    price: !deal.price || text.includes(deal.price),
+    // "7 days" or "7-day", so the 7 in "$27" doesn't count.
+    trial: !deal.days || new RegExp(`\\b${deal.days}[\\s-]*days?\\b`, "i").test(text),
+    cancel: /cancel/i.test(text),
+    how: /cancel/i.test(text) && /settings/i.test(text),
+  };
 }
 
 export function buildPrompt(input: LaunchKitInput) {
-  const trial = trialInOffer(input.offer);
+  const deal = dealFor(input);
+  const boxes = Boolean(cleanPrice(input.price ?? ""));
   return `Write the launch kit for this community.
 
 Community name: ${input.businessName}
@@ -96,26 +144,41 @@ Owner: ${input.ownerName}
 Niche: ${input.niche}
 Who it serves: ${input.audience}
 Main outcome members want: ${input.outcome}
-Lead magnet idea: ${input.leadMagnetIdea || "(pick the best quick-win lead magnet for this niche)"}
-Offer inside the Skool group: ${input.offer || "(a paid Skool membership, no details given)"}
+${input.leadMagnetIdea ? `Free checklist name: use "${input.leadMagnetIdea}" as leadMagnetName, word for word` : "Free checklist: (pick the best quick-win checklist for this niche and give it a short name)"}
+Offer inside the Skool group: ${input.offer || (deal ? offerLine(deal) : "(a paid Skool membership, no details given)")}
 Mention a free trial, a price or cancelling only if the offer line above states it. Never invent one, on any page or in any email.${
-    trial
+    deal && deal.days !== 0
       ? `
-The offer has a free trial, so thankYouBody must state the deal in plain words, right above the button: ${trialTerms(trial)} Keep all of that (how long it's free, the price a month after, and that they can cancel before it bills), in your own warm words. thankYouButton invites them to start the trial.`
-      : ""
+The offer has a free trial, so thankYouBody must state the deal in plain words, right above the button: ${trialTerms(deal, { how: boxes })} Keep all of that (how long it's free, the price a month after, and that they can cancel before it bills${boxes ? ", and where they cancel" : ""}), in your own warm words. thankYouButton invites them to start the trial.`
+      : deal
+        ? `
+There is no free trial, so thankYouBody must state the price in plain words, right above the button: ${trialTerms(deal, { how: true })} Keep the price and where they cancel, in your own warm words. Never mention a free trial.`
+        : ""
   }
 Tone: ${input.tone}
 
-Counts: exactly 3 bullets, 3 benefits, 3 steps, 4 FAQ items, 3 emails (day 0, day 1, day 3), 3 ads (the 3-Pack: angle pain, dream and lesson, in that order), 10 hooks, 2 campaigns in the ad plan and 7 first-week actions (one per day).
-The lead magnet content must be the full, usable lead magnet itself (300 to 600 words), not a description of it.`;
+Counts: exactly 3 bullets, 3 benefits, 3 steps, 4 FAQ items, 3 emails (day 0, day 1, day 3), 3 ads (the 3-Pack: angle pain, dream and lesson, in that order) and 10 hooks.
+The lead magnet content must be the full, usable checklist itself (300 to 600 words), not a description of it.`;
 }
 
-/** The AI should already have said it. If the deal didn't make it onto the page, it goes on anyway. */
-export function withTrialTerms(kit: LaunchKit, offer: string): LaunchKit {
-  const trial = trialInOffer(offer);
-  if (!trial) return kit;
-  const said = (!trial.days || kit.thankYouBody.includes(String(trial.days))) && (!trial.price || kit.thankYouBody.includes(trial.price)) && /cancel/i.test(kit.thankYouBody);
-  return said ? kit : { ...kit, thankYouBody: `${kit.thankYouBody.trim()} ${trialTerms(trial)}`.trim() };
+/**
+ * The AI should already have said it. If the deal didn't make it onto the page, it goes on anyway.
+ * A member who filled in the price and trial boxes also gets where to cancel.
+ */
+export function withTrialTerms(kit: LaunchKit, from: string | DealSource): LaunchKit {
+  const boxes = typeof from !== "string" && Boolean(cleanPrice(from.price ?? ""));
+  const deal = typeof from === "string" ? trialInOffer(from) : dealFor(from);
+  if (!deal) return kit;
+  const body = kit.thankYouBody.trim();
+  const said = termsCheck(body, deal);
+  const dealSaid = said.price && said.trial && (deal.days === 0 || said.cancel);
+  if (dealSaid && (!boxes || said.how)) return kit;
+  return { ...kit, thankYouBody: `${body} ${dealSaid ? HOW_TO_CANCEL : trialTerms(deal, { how: boxes })}`.trim() };
+}
+
+/** The checklist's name as the pages use it: "Get the free 7-Day Dad Reset", never "Get the free The 7-Day...". */
+export function checklistName(raw: string): string {
+  return raw.trim().replace(/^the\s+/i, "");
 }
 
 function take<T>(arr: T[], n: number, filler: (i: number) => T): T[] {
@@ -140,8 +203,11 @@ export function normalizeKit(kit: LaunchKit): LaunchKit {
 // Deterministic copy used when no AI key is configured (local dev, demos, tests).
 export function fallbackKit(input: LaunchKitInput): LaunchKit {
   const first = input.ownerName.split(" ")[0];
-  const lm = (input.leadMagnetIdea || `7-Day ${titleCase(input.niche)} Quick-Start Checklist`).replace(/^the\s+/i, "");
-  const trial = trialInOffer(input.offer);
+  const lm = checklistName(input.leadMagnetIdea) || `7-Day ${titleCase(input.niche)} Quick-Start Checklist`;
+  const deal = dealFor(input);
+  const trial = deal && deal.days !== 0 ? deal : null;
+  // Only the price and trial boxes add where to cancel; a typed offer line keeps to the member's own words.
+  const how = Boolean(cleanPrice(input.price ?? ""));
   return {
     leadMagnetName: lm,
     leadMagnetType: "checklist",
@@ -184,7 +250,9 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
       { q: "Can I start today?", a: "Yes. Enter your email and start with day 1." },
     ],
     thankYouHeadline: "It's in your inbox 📬",
-    thankYouBody: trial ? `Want help putting it to work? Come and join ${input.businessName}. ${trialTerms(trial)}` : `Want the full system? Join ${input.businessName} and get live help every week.`,
+    thankYouBody: trial
+      ? `Want help putting it to work? Come and join ${input.businessName}. ${trialTerms(trial, { how })}`
+      : `Want the full system? Join ${input.businessName} and get live help every week.${deal && how ? ` ${trialTerms(deal, { how })}` : ""}`,
     thankYouButton: trial ? "Start my free trial" : "Join the group",
     emails: [
       {
@@ -247,13 +315,13 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
         { name: "Skool link · Traffic", objective: "Traffic to your Skool link, optimised for landing page views", budgetUsd: 5, why: "Starts on Day 2 in its own campaign. Feeds Skool's 100-visitor bar for Level 2." },
       ],
       firstWeek: [
-        "Day 1: Publish your website, connect your Meta Pixel, sign up yourself, then launch 5 statics to your website at $10 a day.",
-        "Day 2: Get a free AI key and launch 5 more statics to your Skool link at $5 a day, in their own campaign.",
-        "Day 3: Hands off the ads. Walk through your own website and check your tracking in three places.",
-        "Day 4: Pin a welcome post, make your first Unlock and add one quick win to your Classroom.",
-        "Day 5: List 20 people who already know you and text five by hand. No link until they ask.",
-        "Day 6: Read your Ad review verdicts. Ads marked Kill go off today, and nothing else changes.",
-        "Day 7: Save your check-in, count what you built and decide what happens next.",
+        "Day 1: Add your free Gemini key, build this kit, publish your website, open your Skool group, connect your Meta Pixel, then launch 5 statics to your website at $10 a day.",
+        "Day 2: Launch 5 more statics to your Skool link at $5 a day, in their own campaign.",
+        "Day 3: Hands off the ads. Walk through your own website and sign-up, the way a stranger would.",
+        "Day 4: Pin a welcome post, make your first Unlock and add your first lesson.",
+        "Day 5: Text five people who already know you, by hand.",
+        "Day 6: Read your first numbers in Ad review.",
+        "Day 7: Save your check-in on Growth ladder and decide, in private, whether to stay.",
       ],
     },
   };
@@ -316,71 +384,142 @@ export function funnelPagesFromKit(kit: LaunchKit, input: Pick<LaunchKitInput, "
 }
 
 export type LaunchKitResult =
-  | { ok: true; generationId: string; siteId: string; usedAi: boolean; warning?: string }
-  | { ok: false; error: string };
+  | { ok: true; generationId: string; siteId: string; usedAi: boolean; /** An earlier kit's website was rewritten, not a second one made. */ replaced: boolean; warning?: string }
+  | { ok: false; error: string; /** no_runs: the free AI runs are used up. ai_failed: the AI call broke, and nothing was built. */ code?: "no_runs" | "ai_failed" };
 
-/** Generate the kit (AI or template), build the funnel and wire up the emails. */
-export async function runLaunchKit(workspaceId: string, rawInput: unknown): Promise<LaunchKitResult> {
+/** What the member reads when their free AI runs are gone. The page shows the "add your free key" card beside it. */
+export const KIT_OUT_OF_RUNS = "You've used your free AI runs for this month. Add a free Gemini key in Your AI, then press Build my launch kit again.";
+
+// The ad plan is never shown anywhere, so the AI isn't asked to write it: that keeps the reply
+// inside the smaller limit a free key allows. The kit still carries the rule-based plan.
+const aiKitSchema = launchKitSchema.omit({ adPlan: true });
+
+type KitPage = { slug: string; title: string; kind: PageKind; content: PageContent };
+
+/** The website an earlier launch kit built, if it's still there. Building again rewrites it. */
+export async function kitSite(workspaceId: string): Promise<Site | null> {
+  const db = await getDb();
+  const kits = await db
+    .select({ input: aiGenerations.input })
+    .from(aiGenerations)
+    .where(and(eq(aiGenerations.workspaceId, workspaceId), eq(aiGenerations.kind, "launch_kit")))
+    .orderBy(desc(aiGenerations.createdAt))
+    .limit(5);
+  for (const k of kits) {
+    const site = typeof k.input.siteId === "string" ? await getSite(workspaceId, k.input.siteId) : null;
+    if (site) return site;
+  }
+  if (!kits.length) return null;
+  // Kits from before the website was recorded on them: only a kit's website keeps its checklist at /guide.
+  const [old] = await db
+    .select()
+    .from(sites)
+    .where(and(eq(sites.workspaceId, workspaceId), eq(sites.leadMagnetUrl, "/guide")))
+    .orderBy(desc(sites.createdAt))
+    .limit(1);
+  return old ?? null;
+}
+
+/**
+ * Put a new kit into the website the last one built: same address, same name. Only the draft
+ * changes, so a live website shows the old pages until the member presses Publish again.
+ */
+async function rewriteSite(site: Site, next: { theme: Partial<SiteTheme>; skoolUrl: string; leadMagnetName: string; pages: KitPage[] }) {
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(sites)
+      .set({
+        theme: siteThemeSchema.parse({ ...site.theme, ...next.theme }),
+        skoolUrl: next.skoolUrl || site.skoolUrl,
+        leadMagnetName: next.leadMagnetName,
+        leadMagnetUrl: "/guide",
+        updatedAt: new Date(),
+      })
+      .where(eq(sites.id, site.id));
+    const existing = await tx.select({ id: pages.id, slug: pages.slug }).from(pages).where(eq(pages.siteId, site.id));
+    for (const p of next.pages) {
+      const content = pageContentSchema.parse(p.content);
+      const hit = existing.find((e) => e.slug === p.slug);
+      if (hit) await tx.update(pages).set({ content, title: p.title, kind: p.kind, updatedAt: new Date() }).where(eq(pages.id, hit.id));
+      else await tx.insert(pages).values({ siteId: site.id, workspaceId: site.workspaceId, slug: p.slug, title: p.title, kind: p.kind, content });
+    }
+  });
+  return site;
+}
+
+/**
+ * Generate the kit (AI or template), build the website and wire up the emails.
+ * Building again rewrites the website the last kit made. If the AI call fails, nothing is
+ * built or changed; `useAi: false` asks for the starter template on purpose.
+ */
+export async function runLaunchKit(workspaceId: string, rawInput: unknown, opts: { useAi?: boolean } = {}): Promise<LaunchKitResult> {
   const parsedInput = launchKitInputSchema.safeParse(rawInput);
   if (!parsedInput.success) return { ok: false, error: "Please fill in every required field." };
-  const input = parsedInput.data;
+  // The price and trial boxes become the offer line, so Ad studio, ad research and reply drafts read the same deal.
+  const price = cleanPrice(parsedInput.data.price ?? "");
+  const input: LaunchKitInput = price
+    ? { ...parsedInput.data, price, trialDays: parsedInput.data.trialDays ?? 0, offer: offerLine({ price, days: parsedInput.data.trialDays ?? 0 }) }
+    : parsedInput.data;
 
   let kit: LaunchKit;
   let usedAi = false;
   let warning: string | undefined;
   let usage = { inputTokens: 0, outputTokens: 0, model: "template" };
 
-  const charge = await chargeAi(workspaceId, "ai_generation", "AI launch kit");
-  if (!charge && env.aiEnabled) {
-    return { ok: false, error: "You've used this month's AI generations. Add funds in Plan & wallet to generate more." };
-  }
+  const charge = opts.useAi === false ? null : await chargeAi(workspaceId, "ai_generation", "AI launch kit");
   if (charge) {
     try {
-      const res = await generateStructured({ workspaceId, creds: charge.creds, system: SYSTEM, prompt: buildPrompt(input), schema: launchKitSchema, effort: "medium" });
-      kit = withTrialTerms(normalizeKit(res.data), input.offer);
+      const res = await generateStructured({ workspaceId, creds: charge.creds, system: SYSTEM, prompt: buildPrompt(input), schema: aiKitSchema, effort: "medium" });
+      const written = normalizeKit({ ...res.data, adPlan: fallbackKit(input).adPlan });
+      const named = checklistName(input.leadMagnetIdea) || checklistName(written.leadMagnetName) || written.leadMagnetName;
+      kit = withTrialTerms({ ...written, leadMagnetName: named }, input);
       usage = res.usage;
       usedAi = true;
     } catch (err) {
       await refundAi(workspaceId, "ai_generation", charge, "Refund: AI launch kit failed");
-      warning = `${describeAiError(err)} We used a template kit instead.`;
-      kit = fallbackKit(input);
+      return { ok: false, code: "ai_failed", error: `${describeAiError(err)} Nothing was built or changed. Press Build my launch kit to try again, or use the starter template for now.` };
     }
+  } else if (opts.useAi !== false && env.aiEnabled) {
+    return { ok: false, code: "no_runs", error: KIT_OUT_OF_RUNS };
   } else {
     kit = fallbackKit(input);
-    warning = "AI is not configured on this server, so this kit uses a template. Add ANTHROPIC_API_KEY for AI-written copy.";
+    warning =
+      opts.useAi === false
+        ? "This kit is the starter template, not written by AI. You can edit every word, or build again once your AI is working."
+        : "No AI is connected yet, so this kit is a starter template. Add a free Gemini key in Your AI, then build again for a kit written around you.";
   }
 
   const db = await getDb();
+  const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+  // A blank link box never wipes a link saved earlier.
+  const skoolUrl = input.skoolUrl || ws?.settings.skoolUrl || "";
+  const pagesContent = funnelPagesFromKit(kit, input);
+  const theme: Partial<SiteTheme> = { brandColor: input.brandColor, style: input.tone === "calm" ? "clean" : "bold" };
+  const kitPages: KitPage[] = [
+    { slug: "", title: "Opt-in page", kind: "optin", content: pagesContent.optin },
+    { slug: "thank-you", title: "Thank-you page", kind: "thankyou", content: pagesContent.thankyou },
+    { slug: "guide", title: kit.leadMagnetName, kind: "custom", content: pagesContent.guide },
+  ];
+  const earlier = await kitSite(workspaceId);
+  const site = earlier
+    ? await rewriteSite(earlier, { theme, skoolUrl, leadMagnetName: kit.leadMagnetName, pages: kitPages })
+    : await createSite({ workspaceId, name: `${input.businessName} funnel`, theme: { ...theme, font: "sans" }, skoolUrl, leadMagnetName: kit.leadMagnetName, leadMagnetUrl: "/guide", pages: kitPages });
+
   const [generation] = await db
     .insert(aiGenerations)
     .values({
       workspaceId,
       kind: "launch_kit",
-      input,
+      input: { ...input, siteId: site.id },
       output: kit as unknown as Record<string, unknown>,
       model: usage.model,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
     })
     .returning({ id: aiGenerations.id });
-
-  const pagesContent = funnelPagesFromKit(kit, input);
-  const site = await createSite({
-    workspaceId,
-    name: `${input.businessName} funnel`,
-    theme: { brandColor: input.brandColor, style: input.tone === "calm" ? "clean" : "bold", font: "sans" },
-    skoolUrl: input.skoolUrl,
-    leadMagnetName: kit.leadMagnetName,
-    leadMagnetUrl: "/guide",
-    pages: [
-      { slug: "", title: "Opt-in page", kind: "optin", content: pagesContent.optin },
-      { slug: "thank-you", title: "Thank-you page", kind: "thankyou", content: pagesContent.thankyou },
-      { slug: "guide", title: kit.leadMagnetName, kind: "custom", content: pagesContent.guide },
-    ],
-  });
   await replaceDefaultEmails(workspaceId, kit, input.ownerName);
 
-  const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
   await db
     .update(workspaces)
     .set({
@@ -389,14 +528,37 @@ export async function runLaunchKit(workspaceId: string, rawInput: unknown): Prom
         businessName: input.businessName,
         niche: input.niche,
         audience: input.audience,
-        offer: input.offer,
-        skoolUrl: input.skoolUrl,
+        offer: input.offer || ws?.settings.offer || "",
+        skoolUrl,
         launchKitId: generation.id,
       },
     })
     .where(eq(workspaces.id, workspaceId));
 
-  return { ok: true, generationId: generation.id, siteId: site.id, usedAi, warning };
+  return { ok: true, generationId: generation.id, siteId: site.id, usedAi, replaced: Boolean(earlier), warning };
+}
+
+const NOT_WORDS = new Set(["id", "type", "buttonUrl", "imageUrl", "url"]);
+const words = (v: unknown): string[] =>
+  typeof v === "string" ? [v] : Array.isArray(v) ? v.flatMap(words) : v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => (NOT_WORDS.has(k) ? [] : words(x))) : [];
+
+/** Every word a visitor reads on a page, for checking what it states. */
+export function pageText(content: PageContent | null | undefined): string {
+  return words(content?.sections ?? []).join(" ");
+}
+
+/** The kit's website and what its thank-you page says right now (the draft, edits included). */
+export async function kitWebsite(workspaceId: string): Promise<{ site: Site; thankYou: { id: string; text: string } | null } | null> {
+  const site = await kitSite(workspaceId);
+  if (!site) return null;
+  const db = await getDb();
+  const [page] = await db
+    .select({ id: pages.id, content: pages.content })
+    .from(pages)
+    .where(and(eq(pages.siteId, site.id), eq(pages.kind, "thankyou")))
+    .orderBy(asc(pages.createdAt))
+    .limit(1);
+  return { site, thankYou: page ? { id: page.id, text: pageText(page.content) } : null };
 }
 
 async function replaceDefaultEmails(workspaceId: string, kit: LaunchKit, ownerName: string) {

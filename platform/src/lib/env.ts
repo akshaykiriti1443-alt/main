@@ -32,6 +32,7 @@ export const env = {
   skoolWebhookSecret: process.env.SKOOL_WEBHOOK_SECRET ?? "",
   // Your Skool community (where "Join on Skool" buttons point), e.g. https://www.skool.com/your-group/about
   skoolGroupUrl: process.env.SKOOL_GROUP_URL ?? "",
+  skoolReferralUrl: process.env.SKOOL_REFERRAL_URL ?? "",
   // New signups can use the app right away for this many days (once per email) while their
   // membership is confirmed by Zapier or the next Skool export. 0 turns it off.
   welcomeAccessDays: Number(process.env.WELCOME_ACCESS_DAYS ?? 3),
@@ -72,6 +73,11 @@ export const env = {
 
   twilioSid: process.env.TWILIO_ACCOUNT_SID ?? "",
   twilioToken: process.env.TWILIO_AUTH_TOKEN ?? "",
+
+  // ReelVault Members is its own app. OneX signs a short ticket so a logged-in member lands there signed in.
+  // Both sides hold the same ONEX_SSO_SECRET (32+ characters). Server only: never in client code or Git.
+  reelVaultUrl: (process.env.REELVAULT_URL || "http://localhost:8800").replace(/\/$/, ""),
+  onexSsoSecret: process.env.ONEX_SSO_SECRET ?? "",
 };
 
 export function assertProductionSecrets() {

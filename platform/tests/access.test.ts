@@ -199,7 +199,7 @@ describe("member access without codes", () => {
   it("confirm emails are throttled: one a minute, five a day", async () => {
     const user = await createUser({ email: `throttle-${stamp()}@example.com`, name: "Tho Ttle", password: "password123", emailVerified: false });
     await sendVerifyEmail(user.id);
-    await expect(sendVerifyEmail(user.id)).rejects.toThrow(/Wait a minute/);
+    await expect(sendVerifyEmail(user.id)).rejects.toThrow(/less than a minute/);
     const key = `t-${stamp()}`;
     const at = new Date();
     expect(await takeRateLimit(key, EMAIL_SEND_LIMIT, at)).toBe(true);

@@ -1,9 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requireWorkspace } from "@/server/tenancy";
-import { runLaunchKit } from "@/server/ai/launchKit";
 import {
+  accountSkoolUrl,
   addPage,
   createSite,
   defaultSection,
@@ -12,6 +11,7 @@ import {
   listSites,
   publishSite,
   savePageContent,
+  siteBaseUrl,
   unpublishSite,
   updateSite,
 } from "@/server/sites";
@@ -19,45 +19,17 @@ import { connectDomain, removeDomain } from "@/server/domains";
 import { siteThemeSchema } from "@/lib/db/types";
 import { safeUrl } from "@/lib/html";
 import { PLANS, hasFeature } from "@/server/plans";
-import { isSkoolUrl } from "@/server/growth";
 import { errMsg, field, go } from "./helpers";
-
-const SKOOL_URL_ERROR = "Your Skool link must be a skool.com link, like https://www.skool.com/your-group";
-
-export async function launchKitAction(wid: string, fd: FormData) {
-  const { workspace } = await requireWorkspace(wid, "admin");
-  const sites = await listSites(wid);
-  if (sites.length >= PLANS[workspace.plan].maxSites) {
-    go(`/app/w/${wid}/launch`, { error: `Your plan includes ${PLANS[workspace.plan].maxSites} sites. Delete one or upgrade to add more.` });
-  }
-  const launchSkoolUrl = field(fd, "skoolUrl", 300);
-  if (launchSkoolUrl && !isSkoolUrl(launchSkoolUrl)) go(`/app/w/${wid}/launch`, { error: SKOOL_URL_ERROR });
-  const res = await runLaunchKit(wid, {
-    businessName: field(fd, "businessName", 80),
-    ownerName: field(fd, "ownerName", 60),
-    niche: field(fd, "niche", 160),
-    audience: field(fd, "audience", 200),
-    outcome: field(fd, "outcome", 200),
-    leadMagnetIdea: field(fd, "leadMagnetIdea", 200),
-    offer: field(fd, "offer", 200),
-    skoolUrl: safeUrl(launchSkoolUrl),
-    tone: field(fd, "tone") || "friendly",
-    brandColor: field(fd, "brandColor") || "#2A44EE",
-  });
-  if (!res.ok) go(`/app/w/${wid}/launch`, { error: res.error });
-  revalidatePath(`/app/w/${wid}`, "layout");
-  go(`/app/w/${wid}/launch?kit=${res.generationId}`, { ok: "Your launch kit is ready. Your funnel is built.", ...(res.warning ? { warn: res.warning } : {}) });
-}
 
 export async function createSiteAction(wid: string, fd: FormData) {
   const { workspace } = await requireWorkspace(wid, "admin");
   const sites = await listSites(wid);
-  if (sites.length >= PLANS[workspace.plan].maxSites) go(`/app/w/${wid}/sites`, { error: "You've reached your plan's site limit." });
+  if (sites.length >= PLANS[workspace.plan].maxSites) go(`/app/w/${wid}/sites`, { error: "You already have as many funnels as your account holds. Delete one to start another." });
   const name = field(fd, "name", 80) || "New funnel";
   const site = await createSite({
     workspaceId: wid,
     name,
-    skoolUrl: workspace.settings.skoolUrl ?? "",
+    skoolUrl: await accountSkoolUrl(wid, workspace.settings.skoolUrl),
     pages: [
       { slug: "", title: "Opt-in page", kind: "optin", content: { sections: [defaultSection("hero"), defaultSection("benefits"), defaultSection("faq"), defaultSection("form")] } },
       { slug: "thank-you", title: "Thank-you page", kind: "thankyou", content: { sections: [defaultSection("cta")] } },
@@ -69,15 +41,13 @@ export async function createSiteAction(wid: string, fd: FormData) {
 export async function updateSiteAction(wid: string, siteId: string, fd: FormData) {
   await requireWorkspace(wid, "admin");
   const theme = siteThemeSchema.safeParse({ style: field(fd, "style"), brandColor: field(fd, "brandColor"), font: field(fd, "font") });
-  const skoolUrl = field(fd, "skoolUrl", 300);
   const leadMagnetUrl = field(fd, "leadMagnetUrl", 500);
-  if (skoolUrl && !isSkoolUrl(skoolUrl)) go(`/app/w/${wid}/sites/${siteId}`, { error: SKOOL_URL_ERROR });
   if (leadMagnetUrl && !leadMagnetUrl.startsWith("/") && !safeUrl(leadMagnetUrl)) {
     go(`/app/w/${wid}/sites/${siteId}`, { error: "The lead magnet link must start with https:// or be a page like /guide" });
   }
+  // The Skool link is not set here: there is one per account, saved in Settings.
   await updateSite(wid, siteId, {
     name: field(fd, "name", 80) || "Funnel",
-    skoolUrl: skoolUrl ? safeUrl(skoolUrl) : "",
     leadMagnetName: field(fd, "leadMagnetName", 120),
     leadMagnetUrl,
     ...(theme.success ? { theme: theme.data } : {}),
@@ -87,14 +57,14 @@ export async function updateSiteAction(wid: string, siteId: string, fd: FormData
 
 export async function publishSiteAction(wid: string, siteId: string) {
   await requireWorkspace(wid, "admin");
-  await publishSite(wid, siteId);
-  go(`/app/w/${wid}/sites/${siteId}`, { ok: "Published. Your pages are live." });
+  const site = await publishSite(wid, siteId);
+  go(`/app/w/${wid}/sites/${siteId}`, { ok: `Published. Your website is live at ${siteBaseUrl(site).replace(/^https?:\/\//, "")}` });
 }
 
 export async function unpublishSiteAction(wid: string, siteId: string) {
   await requireWorkspace(wid, "admin");
   await unpublishSite(wid, siteId);
-  go(`/app/w/${wid}/sites/${siteId}`, { ok: "Unpublished. Visitors see a 'not live' notice." });
+  go(`/app/w/${wid}/sites/${siteId}`, { ok: "Unpublished. Visitors now see a short 'not live yet' note." });
 }
 
 export async function deleteSiteAction(wid: string, siteId: string) {

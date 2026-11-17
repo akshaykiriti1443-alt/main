@@ -1,51 +1,55 @@
-import { computePath, type TodayCard } from "./path";
+import { computePath, type Path, type WeekStep } from "./path";
 import { getEntryTicket } from "./unlocks";
 
-// The companion ("Penny"): a step-by-step guide on every page that a member can turn on and off.
-// The server only says where the member is on Your path; the words live in src/lib/guides.ts.
+// The companion ("Penny"): how to do this exact step, on the page where it happens. She never
+// picks a step: she reads path.current, so she can't disagree with the big card on the home page.
+// The words live in src/lib/guides.ts and src/lib/week.ts.
 
 export {
   GUIDE_COOKIE,
+  GUIDE_HELLO_COOKIE,
   GUIDE_SKIP_COOKIE,
   isGuideMode,
   type GuideMode,
 } from "@/lib/guides";
 
-export type CompanionStep = {
-  key: string;
-  title: string;
-  why: string;
-  lesson: string;
-  href: string;
-  done: boolean;
-  locked?: string;
-  /** Optional steps and outcomes are never "next"; they still tick when done (see path.ts). */
-  kind?: "optional" | "outcome";
-  stage: string;
-};
 export type CompanionSnapshot = {
-  steps: CompanionStep[];
-  done: number;
-  total: number;
-  level: number;
-  /** Days 2 to 7: today's lesson. Read-only, never counted (see path.ts). */
-  today: TodayCard | null;
+  mode: Path["mode"];
+  state: Path["state"];
+  current: WeekStep | null;
+  /** The current day's title, for her kicker. */
+  dayTitle?: string;
+  doneKeys: string[];
+  /** Win line per done key, so a fresh tick can say what now exists. */
+  wins: Record<string, string>;
+  laterCount: number;
+  waitingOnMeta: boolean;
+  skoolGroupUrl: string;
 };
+
+/** Pure: the slice of the path Penny needs. */
+export function snapshotFromPath(path: Path): CompanionSnapshot {
+  const steps = path.days.flatMap((d) => d.steps);
+  return {
+    mode: path.mode,
+    state: path.state,
+    current: path.current,
+    dayTitle: path.current ? path.days[path.current.day - 1]?.title : undefined,
+    doneKeys: path.doneKeys,
+    wins: Object.fromEntries(steps.filter((s) => s.done).map((s) => [s.key, s.win])),
+    laterCount: path.laterKeys.length,
+    waitingOnMeta: path.waitingOnMeta,
+    skoolGroupUrl: path.links.skoolGroup,
+  };
+}
 
 export async function companionSnapshot(
   ws: Parameters<typeof computePath>[0],
   userId: string,
 ): Promise<CompanionSnapshot> {
-  const path = await computePath(ws, userId, {
-    entryTicketOn: Boolean((await getEntryTicket())?.on),
-  });
-  return {
-    steps: path.stages.flatMap((st) =>
-      st.steps.map((x) => ({ ...x, stage: st.tag })),
-    ),
-    done: path.done,
-    total: path.total,
-    level: path.level,
-    today: path.today,
-  };
+  return snapshotFromPath(
+    await computePath(ws, userId, {
+      entryTicketOn: Boolean((await getEntryTicket())?.on),
+    }),
+  );
 }
