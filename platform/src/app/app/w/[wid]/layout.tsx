@@ -83,6 +83,7 @@ export default async function WorkspaceLayout({
         base,
         plan: workspace.plan,
         unread,
+        // Only shown once ONEX_SSO_SECRET is set, and open from the start: ReelVault is never locked behind a post.
         reelVault: reelVaultConfigured(),
         member: workspace.plan === "starter" && agency.isPlatform,
         mode,

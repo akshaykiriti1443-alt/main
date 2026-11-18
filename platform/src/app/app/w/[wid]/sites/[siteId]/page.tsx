@@ -97,7 +97,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
         All funnels
       </Link>
       <PageHead
-        lesson="Day 1"
+        lesson="Day 2"
         title={site.name}
         sub={site.published ? "Live and taking sign-ups. Edit any page, then publish the changes." : "A draft, so nobody can see it yet. Check your pages, then publish."}
         first={site.published ? undefined : "Open the opt-in page, make the headline sound like you, then press Publish."}
@@ -157,7 +157,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
         </Card>
       ) : (
         <NextStep
-          eyebrow="Day 1 · The scary button"
+          eyebrow="Day 2 · The scary button"
           title="Publish your funnel"
           body={
             <>
@@ -306,13 +306,14 @@ export default async function SitePage({ params, searchParams }: { params: Promi
               <Field>
                 <FieldLabel htmlFor="style">Style</FieldLabel>
                 <NativeSelect id="style" name="style" defaultValue={site.theme.style} className="w-full">
+                  <NativeSelectOption value="glass">Glass (premium: soft glow, frosted cards)</NativeSelectOption>
                   <NativeSelectOption value="bold">Bold (color hero)</NativeSelectOption>
                   <NativeSelectOption value="clean">Clean (light)</NativeSelectOption>
                   <NativeSelectOption value="dark">Dark</NativeSelectOption>
                   <NativeSelectOption value="editorial">Editorial (paper, magazine type)</NativeSelectOption>
                   <NativeSelectOption value="luxe">Luxe (deep color, centered)</NativeSelectOption>
                 </NativeSelect>
-                <FieldDescription>Editorial and Luxe look best with the Classic serif font.</FieldDescription>
+                <FieldDescription>Glass looks best with Modern sans. Editorial and Luxe look best with the Classic serif font.</FieldDescription>
               </Field>
               <div className="grid grid-cols-[1fr_auto] items-end gap-4">
                 <Field>

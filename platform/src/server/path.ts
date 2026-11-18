@@ -1,16 +1,18 @@
 import { cache } from "react";
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { activities, agencyMembers, aiGenerations, automations, contacts, emailSequences, emailSequenceSteps, sites, skoolCheckins, unlockClaims, unlocks } from "@/lib/db/schema";
+import { activities, agencyMembers, aiGenerations, apiTokens, automations, contacts, emailSequences, emailSequenceSteps, sites, skoolCheckins, unlockClaims, unlocks } from "@/lib/db/schema";
 import type { Journey, WorkspaceSettings } from "@/lib/db/types";
 import { env } from "@/lib/env";
-import { AI_RUNS_WIN, HELLO_STEP, JOURNEY_COPY, JOURNEY_SINCE, POST_KEYS, REVIEW_WAITING_WIN, WEEK, WEEK_STEPS, type HrefKind, type WeekStepDef, type Where } from "@/lib/week";
+import { AI_CONNECTOR_WIN, AI_RUNS_WIN, CARRIED_WIN, DAY_REWARDS, fill, postLinkPlaceholder, HELLO_STEP, JOURNEY_COPY, JOURNEY_SINCE, POST_KEYS, REVIEW_WAITING_WIN, WEEK, WEEK_STEPS, withCarriedTicks, withLegacyTicks, type HrefKind, type WeekStepDef, type Where } from "@/lib/week";
+import { reelVaultConfigured } from "@/lib/reelvault";
 import { isAdSource, skoolAdVisits } from "./growth";
 import { pixelStatus, type TrackingSettings } from "./meta/capi";
 import { hasFeature } from "./plans";
 import { siteBaseUrl } from "./sites";
 import { getWorkspaceContext } from "./tenancy";
 import { getEntryTicket } from "./unlocks";
+import { courseGroup, getCourseUnlocks, inCourse, postCountsBeforeSwitch } from "./courseUnlocks";
 
 // "Your path": the seven days of The Anti-Pete Week as a checklist. The course itself is text in
 // Skool; this is the doing. Each step ticks from what the app can see, or from the member's own
@@ -62,8 +64,15 @@ export type WeekStep = {
   note?: string;
   /** Post steps: each half of "post yours, review the one before". Done needs both. */
   halves?: { posted: boolean; reviewed: boolean };
+  /**
+   * Post steps while course unlocks are on: the posted half is the pasted link, not a tick.
+   * saved: the link that's in (flagged ones wait for the owner). reward: what the link opened.
+   */
+  /** catchUp: posted only on a pre-switch tick with no link saved. It counts, but the link form still shows (with this line). */
+  postLink?: { saved?: { url: string; flagged: boolean; reason: string }; next: string; reward?: string; placeholder: string; catchUp?: string };
 };
-export type WeekDay = { day: number; title: string; section?: string; steps: WeekStep[]; done: number; total: number; complete: boolean };
+/** opens: course unlocks only, a quiet line on a day whose lesson opens after an earlier post. Never a lock in the app. */
+export type WeekDay = { day: number; title: string; section?: string; steps: WeekStep[]; done: number; total: number; complete: boolean; opens?: string };
 
 type Ws = { id: string; plan: "starter" | "growth" | "owner"; accessSource: string; settings: WorkspaceSettings; createdAt: Date };
 
@@ -117,11 +126,20 @@ export type Path = {
   level: number;
   loop: LoopCounts;
   shelf: Shelf;
+  /** Course unlocks apply to this account: each day's lesson in Skool opens after the post before it. */
+  courseUnlocks: boolean;
 };
+
+/** Your path's intro line. With course unlocks on, Skool's lessons open one post at a time, so it says that. */
+export const pathIntro = (path: Pick<Path, "courseUnlocks">): string => (path.courseUnlocks ? JOURNEY_COPY.path.subUnlocks : JOURNEY_COPY.path.sub);
 
 const count = (rows: { n: number }[]) => rows[0]?.n ?? 0;
 const DAY = 86_400_000;
 const EVENTS_MANAGER = "https://business.facebook.com/events_manager2";
+/** Day 2's Page and Instagram: Meta Business Suite is where both are linked. */
+const META_BUSINESS = "https://business.facebook.com/";
+/** Day 2's "Plan this week's posts": the free Planner in Meta Business Suite (Facebook and Instagram). */
+export const META_PLANNER = "https://business.facebook.com/latest/content_calendar";
 
 /** The calendar date in the member's timezone (en-CA prints YYYY-MM-DD). A bad zone falls back to UTC. */
 function localDate(d: Date, timeZone: string): string {
@@ -132,17 +150,20 @@ function localDate(d: Date, timeZone: string): string {
   }
 }
 
-export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?: boolean; now?: Date } = {}): Promise<Path> {
+export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?: boolean; courseUnlocksOn?: boolean; courseUnlocksSince?: string | null; now?: Date } = {}): Promise<Path> {
   const db = await getDb();
   const wid = ws.id;
   const now = opts.now ?? new Date();
   const since30 = new Date(now.getTime() - 30 * DAY);
   const n = sql<number>`count(*)::int`;
-  const [kits, research, studio, reviews, published, skoolSite, clicks, realClicks, leads30, leadsEver, adLeads, checkins, checkinCount, paidCheckins, liveAutomations, myUnlocks, unlockClaimCount, longSequences, agencies, handAdded, firstSite, studioDest] = await Promise.all([
+  const [kits, research, studio, reviews, carousels, published, skoolSite, clicks, realClicks, leads30, leadsEver, adLeads, checkins, checkinCount, paidCheckins, liveAutomations, myUnlocks, unlockClaimCount, longSequences, agencies, handAdded, firstSite, studioDest, connectors] = await Promise.all([
     db.select({ n }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "launch_kit"))),
     db.select({ n }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_research"))),
     db.select({ n }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_studio"))),
     db.select({ n }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_review"))),
+    // Day 1's "Make your first post": a carousel saved in Make my carousel (one ai_generations row each,
+    // kind "carousel", see src/server/carousel/store.ts).
+    db.select({ n }).from(aiGenerations).where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "carousel"))),
     db.select({ n }).from(sites).where(and(eq(sites.workspaceId, wid), eq(sites.published, true))),
     db.select({ n }).from(sites).where(and(eq(sites.workspaceId, wid), sql`${sites.skoolUrl} <> ''`)),
     db.select({ n }).from(activities).where(and(eq(activities.workspaceId, wid), eq(activities.type, "skool_visit"), gte(activities.createdAt, since30))),
@@ -175,7 +196,7 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
     db.select({ n }).from(contacts).where(and(eq(contacts.workspaceId, wid), eq(contacts.source, "manual"))),
     // The member's real website address, for the post layouts and "Open it".
     db.select({ slug: sites.slug, customDomain: sites.customDomain, domainStatus: sites.domainStatus }).from(sites).where(and(eq(sites.workspaceId, wid), eq(sites.published, true))).orderBy(asc(sites.createdAt)).limit(1),
-    // Day 2's pack goes to the Skool link. Packs from before destinations were saved have none.
+    // Day 3's pack goes to the Skool link. Packs from before destinations were saved have none.
     db
       .select({
         skool: sql<number>`count(*) filter (where ${aiGenerations.input}->>'destination' = 'skool')::int`,
@@ -183,11 +204,20 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
       })
       .from(aiGenerations)
       .where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "ad_studio"))),
+    // Day 1's AI step: a connector link (their own Claude) that hasn't been revoked and that Claude has
+    // used at least once. A link that was only made isn't a connected Claude.
+    db.select({ n }).from(apiTokens).where(and(eq(apiTokens.workspaceId, wid), isNull(apiTokens.revokedAt), isNotNull(apiTokens.lastUsedAt))),
   ]);
 
   const s = ws.settings;
   const journey: Journey = s.journey ?? {};
-  const ticks = journey.ticks ?? {};
+  // Ticks saved under steps the week no longer has count for the steps that replaced them (video1, the
+  // old Day 2 post, counts for Day 1's carousel and firstpost). Keys with no step now are simply ignored.
+  // Then carry-over: a member who posted a day on the old day order (before WEEK_V5_SINCE) has every
+  // step of that day and the days before it counted ("carried"), so they land on the first day they
+  // haven't posted, not back on Day 1. Carried steps read as the member's word, never as app-seen.
+  const ticks = withCarriedTicks(withLegacyTicks(journey.ticks), journey.posts, journey.uncarried);
+  const carried = (key: string) => ticks[key]?.as === "carried";
   const laterAt = journey.later ?? {};
   const started = journey.started ?? {};
   const base = `/app/w/${wid}`;
@@ -204,10 +234,12 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
   // What the app can see. A "you-upgrades" step turns solid here as soon as the proof arrives.
   const seen: Record<string, boolean> = {
     hello: Boolean(s.entryClaimedAt),
-    // Only a saved key lifts the 3-run cap, so a connector doesn't tick it.
-    ai: Boolean(s.aiKeyEnc),
+    // A saved key, or their own Claude connected through a connector link it has used. (Only a key lifts the
+    // 3-run cap; the connector does the AI work from their chat, at their cost.)
+    ai: Boolean(s.aiKeyEnc) || count(connectors) > 0,
     skool: Boolean(s.skoolUrl) || count(skoolSite) > 0,
     kit: count(kits) > 0,
+    carousel: count(carousels) > 0,
     publish: count(published) > 0,
     pixel: Boolean(s.metaPixelId),
     research: count(research) > 0,
@@ -225,6 +257,7 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
     checkin: Boolean(last),
   };
 
+  const rvOn = reelVaultConfigured();
   const hrefOf = (kind: HrefKind): string | null => {
     switch (kind) {
       case "ai": return `${base}/ai`;
@@ -242,6 +275,11 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
       case "events": return EVENTS_MANAGER;
       case "unlocks": return `${base}/unlocks`;
       case "ads": return `${base}/ads`;
+      // Only once ReelVault is switched on: without it the step is done by hand (see whyOf).
+      case "reelvault": return rvOn ? `${base}/reelvault` : null;
+      case "carousel": return `${base}/carousel`;
+      case "metaPages": return META_BUSINESS;
+      case "metaPlanner": return META_PLANNER;
       case "none": return null;
     }
   };
@@ -252,19 +290,30 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
     publish: websiteUrl ? { text: P.publish, href: websiteUrl } : undefined,
     pixel: { text: pixelStatus(s as TrackingSettings).state === "accepted" ? P.pixelAccepted : P.pixelUntested, href: `${base}/settings#tracking` },
     research: { text: P.research, href: `${base}/ads/research` },
+    carousel: seen.carousel ? { text: P.carousel, href: `${base}/carousel` } : undefined,
     statics: { text: P.statics, href: `${base}/ads/studio#plan` },
     lead1: { text: P.lead1, href: `${base}/leads` },
     unlock: { text: P.unlock, href: `${base}/unlocks` },
     review: { text: P.review, href: `${base}/ads` },
   };
 
+  // Course unlocks: the posted half of a day's post is its pasted link (ticked "as link"). A post ticked
+  // before the switch went on still counts, so turning it on never moves anyone backwards. Every member
+  // account is in the course (manual grants too); only agency workspaces aren't.
+  const linkMode = Boolean(opts.courseUnlocksOn) && inCourse(ws);
+  const posts = journey.posts ?? {};
+  const postedOf = (key: string) =>
+    linkMode ? ticks[key]?.as === "link" || carried(key) || postCountsBeforeSwitch(ticks[key], opts.courseUnlocksSince) : Boolean(ticks[key]);
+
   const tickOf = (def: WeekStepDef): Tick => {
-    if (POST_KEYS.includes(def.key)) return ticks[def.key] && ticks[`${def.key}r`] ? "you" : null;
-    if (def.tick === "app") return seen[def.key] ? "app" : null;
+    if (POST_KEYS.includes(def.key)) return postedOf(def.key) && ticks[`${def.key}r`] ? "you" : null;
+    // A carried step the app hasn't seen reads as the member's word: it never claims the app saw it.
+    if (def.tick === "app") return seen[def.key] ? "app" : carried(def.key) ? "you" : null;
     if (def.tick === "you") return ticks[def.key] ? "you" : null;
     if (seen[def.key]) return "app";
     const t = ticks[def.key];
     if (!t) return null;
+    if (t.as === "carried") return "you";
     // The verdicts step only ever takes the member's word as "nothing to judge yet".
     return def.key === "review" || t.as === "waiting" ? "waiting" : "you";
   };
@@ -274,6 +323,22 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
   const showHello = Boolean(opts.entryTicketOn) && ws.accessSource === "member" && Boolean(s.entryClaimedAt);
   // Agency workspaces aren't in the community, so there's no Skool post to make.
   const defs = ws.accessSource === "agency" ? WEEK_STEPS.filter((d) => !POST_KEYS.includes(d.key)) : WEEK_STEPS;
+
+  const postLinkOf = (day: number): WeekStep["postLink"] => {
+    const p = posts[String(day)];
+    const C = JOURNEY_COPY.post;
+    const key = `post${day}`;
+    // Posted on a tick from before the switch, with no link in: no post record, no Zapier send, so the
+    // next lesson in Skool never opened. It keeps counting; the form stays up so the paste can open it.
+    const catchUp = !p?.url && ticks[key]?.as !== "link" && postCountsBeforeSwitch(ticks[key], opts.courseUnlocksSince);
+    return {
+      saved: p?.url ? { url: p.url, flagged: Boolean(p.flagged), reason: p.reason ?? "" } : undefined,
+      next: day < WEEK.length ? C.linkNext : C.linkLast,
+      reward: DAY_REWARDS[day],
+      placeholder: postLinkPlaceholder(courseGroup()),
+      ...(catchUp ? { catchUp: fill(day < WEEK.length ? C.linkCatchUp : C.linkCatchUpLast, { day }) } : {}),
+    };
+  };
 
   const days: WeekDay[] = WEEK.map((wd) => {
     const list = [...(wd.day === 1 && showHello ? [HELLO_STEP] : []), ...defs.filter((d) => d.day === wd.day)];
@@ -287,7 +352,7 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
         n: i + 1,
         count: list.length,
         title: def.title,
-        why: def.why,
+        why: isPost && linkMode ? `${def.why} ${JOURNEY_COPY.post.linkWhy}` : def.hrefKind === "reelvault" && !rvOn ? JOURNEY_COPY.hero.reelVaultOff : def.why,
         verb: def.verb,
         where: def.where,
         href,
@@ -301,10 +366,20 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
         waitingLabel: def.waitingLabel,
         section: isPost ? wd.section : undefined,
         // A word-only tick never claims what the app didn't see: Day 6's clock, and Day 1's AI step without a key.
-        win: def.key === "review" && tick === "waiting" ? REVIEW_WAITING_WIN : def.key === "ai" && tick === "you" ? AI_RUNS_WIN : def.win,
+        win:
+          def.key === "review" && tick === "waiting"
+            ? REVIEW_WAITING_WIN
+            : tick === "you" && carried(def.key)
+              ? CARRIED_WIN
+            : def.key === "ai" && tick === "you"
+              ? AI_RUNS_WIN
+              : def.key === "ai" && tick === "app" && !s.aiKeyEnc
+                ? AI_CONNECTOR_WIN
+                : def.win,
         proof: proofOf[def.key],
         note: def.note,
-        halves: isPost ? { posted: Boolean(ticks[def.key]), reviewed: Boolean(ticks[`${def.key}r`]) } : undefined,
+        halves: isPost ? { posted: postedOf(def.key), reviewed: Boolean(ticks[`${def.key}r`]) } : undefined,
+        postLink: isPost && linkMode ? postLinkOf(wd.day) : undefined,
       };
     });
     const done = steps.filter((x) => x.done).length;
@@ -322,11 +397,23 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
     }
   }
 
+  // Course unlocks: each day's lesson in Skool opens after the post before it. A quiet line on the
+  // days after the first post still to paste. The app's own tools stay open whatever the line says.
+  if (linkMode) {
+    const firstUnposted = days.find((d) => d.steps.some((x) => POST_KEYS.includes(x.key) && !x.halves?.posted));
+    if (firstUnposted) {
+      for (const d of days) {
+        if (d.day <= firstUnposted.day) continue;
+        d.opens = d.day === firstUnposted.day + 1 && firstOpen?.day === firstUnposted.day ? JOURNEY_COPY.post.opensToday : fill(JOURNEY_COPY.post.opensAfter, { day: d.day - 1 });
+      }
+    }
+  }
+
   const all = days.flatMap((d) => d.steps);
   const weekSteps = all.filter((x) => x.key !== "hello");
   const tickKeysOf = (day: number) => days[day - 1].steps.flatMap((x) => (POST_KEYS.includes(x.key) ? [x.key, `${x.key}r`] : [x.key]));
   // Only what the member did counts as starting a day. App-seen proof often predates the day
-  // (a Skool click from a Day 2 ad ticks Day 3's), so it must not skip the done-for-today card.
+  // (an ad lead from Day 2's ads, a Skool click from Day 3's), so it must not skip the done-for-today card.
   const touched = (day: number) => Boolean(started[String(day)]) || tickKeysOf(day).some((k) => ticks[k] || laterAt[k]);
   const lastTickAt = (day: number) =>
     tickKeysOf(day)
@@ -408,6 +495,7 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
     level,
     loop: { clicks: count(clicks), leads: count(leads30), customers: last?.newPaid ?? 0 },
     shelf,
+    courseUnlocks: linkMode,
   };
 }
 
@@ -417,5 +505,6 @@ export async function computePath(ws: Ws, userId: string, opts: { entryTicketOn?
  */
 export const loadPath = cache(async (wid: string, userId: string) => {
   const { workspace } = await getWorkspaceContext(wid);
-  return computePath(workspace, userId, { entryTicketOn: Boolean((await getEntryTicket())?.on) });
+  const [ticket, course] = await Promise.all([getEntryTicket(), getCourseUnlocks()]);
+  return computePath(workspace, userId, { entryTicketOn: Boolean(ticket?.on), courseUnlocksOn: course.on, courseUnlocksSince: course.since });
 });

@@ -3,6 +3,7 @@
 import { requireWorkspace } from "@/server/tenancy";
 import { searchAdLibraryFor } from "@/server/meta/adLibrary";
 import { analyzeCompetitorAds, parsePastedAds, type ResearchAd } from "@/server/ai/adResearch";
+import { rememberAdCountry } from "@/server/ai/adStudio";
 import { errMsg, field, go } from "./helpers";
 
 /** Analyse competitor ads: from an Ad Library search, or ads the owner pasted from the website. */
@@ -11,6 +12,8 @@ export async function adResearchAction(wid: string, fd: FormData) {
   const q = field(fd, "q", 100);
   const pageId = field(fd, "pageId", 30);
   const country = field(fd, "country", 3) || "ALL";
+  // Ad studio starts on this country next time ("ALL" changes nothing).
+  await rememberAdCountry(wid, country);
   const back = `/app/w/${wid}/ads/research?${new URLSearchParams({ q, pageId, country }).toString()}`;
 
   let ads: ResearchAd[] = [];
@@ -30,4 +33,10 @@ export async function adResearchAction(wid: string, fd: FormData) {
   const res = await analyzeCompetitorAds(wid, { ads, query: q || pageId || "pasted ads" });
   if (!res.ok) go(back, { error: res.error });
   go(`${back}&analysis=${res.id}`, { ok: "Your ad research is ready.", ...(res.warning ? { warn: res.warning } : {}) });
+}
+
+/** A country picked on Ad research or Ad studio, kept the moment it changes, so the other screen starts on it. */
+export async function rememberAdCountryAction(wid: string, country: string) {
+  await requireWorkspace(wid);
+  await rememberAdCountry(wid, String(country ?? "").slice(0, 3));
 }

@@ -167,9 +167,9 @@ export function DayLoop() {
                 </span>
               </div>
               <div className="flex flex-col gap-2.5 p-4">
-                <UpNext day={1} title="Put your website live" body="Answer a few questions. The app writes the page. You press publish." />
-                <StepRow state="done">Your free Gemini key is in</StepRow>
-                <StepRow state="later">After that: your Meta Pixel</StepRow>
+                <UpNext day={1} title="Make your first post" body="Paste the script you picked. The app turns it into slides. You post them." />
+                <StepRow state="done">You found a reel that already works</StepRow>
+                <StepRow state="later">After that: post it on Instagram</StepRow>
               </div>
             </div>
           </Step>

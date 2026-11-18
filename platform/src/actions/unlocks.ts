@@ -8,6 +8,8 @@ import { unlocks, workspaceMembers } from "@/lib/db/schema";
 import { requireWorkspace } from "@/server/tenancy";
 import { requirePlatformAdmin } from "@/server/auth";
 import { claimEntryTicket, claimUnlock, createUnlock, setEntryTicket, setUnlockActive, getEntryTicket, updateUnlock, type UnlockInput } from "@/server/unlocks";
+import { approveCoursePost, resendCoursePost, setCourseUnlocks } from "@/server/courseUnlocks";
+import { suggestUnlock, type SuggestUnlockResult } from "@/server/ai/unlockSuggest";
 import { isUuid } from "@/lib/util";
 import { clientIp } from "@/lib/ip";
 import { errMsg, field, go } from "./helpers";
@@ -45,6 +47,16 @@ export async function createUnlockAction(wid: string, fd: FormData) {
     go(`/app/w/${wid}/unlocks`, { error: errMsg(err) });
   }
   go(`/app/w/${wid}/unlocks`, { ok: "Unlock created. Copy the Skool post below and publish it in your community." });
+}
+
+/** "Suggest an unlock": an idea for the create form. Nothing is saved until they press Create unlock. */
+export async function suggestUnlockAction(wid: string): Promise<SuggestUnlockResult> {
+  await requireWorkspace(wid, "admin");
+  try {
+    return await suggestUnlock(wid);
+  } catch (err) {
+    return { ok: false, error: errMsg(err) };
+  }
 }
 
 /** Fix a typo or a broken reward link. The claim link stays the same. */
@@ -100,4 +112,42 @@ export async function saveEntryTicketAction(fd: FormData) {
   const keepSince = previous?.enabled && previous.unlockId === unlockId && new Date(previous.since).getTime() > 0;
   await setEntryTicket({ on, unlockId, since: everyone ? epoch : keepSince ? previous.since : new Date().toISOString() });
   go("/app/admin/members", { ok: on ? "Entry ticket is on. New members post their intro to unlock the app." : "Entry ticket is off." });
+}
+
+/** Admin: course unlocks on or off, and the Zapier hook that fires when a member finishes each day. */
+export async function saveCourseUnlocksAction(fd: FormData) {
+  await requirePlatformAdmin();
+  const hooks: Record<string, string> = {};
+  for (let d = 1; d <= 7; d++) hooks[String(d)] = field(fd, `hook${d}`, 500);
+  const on = fd.get("on") === "on";
+  try {
+    await setCourseUnlocks({ on, hooks });
+  } catch (err) {
+    go("/app/admin/members#course-unlocks", { error: errMsg(err) });
+  }
+  go("/app/admin/members#course-unlocks", { ok: on ? "Course unlocks are on. Members paste each day's post link to open the next lesson." : "Course unlocks are off. Members tick their posts, as before." });
+}
+
+/** Admin: a flagged post link looks fine. It counts, and the day's hook fires. */
+export async function approveCoursePostAction(workspaceId: string, day: number) {
+  await requirePlatformAdmin();
+  if (!isUuid(workspaceId)) go("/app/admin/members#course-unlocks", { error: "That account doesn't exist any more." });
+  try {
+    await approveCoursePost(workspaceId, Math.trunc(Number(day)));
+  } catch (err) {
+    go("/app/admin/members#course-unlocks", { error: errMsg(err) });
+  }
+  go("/app/admin/members#course-unlocks", { ok: "Approved. Their next lesson is opening in Skool." });
+}
+
+/** Admin: send a post link's Zapier hook again (a fresh job), e.g. after it failed or had no link. */
+export async function resendCoursePostAction(workspaceId: string, day: number) {
+  await requirePlatformAdmin();
+  if (!isUuid(workspaceId)) go("/app/admin/members#course-unlocks", { error: "That account doesn't exist any more." });
+  try {
+    await resendCoursePost(workspaceId, Math.trunc(Number(day)));
+  } catch (err) {
+    go("/app/admin/members#course-unlocks", { error: errMsg(err) });
+  }
+  go("/app/admin/members#course-unlocks", { ok: "Sending again. The status shows how it went." });
 }

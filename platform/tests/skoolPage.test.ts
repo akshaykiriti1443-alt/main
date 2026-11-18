@@ -39,6 +39,13 @@ describe("/skool short page", () => {
       at = i;
     }
     for (const d of [1, 2, 3, 4, 5, 6, 7]) expect(t).toContain(`Day ${d}`);
+    // The wins are the app's own day titles, in the app's order: first post on Day 1, website and first ads Day 2, Skool-link ads Day 3.
+    for (const d of WEEK) expect(t, `Day ${d.day}`).toContain(d.title);
+    expect(t).toContain("five ads live at $10 a day");
+    expect(t).toContain("turn it into your first carousel and post it");
+    expect(t).not.toMatch(/name (3|three) competitors/);
+    expect(t).toContain("Five more ads straight to your Skool link at $5 a day");
+    expect(t).not.toContain("Two ways in, tested");
     // The ads are part of the course's story, but the money is never hidden: named in the price box and the FAQ.
     expect(t).toContain("about $15 a day on your own card");
     expect(t).toContain("about $15 a day while you test");
@@ -80,6 +87,12 @@ describe("/skool/inside page", () => {
     for (const d of [1, 2, 3, 4, 5, 6, 7]) expect(t).toContain(`Day ${d}`);
     // The day titles are the app's own, in the app's order.
     for (const d of WEEK) expect(t, `Day ${d.day}`).toContain(d.title);
+    // Day 1 is the first post and spends nothing; the website and first ads go live on Day 2, the Skool-link ads on Day 3.
+    expect(t).toContain("Nothing spends money today.");
+    expect(t).toContain("schedule them for the week in Meta's free Planner");
+    expect(t).not.toMatch(/name (3|three) competitors/);
+    expect(t).toContain("$10 a day for Day 2's five ads and $5 a day for Day 3's five");
+    expect(t).not.toContain("Day 1's five ads");
     expect(t).toContain("About $15 a day");
     expect(t).toContain("Skool bills you automatically unless you cancel");
     expect(t).toContain("opens right inside the app");

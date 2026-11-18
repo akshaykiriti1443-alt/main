@@ -81,7 +81,7 @@ export type ConnectorState = { url?: string; error?: string };
 export async function createConnectorAction(wid: string, _prev: ConnectorState, fd: FormData): Promise<ConnectorState> {
   const { user } = await requireWorkspace(wid, "admin");
   try {
-    const { url } = await createConnectorToken(wid, user.id, field(fd, "name", 60) || "My AI");
+    const { url } = await createConnectorToken(wid, user.id, field(fd, "name", 60) || "OneX");
     return { url };
   } catch (err) {
     return { error: errMsg(err) };

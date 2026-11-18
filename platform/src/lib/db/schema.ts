@@ -749,7 +749,7 @@ export const aiGenerations = pgTable(
   {
     id: id(),
     workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message" | "ad_research" | "ad_studio" | "ai_task" | "automation_draft">().notNull(),
+    kind: text("kind").$type<"launch_kit" | "lead_score" | "reply_draft" | "ad_review" | "skool_message" | "ad_research" | "ad_studio" | "ai_task" | "automation_draft" | "carousel" | "cover_photo">().notNull(),
     input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
     output: jsonb("output").$type<Record<string, unknown>>().notNull().default({}),
     model: text("model").notNull(),

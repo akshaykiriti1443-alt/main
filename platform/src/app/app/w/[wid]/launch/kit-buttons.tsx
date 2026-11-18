@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { SparklesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,16 +17,22 @@ export const REBUILD_CONFIRM: Record<Which, string> = {
  * Build my launch kit, and the starter template beside it when AI can't run. Once a kit exists,
  * either one rewrites the website's draft and the emails, so both ask for a second press.
  */
+/** The words on the button while the kit builds. With no AI the starter template is built in a second or two. */
+export const buildingLabel = (noAi: boolean) => (noAi ? "Building your kit…" : "Writing your kit… (up to a minute)");
+
 export function KitButtons({
   starterAction,
   rebuild,
   aiDisabled,
   offerStarter,
+  noAi = false,
 }: {
   starterAction: (fd: FormData) => Promise<void>;
   rebuild: boolean;
   aiDisabled: boolean;
   offerStarter: boolean;
+  /** No AI can run (no key, no included runs): Build my launch kit makes the starter template. */
+  noAi?: boolean;
 }) {
   const { pending } = useFormStatus();
   const [armed, setArmed] = useState<Which | null>(null);
@@ -39,7 +45,15 @@ export function KitButtons({
   }, [armed]);
 
   const waiting = (which: Which) => rebuild && armed !== which;
-  const press = (which: Which) => () => (waiting(which) ? setArmed(which) : setSent(which));
+  // The first press of a rebuild only arms the button. It starts as type="button", but React re-renders inside
+  // the click (it turns into a submit button) before the browser decides whether the click submits, so the
+  // press also cancels the click's default: otherwise one press both armed and built.
+  const press = (which: Which) => (e: MouseEvent<HTMLButtonElement>) => {
+    if (waiting(which)) {
+      e.preventDefault();
+      setArmed(which);
+    } else setSent(which);
+  };
 
   return (
     <>
@@ -55,7 +69,7 @@ export function KitButtons({
         onClick={press("ai")}
       >
         {pending && sent === "ai" ? <Spinner data-icon="inline-start" /> : <SparklesIcon data-icon="inline-start" />}
-        {pending && sent === "ai" ? "Writing your kit… (up to a minute)" : rebuild && armed === "ai" ? REBUILD_CONFIRM.ai : "Build my launch kit"}
+        {pending && sent === "ai" ? buildingLabel(noAi) : rebuild && armed === "ai" ? REBUILD_CONFIRM.ai : "Build my launch kit"}
       </Button>
       {offerStarter ? (
         <Button

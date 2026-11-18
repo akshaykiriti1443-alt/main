@@ -27,23 +27,24 @@ export const DAYS: Day[] = [
   {
     day: 1,
     title: dayTitle(1),
-    body: "The long one, and the one that makes the rest easy. Grab a free Gemini key, let the AI launch kit write your website and free checklist, and put it live. Open your own Skool group, connect your Meta Pixel, see which ads already keep running in your niche, then make five of your own. Stop halfway if you like: the app keeps your place.",
-    win: "A live website with your Pixel on it, and five ads in front of Meta.",
-    tools: ["Your AI", "AI launch kit", "Funnels & pages", "Settings", "Ad research", "Ad studio"],
+    body: "The win comes first, in short lessons. Connect your Claude, then open ReelVault and find the reels that already work in your niche. Pick one and get a script in your own words, turn it into a carousel in Make my carousel (or film it as a short talking-head video, no editing), and post it on Instagram. Then open your own Skool group and give it a price, and let the AI launch kit write your About page and make your cover. Nothing spends money today.",
+    win: "Your first post is out, and your own group exists.",
+    // ReelVault is named in the lesson; its chip would show even before it's switched on.
+    tools: ["Your AI", "Make my carousel", "AI launch kit"],
   },
   {
     day: 2,
     title: dayTitle(2),
-    body: "Leave yesterday's ads alone. Today's five skip the website and go straight to your Skool group, in their own small campaign, so later you can see which road works better for you.",
-    win: "Ten ads out, testing two roads into your group.",
-    tools: ["Ad studio"],
+    body: "Your shop window first: set up your Facebook Page and Instagram with your Skool link in the bio, and put your website live with your free checklist on it. Then connect your Meta Pixel, see which ads keep running in your niche, make five of your own and put them live to your website. Last, make three more posts and schedule them for the week in Meta's free Planner.",
+    win: "A real profile, a live website, five ads in front of Meta and this week's posts scheduled.",
+    tools: ["Funnels & pages", "Settings", "Ad research", "Ad studio"],
   },
   {
     day: 3,
     title: dayTitle(3),
-    body: "Your ads are learning, so hands off. Walk through what a stranger will see instead: sign up on your own website, read your own emails, press your own Join button. Better you find the typo than they do.",
-    win: "You've signed up on your own website like a stranger would, all the way to the Join button.",
-    tools: ["Funnels & pages", "Leads", "Emails"],
+    body: "Leave yesterday's ads alone. Five more skip the website and go straight to your Skool group, in their own small campaign, so later you can see which road works better for you. Then walk through what a stranger will see: sign up on your own website, read your own emails, press your own Join button. Better you find the typo than they do.",
+    win: "Ten ads out on two roads, and you've signed up on your own website like a stranger would.",
+    tools: ["Ad studio", "Funnels & pages", "Leads", "Growth ladder"],
   },
   {
     day: 4,
@@ -90,7 +91,7 @@ export function costLines(reelVault: boolean): CostLine[] {
     {
       item: "Your ads",
       price: "About $15 a day",
-      note: "While you test: $10 a day for Day 1's five ads and $5 a day for Day 2's five. They're your ads on your card, and you can switch them off any time with the toggle beside the campaign.",
+      note: "While you test: $10 a day for Day 2's five ads and $5 a day for Day 3's five. They're your ads on your card, and you can switch them off any time with the toggle beside the campaign.",
       payee: "Paid to Meta, never to us",
     },
     {
@@ -132,7 +133,7 @@ export function faqItems(reelVault: boolean): Qa[] {
     },
     {
       q: "Do I need a following or an audience first?",
-      a: "No. The week doesn't lean on an audience you don't have yet. Your website and a few small ads put your group in front of people who've never heard of you, and on Day 5 you start real conversations with people who already know your name. No daily Reels required.",
+      a: "No. The week doesn't lean on an audience you don't have yet. On Day 1 you make your first post from a reel that already works in your niche, so your profile isn't empty when people look. Your website and a few small ads put your group in front of people who've never heard of you, and on Day 5 you start real conversations with people who already know your name.",
     },
     {
       q: "What does it cost?",
@@ -148,7 +149,7 @@ export function faqItems(reelVault: boolean): Qa[] {
     },
     {
       q: "Do I need to know how to run ads?",
-      a: "No. Ad research shows you the ads that keep running in your niche, and Ad studio writes your first five image ads with the exact clicks to launch them in Meta Ads Manager. You connect your Meta Pixel on Day 1 with every click spelled out. You will need a Facebook Page and a Meta ad account with a card on it.",
+      a: "No. Ad research shows you the ads that keep running in your niche, and Ad studio writes your first five image ads with the exact clicks to launch them in Meta Ads Manager. You set up your Facebook Page and Instagram and connect your Meta Pixel on Day 2, with every click spelled out. You will also need a Meta ad account with a card on it.",
     },
     {
       q: "Do I have to pay for AI?",
@@ -156,7 +157,7 @@ export function faqItems(reelVault: boolean): Qa[] {
     },
     {
       q: "How long does each day take?",
-      a: "Day 1 is the long one: plan on an evening, and stop halfway if you need to. The other six days are much shorter, and most of the time goes on your post and your review in Skool.",
+      a: "Days 1 and 2 are the long ones: plan on an evening each, and stop halfway if you need to. The other days are shorter, and most of the time goes on your Instagram posts, your Skool post and your review.",
     },
     {
       q: "What if I fall behind?",

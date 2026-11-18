@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "@/lib/db";
 import { activities, aiGenerations, contacts, sites } from "@/lib/db/schema";
 import type { Journey } from "@/lib/db/types";
-import { AI_RUNS_WIN, JOURNEY_SINCE, POST_KEYS, WEEK_STEPS } from "@/lib/week";
+import { AI_RUNS_WIN, HALF_TIME, JOURNEY_COPY, JOURNEY_SINCE, POST_KEYS, postFor, SELF_TICK_KEYS, stepDef, WEEK_STEPS, WEEK_V5_SINCE, withLegacyTicks } from "@/lib/week";
 import { snapshotFromPath } from "@/server/companion";
-import { createConnectorToken } from "@/server/connectors";
-import { computePath, launchDay } from "@/server/path";
+import { createConnectorToken, resolveConnectorToken } from "@/server/connectors";
+import { computePath, launchDay, META_PLANNER } from "@/server/path";
 import { makeWorkspace } from "./helpers";
 
 // The week engine: one next step, picked by unfinished work and never by the calendar.
@@ -17,16 +17,20 @@ const withSettings = (ws: W, extra: Record<string, unknown>) => ({ ...ws, settin
 const journey = (ws: W, j: Journey, extra: Record<string, unknown> = {}) => withSettings(ws, { journey: j, ...extra });
 const DAY1_SETTINGS = { aiKeyEnc: "x", metaPixelId: "1234567890" };
 
-/** Day 1's app steps, on real data: kit, website, research and a website pack. The Pixel and key live in settings. */
+/** The app steps of Days 1 and 2, on real data: a carousel, kit, website, research and a website pack. The Pixel and key live in settings. */
 async function day1Data(workspaceId: string, opts: { skip?: string[] } = {}) {
   const db = await getDb();
   const skip = new Set(opts.skip);
+  if (!skip.has("carousel")) await db.insert(aiGenerations).values({ workspaceId, kind: "carousel", model: "rules" });
   if (!skip.has("kit")) await db.insert(aiGenerations).values({ workspaceId, kind: "launch_kit", model: "rules" });
   if (!skip.has("research")) await db.insert(aiGenerations).values({ workspaceId, kind: "ad_research", model: "rules" });
   if (!skip.has("statics")) await db.insert(aiGenerations).values({ workspaceId, kind: "ad_studio", model: "rules", input: { destination: "website" } });
   if (!skip.has("publish")) await db.insert(sites).values({ workspaceId, name: "Funnel", slug: `funnel-week-${workspaceId}`, theme: {} as never, published: true });
 }
-const day1Ticks = (when: string) => ({ clicks: { at: when }, post1: { at: when }, post1r: { at: when } });
+/** Day 1's word-only ticks: the script from ReelVault, the Instagram post and the Skool post. */
+const day1Ticks = (when: string) => ({ reel1: { at: when }, firstpost: { at: when }, post1: { at: when }, post1r: { at: when } });
+/** Day 2's word-only ticks: the Page, Publish, this week's posts and the Skool post. */
+const day2Ticks = (when: string) => ({ pages: { at: when }, clicks: { at: when }, planweek: { at: when }, post2: { at: when }, post2r: { at: when } });
 
 describe("the week engine", () => {
   it("counts the day the workspace was made as Day 1 (the admin table still uses it)", () => {
@@ -36,16 +40,22 @@ describe("the week engine", () => {
     expect(launchDay(new Date(now.getTime() - DAY), now)).toBe(2);
   });
 
-  it("starts a new workspace on the free AI key: Day 1, step 1 of 9", async () => {
+  it("starts a new workspace on connecting Claude, with the free key as the fallback", async () => {
     const { ws, user } = await makeWorkspace();
-    const p = await computePath(withSettings(ws, { skoolUrl: "" }), user.id);
-    expect(p.current).toMatchObject({ key: "ai", day: 1, n: 1, count: 9, title: "Get your free AI key", verb: "Get my free key", href: `/app/w/${ws.id}/ai`, external: false, tick: null });
-    expect(p.state).toBe("first");
-    expect(p.mode).toBe("week");
-    expect(p.days.map((d) => d.total)).toEqual([9, 3, 4, 4, 2, 2, 3]);
-    expect(p.total).toBe(27);
-    // The helper's Skool link already counts, so that account is past "first".
-    expect((await computePath(ws, user.id)).state).toBe("doing");
+    const fresh = await computePath(withSettings(ws, { skoolUrl: "" }), user.id);
+    expect(fresh.current).toMatchObject({ key: "ai", day: 1, n: 1, count: 7, title: "Connect your Claude", tick: null });
+    expect(fresh.state).toBe("first");
+    expect(fresh.mode).toBe("week");
+    // The helper's Skool link already counts (Day 1's fifth step), so that account is past "first".
+    const p = await computePath(ws, user.id);
+    expect(p.current).toMatchObject({ key: "ai", day: 1, n: 1, count: 7, title: "Connect your Claude", verb: "Connect my Claude", href: `/app/w/${ws.id}/ai`, external: false, tick: null });
+    // One sentence on why, then the free Gemini key as the second way, never the first.
+    expect(p.current!.why).toBe("Claude writes your carousel, your website and your emails, and saves them straight into the app. No Claude? A free Gemini key works too.");
+    expect(p.current!.why.indexOf("Claude")).toBeLessThan(p.current!.why.indexOf("Gemini"));
+    expect(p.current!.selfLabel).toBe("I'll use my 3 included runs");
+    expect(p.state).toBe("doing");
+    expect(p.days.map((d) => d.total)).toEqual([7, 8, 6, 4, 2, 2, 3]);
+    expect(p.total).toBe(32);
   });
 
   it("keeps a member on Day 1 however old the account is, with nothing locked", async () => {
@@ -64,16 +74,16 @@ describe("the week engine", () => {
     const today = await computePath(journey(ws, { ticks: day1Ticks(at()) }, DAY1_SETTINGS), user.id);
     expect(today.days[0].complete).toBe(true);
     expect(today.state).toBe("dayDone");
-    expect(today.current?.key).toBe("refresh");
+    expect(today.current?.key).toBe("pages");
     expect(snapshotFromPath(today).state).toBe("dayDone");
 
     const started = await computePath(journey(ws, { ticks: day1Ticks(at()), started: { "2": at() } }, DAY1_SETTINGS), user.id);
     expect(started.state).toBe("doing");
-    expect(started.current?.key).toBe("refresh");
+    expect(started.current?.key).toBe("pages");
 
     const yesterday = await computePath(journey(ws, { ticks: day1Ticks(at(26 * 3600_000)) }, DAY1_SETTINGS), user.id);
     expect(yesterday.state).toBe("doing");
-    expect(yesterday.current).toMatchObject({ key: "refresh", day: 2, n: 1, count: 3 });
+    expect(yesterday.current).toMatchObject({ key: "pages", day: 2, n: 1, count: 8 });
   });
 
   it("uses the member's own timezone for 'today', and falls back to UTC", async () => {
@@ -94,15 +104,18 @@ describe("the week engine", () => {
     const db = await getDb();
     await day1Data(ws.id);
     await db.insert(aiGenerations).values({ workspaceId: ws.id, kind: "ad_studio", model: "rules", input: { destination: "skool" } });
-    // A stranger from a Day 1 ad, and a click on the Skool link from a Day 2 ad.
+    // A stranger from a Day 2 ad, and a click on the Skool link from a Day 3 ad.
     await db.insert(activities).values({ workspaceId: ws.id, type: "lead", data: { utm: { fbclid: "ad-lead" } } });
     await db.insert(activities).values({ workspaceId: ws.id, type: "skool_visit", data: { source: "meta-ad" } });
-    const ticks = { ...day1Ticks(at(26 * 3600_000)), post2: { at: at() }, post2r: { at: at() } };
+    const ticks = { ...day1Ticks(at(50 * 3600_000)), ...day2Ticks(at()) };
     const p = await computePath(journey(ws, { ticks }, DAY1_SETTINGS), user.id);
     expect(p.days[1].complete).toBe(true);
     expect(p.state).toBe("dayDone");
     expect(p.dayNow).toBe(3);
     // The ad lead isn't the member's own sign-up, so Day 3 still starts there.
+    // Day 3's pack and campaign are already seen, from the Skool-link pack and the ad click.
+    expect(p.days[2].steps.find((s) => s.key === "refresh")).toMatchObject({ done: true, tick: "app" });
+    expect(p.days[2].steps.find((s) => s.key === "live2")).toMatchObject({ done: true, tick: "app" });
     expect(p.days[2].steps.find((s) => s.key === "lead1")).toMatchObject({ done: false, tick: null });
     expect(p.current?.key).toBe("lead1");
     expect((await computePath(journey(ws, { ticks, started: { "3": at() } }, DAY1_SETTINGS), user.id)).state).toBe("doing");
@@ -113,25 +126,33 @@ describe("the week engine", () => {
 
   it("skips a saved-for-later step until it's the only one left in its day, and never jumps it into Day 2", async () => {
     const { ws, user } = await makeWorkspace();
-    await day1Data(ws.id, { skip: ["research"] });
-    const later = { pixel: at() };
-    const p = await computePath(journey(ws, { later }, { aiKeyEnc: "x" }), user.id);
-    expect(p.days[0].steps.find((s) => s.key === "pixel")).toMatchObject({ later: true, done: false });
-    expect(p.current?.key).toBe("research");
-    expect(p.laterKeys).toEqual(["pixel"]);
+    await day1Data(ws.id, { skip: ["kit"] });
+    const later = { ai: at() };
+    const p = await computePath(journey(ws, { later }), user.id);
+    expect(p.days[0].steps.find((s) => s.key === "ai")).toMatchObject({ later: true, done: false });
+    expect(p.current?.key).toBe("reel1");
+    expect((await computePath(journey(ws, { later, ticks: { reel1: { at: at() }, firstpost: { at: at() } } }), user.id)).current?.key).toBe("kit");
+    expect(p.laterKeys).toEqual(["ai"]);
 
-    await (await getDb()).insert(aiGenerations).values({ workspaceId: ws.id, kind: "ad_research", model: "rules" });
-    const last = await computePath(journey(ws, { later, ticks: day1Ticks(at()) }, { aiKeyEnc: "x" }), user.id);
+    await (await getDb()).insert(aiGenerations).values({ workspaceId: ws.id, kind: "launch_kit", model: "rules" });
+    const last = await computePath(journey(ws, { later, ticks: day1Ticks(at()) }), user.id);
     // Everything else in Day 1 is done: the saved step is next, not Day 2.
-    expect(last.current).toMatchObject({ key: "pixel", day: 1, later: true });
+    expect(last.current).toMatchObject({ key: "ai", day: 1, later: true });
     expect(last.state).toBe("doing");
+
+    // Day 2 works the same way: a saved Pixel waits behind the rest of Day 2.
+    const pixel = await computePath(journey(ws, { later: { pixel: at() }, ticks: { ...day1Ticks(at(2 * DAY)), pages: { at: at() } } }, { aiKeyEnc: "x" }), user.id);
+    expect(pixel.days[1].steps.find((s) => s.key === "pixel")).toMatchObject({ later: true, done: false });
+    expect(pixel.current?.key).toBe("clicks");
   });
 
   it("refuses 'later' on the steps that make the day", () => {
     const can = WEEK_STEPS.filter((s) => s.canLater).map((s) => s.key);
-    for (const k of ["kit", "publish", "statics", "clicks", "checkin", ...POST_KEYS]) expect(can, k).not.toContain(k);
+    // Day 1's whole point is the first post: finding the reel, making it and posting it can't wait.
+    for (const k of ["reel1", "carousel", "firstpost", "skool", "kit", "publish", "pages", "statics", "clicks", "checkin", ...POST_KEYS]) expect(can, k).not.toContain(k);
     expect(can).toContain("ai");
     expect(can).toContain("pixel");
+    expect(can).toContain("planweek");
   });
 
   it("turns the 'I pressed Publish' tick solid at the first lead from an ad, and stops waiting on Meta", async () => {
@@ -139,7 +160,7 @@ describe("the week engine", () => {
     const db = await getDb();
     const ticked = journey(ws, { ticks: { clicks: { at: at() } } });
     const before = await computePath(ticked, user.id);
-    expect(before.days[0].steps.find((s) => s.key === "clicks")).toMatchObject({ tick: "you", done: true });
+    expect(before.days[1].steps.find((s) => s.key === "clicks")).toMatchObject({ tick: "you", done: true });
     expect(before.waitingOnMeta).toBe(true);
     // Your own test sign-up and your own click don't count.
     await db.insert(activities).values({ workspaceId: ws.id, type: "lead", data: { utm: {} } });
@@ -148,7 +169,7 @@ describe("the week engine", () => {
 
     await db.insert(activities).values({ workspaceId: ws.id, type: "lead", data: { utm: { fbclid: "abc123" } } });
     const after = await computePath(ticked, user.id);
-    expect(after.days[0].steps.find((s) => s.key === "clicks")?.tick).toBe("app");
+    expect(after.days[1].steps.find((s) => s.key === "clicks")?.tick).toBe("app");
     expect(after.waitingOnMeta).toBe(false);
     expect(after.events.adLead).toBe(true);
     // "They're live" also ends the wait, without a lead.
@@ -168,9 +189,11 @@ describe("the week engine", () => {
 
   it("needs both halves of a post: yours and the review of the one before", async () => {
     const { ws, user } = await makeWorkspace();
-    const half = await computePath(journey(ws, { ticks: { post1: { at: at() } } }), user.id);
-    expect(half.days[0].steps.find((s) => s.key === "post1")).toMatchObject({ done: false, halves: { posted: true, reviewed: false }, section: "Day 1: 5-Second Test" });
-    const both = await computePath(journey(ws, { ticks: { post1: { at: at() }, post1r: { at: at() } } }), user.id);
+    // Ticked on this day order (after it shipped), so nothing carries over from the old one.
+    const v5 = new Date(Math.max(Date.now(), WEEK_V5_SINCE.getTime() + 3_600_000)).toISOString();
+    const half = await computePath(journey(ws, { ticks: { post1: { at: v5 } } }), user.id);
+    expect(half.days[0].steps.find((s) => s.key === "post1")).toMatchObject({ done: false, halves: { posted: true, reviewed: false }, section: "Day 1: My First Post" });
+    const both = await computePath(journey(ws, { ticks: { post1: { at: v5 }, post1r: { at: v5 } } }), user.id);
     expect(both.days[0].steps.find((s) => s.key === "post1")).toMatchObject({ done: true, tick: "you" });
   });
 
@@ -179,15 +202,15 @@ describe("the week engine", () => {
     const p = await computePath({ ...ws, accessSource: "agency" }, user.id);
     const keys = p.days.flatMap((d) => d.steps.map((s) => s.key));
     for (const k of POST_KEYS) expect(keys).not.toContain(k);
-    expect(p.total).toBe(20);
+    expect(p.total).toBe(25);
   });
 
   it("adds the intro post to Day 1 only when the entry ticket is on, already ticked", async () => {
     const { ws, user } = await makeWorkspace();
     const p = await computePath(withSettings(ws, { entryClaimedAt: at() }), user.id, { entryTicketOn: true });
-    expect(p.days[0].steps[0]).toMatchObject({ key: "hello", tick: "app", n: 1, count: 10 });
-    expect(p.total).toBe(28);
-    expect(p.current).toMatchObject({ key: "ai", n: 2, count: 10 });
+    expect(p.days[0].steps[0]).toMatchObject({ key: "hello", tick: "app", n: 1, count: 8 });
+    expect(p.total).toBe(33);
+    expect(p.current).toMatchObject({ key: "ai", n: 2, count: 8 });
     // Only the intro done still counts as a first visit.
     expect((await computePath(withSettings(ws, { entryClaimedAt: at(), skoolUrl: "" }), user.id, { entryTicketOn: true })).state).toBe("first");
   });
@@ -197,8 +220,8 @@ describe("the week engine", () => {
     const { ws, user } = await makeWorkspace();
     const p = await computePath({ ...ws, accessSource: "member" }, user.id, { entryTicketOn: true });
     expect(p.days[0].steps.map((s) => s.key)).not.toContain("hello");
-    expect(p.total).toBe(27);
-    expect(p.current).toMatchObject({ key: "ai", n: 1, count: 9 });
+    expect(p.total).toBe(32);
+    expect(p.current).toMatchObject({ key: "ai", n: 1, count: 7 });
   });
 
   it("gives an account older than the checklist the numbers dashboard, and nothing owed", async () => {
@@ -240,9 +263,9 @@ describe("the week engine", () => {
       if (POST_KEYS.includes(k)) ticks[`${k}r`] = { at: at(2 * DAY) };
       p = await computePath(journey(ws, { ticks: { ...ticks } }, DAY1_SETTINGS), user.id);
     }
-    // Only what the app can't see needs the member's word. On Days 1 and 2 the post comes before
-    // Publish (Day 2's Publish is seen by the app here, from the click on the Skool link).
-    expect(walked).toEqual(["post1", "clicks", "post2", "events", "post3", "welcome", "lesson", "post4", "post5", "post6", "decide", "post7"]);
+    // Only what the app can't see needs the member's word, and every day ends on its post
+    // (Day 3's Publish is seen by the app here, from the click on the Skool link).
+    expect(walked).toEqual(["reel1", "firstpost", "post1", "pages", "clicks", "planweek", "post2", "events", "post3", "welcome", "lesson", "post4", "post5", "post6", "decide", "post7"]);
     expect(p.state).toBe("weekDone");
     expect(p.mode).toBe("after");
     expect(p.done).toBe(p.total);
@@ -254,12 +277,18 @@ describe("each step ticks from what the app can really see", () => {
   const step = async (ws: Parameters<typeof computePath>[0], userId: string, key: string) =>
     (await computePath(ws, userId)).days.flatMap((d) => d.steps).find((s) => s.key === key);
 
-  it("the AI key ticks at a saved key, not a connector (only a key lifts the cap)", async () => {
+  it("the AI step ticks at a saved key or a connected Claude, and only a key says a key is saved", async () => {
     const { ws, user } = await makeWorkspace();
     expect((await step(ws, user.id, "ai"))?.done).toBe(false);
     expect((await step(withSettings(ws, { aiKeyEnc: "x" }), user.id, "ai"))?.tick).toBe("app");
-    await createConnectorToken(ws.id, user.id, "Claude");
+    const { token } = await createConnectorToken(ws.id, user.id, "Claude");
+    // A link that was only made isn't a connected Claude yet.
     expect((await step(ws, user.id, "ai"))?.done).toBe(false);
+    await resolveConnectorToken(token);
+    const connected = await step(ws, user.id, "ai");
+    expect(connected).toMatchObject({ done: true, tick: "app" });
+    expect(connected?.win).not.toContain("key is saved");
+    expect(connected?.win).toContain("Claude is connected");
   });
 
   it("lets a member with no free key go on with the included runs, without saying a key is saved", async () => {
@@ -272,7 +301,7 @@ describe("each step ticks from what the app can really see", () => {
     expect(await step(withSettings(ticked, { aiKeyEnc: "x" }), user.id, "ai")).toMatchObject({ tick: "app", win: "Done: your AI key is saved. No more counting runs." });
   });
 
-  it("Day 2's pack ticks at a pack made for the Skool link, or two older packs with no destination saved", async () => {
+  it("Day 3's pack ticks at a pack made for the Skool link, or two older packs with no destination saved", async () => {
     const { ws, user } = await makeWorkspace();
     const db = await getDb();
     await db.insert(aiGenerations).values({ workspaceId: ws.id, kind: "ad_studio", model: "rules", input: { destination: "website" } });
@@ -288,7 +317,7 @@ describe("each step ticks from what the app can really see", () => {
     expect((await step(legacy.ws, legacy.user.id, "refresh"))?.done).toBe(true);
   });
 
-  it("Day 2's campaign tick turns solid at an ad click on the Skool link, never your own click", async () => {
+  it("Day 3's campaign tick turns solid at an ad click on the Skool link, never your own click", async () => {
     const { ws, user } = await makeWorkspace();
     const db = await getDb();
     await db.insert(activities).values({ workspaceId: ws.id, type: "skool_visit", data: { source: "direct" } });
@@ -330,5 +359,81 @@ describe("each step ticks from what the app can really see", () => {
     const tested = await step(withSettings(ws, { metaPixelId: "123456789012345", metaCapiTokenEnc: "x", metaPixelCheck: { ok: true, at: at(), pixelId: "123456789012345" } }), user.id, "pixel");
     expect(tested?.proof?.text).toBe("Meta accepted a test event");
     expect(JSON.stringify(saved)).not.toMatch(/connected|working/i);
+  });
+});
+
+describe("Day 1 is the first win, Day 2 the shop window and the ads", () => {
+  const step = async (ws: Parameters<typeof computePath>[0], userId: string, key: string) =>
+    (await computePath(ws, userId)).days.flatMap((d) => d.steps).find((s) => s.key === key);
+
+  it("puts content first on Day 1 and the website at Day 2's half-time, in the course's words", () => {
+    const keys = (day: number) => WEEK_STEPS.filter((s) => s.day === day).map((s) => s.key);
+    expect(keys(1)).toEqual(["ai", "reel1", "carousel", "firstpost", "skool", "kit", "post1"]);
+    expect(keys(2)).toEqual(["pages", "publish", "pixel", "research", "statics", "clicks", "planweek", "post2"]);
+    for (const k of ["rivals", "video1"]) expect(stepDef(k), k).toBeUndefined();
+    expect(HALF_TIME).toEqual({ day: 2, after: "publish" });
+    expect(stepDef("reel1")).toMatchObject({ title: "Find what already works in your niche", where: "app", hrefKind: "reelvault", tick: "you", canLater: false });
+    expect(stepDef("carousel")).toMatchObject({ title: "Make your first post", verb: "Make my carousel", where: "app", hrefKind: "carousel", tick: "you-upgrades", canLater: false });
+    expect(stepDef("firstpost")).toMatchObject({ title: "Post it on Instagram", where: "phone", hrefKind: "none", tick: "you", canLater: false });
+    expect(stepDef("planweek")).toMatchObject({ title: "Plan this week's posts in one sitting", where: "meta", hrefKind: "metaPlanner", tick: "you", canLater: true });
+    expect(stepDef("kit")!.why).toMatch(/^AI writes your Skool About page and your group description, then makes your cover/);
+    // The Instagram and Planner ticks are the member's word; the carousel turns solid by itself.
+    for (const k of ["reel1", "carousel", "firstpost", "planweek"]) expect(SELF_TICK_KEYS, k).toContain(k);
+    expect(postFor(1)).not.toContain("My website");
+    expect(postFor(1, undefined, "https://www.skool.com/the-45-minute-dad")).toContain("My group: https://www.skool.com/the-45-minute-dad");
+    expect(postFor(2, "https://dads.example.com")).toContain("My website: https://dads.example.com");
+    for (const d of [1, 2]) expect(postFor(d), `Day ${d}`).not.toMatch(/\{(website|group)\}/);
+  });
+
+  it("opens Make my carousel and Meta's free Planner, and ReelVault only when it's switched on", async () => {
+    const { ws, user } = await makeWorkspace();
+    expect(await step(ws, user.id, "carousel")).toMatchObject({ href: `/app/w/${ws.id}/carousel`, external: false });
+    expect(await step(ws, user.id, "planweek")).toMatchObject({ href: "https://business.facebook.com/latest/content_calendar", external: true });
+    expect(META_PLANNER).toBe("https://business.facebook.com/latest/content_calendar");
+    const { env } = await import("@/lib/env");
+    const secret = env.onexSsoSecret;
+    try {
+      env.onexSsoSecret = "";
+      // No ReelVault here: the same job by hand, on Instagram, and no button to a page that isn't there.
+      expect(await step(ws, user.id, "reel1")).toMatchObject({ href: null, why: JOURNEY_COPY.hero.reelVaultOff });
+      env.onexSsoSecret = "x".repeat(40);
+      expect(await step(ws, user.id, "reel1")).toMatchObject({ href: `/app/w/${ws.id}/reelvault`, why: stepDef("reel1")!.why });
+    } finally {
+      env.onexSsoSecret = secret;
+    }
+  });
+
+  it("turns 'Make your first post' solid at a saved carousel, and takes a video on the member's word", async () => {
+    const { ws, user } = await makeWorkspace();
+    expect(await step(ws, user.id, "carousel")).toMatchObject({ done: false, tick: null, selfLabel: "I filmed a video instead" });
+    const video = await step(journey(ws, { ticks: { carousel: { at: at() } } }), user.id, "carousel");
+    expect(video).toMatchObject({ done: true, tick: "you" });
+    expect(video?.proof).toBeUndefined();
+    await (await getDb()).insert(aiGenerations).values({ workspaceId: ws.id, kind: "carousel", model: "rules" });
+    expect(await step(ws, user.id, "carousel")).toMatchObject({ done: true, tick: "app", win: "Done: your first post is made.", proof: { href: `/app/w/${ws.id}/carousel` } });
+    // Another workspace's carousel never counts.
+    const other = await makeWorkspace();
+    expect((await step(other.ws, other.user.id, "carousel"))?.done).toBe(false);
+  });
+
+  it("keeps a member mid-week whole: an old video1 tick counts for the first post, an old rivals tick for nothing", async () => {
+    const { ws, user } = await makeWorkspace();
+    await day1Data(ws.id, { skip: ["carousel"] });
+    const old = at(3 * DAY);
+    // Ticked under the old week: Day 1 (rivals, post1), Day 2 (pages, reel1, clicks, video1, post2).
+    const ticks = { rivals: { at: old }, post1: { at: old }, post1r: { at: old }, pages: { at: old }, reel1: { at: old }, clicks: { at: old }, video1: { at: old }, post2: { at: old }, post2r: { at: old } };
+    const p = await computePath(journey(ws, { ticks }, DAY1_SETTINGS), user.id);
+    const keys = p.days.flatMap((d) => d.steps.map((s) => s.key));
+    for (const k of ["rivals", "video1"]) expect(keys, k).not.toContain(k);
+    expect(p.days[0].steps.find((s) => s.key === "carousel")).toMatchObject({ done: true, tick: "you" });
+    expect(p.days[0].steps.find((s) => s.key === "firstpost")).toMatchObject({ done: true, tick: "you" });
+    expect(p.days[0].complete).toBe(true);
+    // Day 2 only misses the new step: planning this week's posts.
+    expect(p.days[1].steps.filter((s) => !s.done).map((s) => s.key)).toEqual(["planweek"]);
+    expect(p.current?.key).toBe("planweek");
+    expect(p.done).toBe(p.days[0].total + p.days[1].total - 1);
+    // A tick under the new key wins over the old one.
+    expect(withLegacyTicks({ video1: { at: old }, firstpost: { at: "mine" } })).toMatchObject({ carousel: { at: old }, firstpost: { at: "mine" } });
+    expect(withLegacyTicks(undefined)).toEqual({});
   });
 });

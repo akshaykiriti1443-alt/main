@@ -16,8 +16,8 @@ const ASIDE: AuthAside = {
   eyebrow: "For Skool community owners",
   title: "Day 1 of the course happens in here.",
   points: [
-    "Your website and free checklist, written by AI",
-    "5 ads in your own words from Ad studio",
+    "Your first post, from a reel that already works in your niche",
+    "Your Skool About page and cover, written and made by AI",
     "Your AI runs on your own key. A free Gemini key works",
     "One next step at a time, in the same order as the course",
   ],

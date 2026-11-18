@@ -100,10 +100,10 @@ function Thread() {
     // 1. Your post
     <article key="post" className={cn(CARD, "rounded-[22px] p-4 ring-1 ring-[var(--sk-lilac)]/40 md:p-5")}>
       <div className="flex items-center justify-between gap-3">
-        <Who initials="FD" name="You, Fit Dads Club" meta="Day 1 section" glow />
+        <Who initials="FD" name="You, Fit Dads Club" meta="Day 2 section" glow />
         <StepTag n={1} label="Post" />
       </div>
-      <p className="mt-3 text-[13.5px] leading-snug text-white/80">My page and my five ads are up. Be honest, I can take it.</p>
+      <p className="mt-3 text-[13.5px] leading-snug text-white/80">My website is up and my 5 ads are in. Be honest, I can take it.</p>
       <Browser className="mt-3 rounded-xl">
         <MiniLanding />
       </Browser>
@@ -112,7 +112,7 @@ function Thread() {
     // 2. Your review of the post before yours
     <article key="review" className={cn(CARD, "rounded-[22px] p-4 md:p-5")}>
       <div className="flex items-center justify-between gap-3">
-        <Who initials="M" name="The post before yours" meta="Day 1 section" />
+        <Who initials="M" name="The post before yours" meta="Day 2 section" />
         <StepTag n={2} label="Review" />
       </div>
       <TextBars className="mt-3" widths={["w-full", "w-[78%]"]} />

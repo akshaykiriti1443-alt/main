@@ -393,7 +393,7 @@ function SectionView({ s, ctx }: { s: Section; ctx: Ctx }): ReactNode {
   }
 }
 
-export const LANDING_STYLES = ["bold", "clean", "dark", "editorial", "luxe"] as const;
+export const LANDING_STYLES = ["bold", "clean", "dark", "editorial", "luxe", "glass"] as const;
 
 export function LandingSections(props: Props) {
   const style = (LANDING_STYLES as readonly string[]).includes(props.theme.style) ? props.theme.style : "bold";
@@ -408,7 +408,16 @@ export function LandingSections(props: Props) {
   const Main = props.standalone ? "main" : "div";
   return (
     <div className={cx("lp", `style-${style}`, `lpf-${props.theme.font}`, lpFontClasses, props.standalone && "lp-standalone")} style={palette}>
-      <div className="lp-page-deco" aria-hidden="true" />
+      <div className="lp-page-deco" aria-hidden="true">
+        {/* Glass: three soft aurora blobs drift behind the page. */}
+        {style === "glass" ? (
+          <>
+            <i />
+            <i />
+            <i />
+          </>
+        ) : null}
+      </div>
       {name ? (
         <div className="lp-brandbar">
           <div className="lp-wrap">

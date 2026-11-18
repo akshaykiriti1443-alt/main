@@ -1,4 +1,5 @@
 import { computePath, type Path, type WeekStep } from "./path";
+import { getCourseUnlocks } from "./courseUnlocks";
 import { getEntryTicket } from "./unlocks";
 
 // The companion ("Penny"): how to do this exact step, on the page where it happens. She never
@@ -50,6 +51,7 @@ export async function companionSnapshot(
   return snapshotFromPath(
     await computePath(ws, userId, {
       entryTicketOn: Boolean((await getEntryTicket())?.on),
+      ...(await getCourseUnlocks().then((c) => ({ courseUnlocksOn: c.on, courseUnlocksSince: c.since }))),
     }),
   );
 }

@@ -3,7 +3,8 @@ import { getDb } from "@/lib/db";
 import { jobs } from "@/lib/db/schema";
 import type { JobType } from "./queue";
 
-type Handler = (payload: Record<string, unknown>) => Promise<void>;
+/** job: this run's attempt number and the most it gets, for handlers that record how their last try went. */
+type Handler = (payload: Record<string, unknown>, job: { attempts: number; maxAttempts: number }) => Promise<void>;
 
 // Lazy imports keep this registry free of import cycles.
 const handlers: Record<JobType, Handler> = {
@@ -18,6 +19,7 @@ const handlers: Record<JobType, Handler> = {
   "inbox.webhook": async (p) => (await import("../meta/webhooks")).processWebhookEvent(p.webhookEventId as string),
   "domain.check": async (p) => (await import("../domains")).checkDomainJob(p.siteId as string),
   "unlock.webhook": async (p) => (await import("../unlocks")).processUnlockWebhook(p),
+  "course.unlock": async (p, job) => (await import("../courseUnlocks")).processCourseUnlockWebhook(p, job),
   "booking.reminder": async (p) => (await import("../booking")).processBookingReminder(p),
   "member.skool_invite": async (p) => (await import("../memberInvite")).sendSkoolInvite(p),
   "agency_domain.check": async (p) => (await import("../domains")).checkAgencyDomainJob(p.agencyId as string, Number(p.startedAt) || Date.now()),
@@ -53,7 +55,7 @@ export async function runDueJobs(limit = 25): Promise<{ processed: number; faile
         const handler = handlers[job.type as JobType];
         try {
           if (!handler) throw new PermanentJobError(`No handler for ${job.type}`);
-          await handler(job.payload ?? {});
+          await handler(job.payload ?? {}, { attempts: job.attempts, maxAttempts: job.max_attempts });
           await db.execute(sql`update ${jobs} set status = 'done', locked_at = null, last_error = null where id = ${job.id}`);
           processed++;
         } catch (err) {

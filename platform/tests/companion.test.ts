@@ -8,7 +8,7 @@ import { HELLO_STEP, POST_KEYS, WEEK, WEEK_STEPS } from "@/lib/week";
 import { makeWorkspace } from "./helpers";
 
 // The data-guide targets that exist on the app's pages, so "Show me where" always has something to glow.
-const TARGETS = ["ai-key", "skool-link", "kit-build", "site-publish", "pixel", "research-analyse", "ad-studio-make", "unlock-create", "ad-review", "checkin", "automation-ai", "agency-new"];
+const TARGETS = ["ai-key", "ai-connect", "skool-link", "kit-build", "site-publish", "pixel", "research-analyse", "ad-studio-make", "unlock-create", "ad-review", "checkin", "automation-ai", "agency-new"];
 
 describe("Penny, the step-by-step guide", () => {
   it("knows how to do every step of the week, with the posts sharing one entry", () => {
@@ -40,9 +40,12 @@ describe("Penny, the step-by-step guide", () => {
     expect(JSON.stringify({ STEP_HOWTO, PAGE_GUIDES })).not.toMatch(/3-Pack|\b[Ll]esson \d\.\d|Hook, Turn or Door|Day 8|Day 9|Optional: your Day 1/);
     expect(STEP_HOWTO.lead1.how.join(" ")).toMatch(/own email/);
     expect(STEP_HOWTO.bio.how.join(" ")).toContain("(Instagram, TikTok or YouTube)");
-    // The free key is Day 1 and needs no connector; the connector lives in that page's tip.
-    expect(STEP_HOWTO.ai.how.join(" ")).not.toMatch(/connector/i);
-    expect(PAGE_GUIDES.ai.tips.join(" ")).toMatch(/connector/i);
+    // Day 1's AI step is Claude first, through the connector; the free Gemini key is the last line, the way round.
+    expect(STEP_HOWTO.ai.target).toBe("ai-connect");
+    expect(STEP_HOWTO.ai.how[0]).toMatch(/Create connector URL/);
+    expect(STEP_HOWTO.ai.how.at(-1)).toMatch(/^No Claude\? .*Gemini key/);
+    expect(PAGE_GUIDES.ai.tips[0]).toMatch(/Claude first.*connector/i);
+    expect(PAGE_GUIDES.ai.tips.join(" ")).toMatch(/No Claude\? A free Google Gemini key works too/);
   });
 
   it("says nothing a Member can't use", () => {
@@ -56,7 +59,7 @@ describe("Penny, the step-by-step guide", () => {
     const p = await computePath(ws, user.id);
     const snap = snapshotFromPath(p);
     expect(snap.current?.key).toBe(p.current?.key);
-    expect(snap).toMatchObject({ mode: "week", state: p.state, dayTitle: "Your whole machine goes live", doneKeys: p.doneKeys, waitingOnMeta: false });
+    expect(snap).toMatchObject({ mode: "week", state: p.state, dayTitle: "Your first win", doneKeys: p.doneKeys, waitingOnMeta: false });
     expect(snap.wins.skool).toBe("Done: your group's link is saved. Every Join button now goes there.");
     expect((await companionSnapshot(ws, user.id)).current?.key).toBe(p.current?.key);
   });
@@ -73,6 +76,7 @@ describe("Penny, the step-by-step guide", () => {
     expect(pageGuideFor(`/app/w/${wid}/ads/research`, wid)?.title).toBe("Ad research");
     expect(pageGuideFor(`/app/w/${wid}/ads`, wid)?.title).toBe("Ad review");
     expect(pageGuideFor(`/app/w/${wid}/sites/abc`, wid)?.title).toBe("Funnels & pages");
+    expect(pageGuideFor(`/app/w/${wid}/carousel`, wid)?.title).toBe("Make my carousel");
     expect(pageGuideFor(`/app/w/${wid}/automations/new`, wid)?.title).toBe("Automations");
     expect(pageGuideFor(`/app/agency/x`, wid)).toBeNull();
     // Every guide is short enough to read at a glance.

@@ -163,7 +163,7 @@ describe("connector playbooks and tools", () => {
     const init = await rpc(token, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
     expect(init.result.capabilities.prompts).toBeTruthy();
     const prompts = await rpc(token, { jsonrpc: "2.0", id: 2, method: "prompts/list" });
-    // Course v5: six playbooks, Monday check-in and Make my 5 statics first. The 3-Pack is retired.
+    // Course v5: Monday check-in and Make my 5 statics first. The 3-Pack is retired. Day 1 with Claude builds the website and emails.
     expect(prompts.result.prompts.map((p: { name: string }) => p.name)).toEqual([
       "monday_check_in",
       "make_my_5_statics",
@@ -171,6 +171,8 @@ describe("connector playbooks and tools", () => {
       "fix_my_page",
       "build_my_automation",
       "plan_this_weeks_unlock",
+      "day_1_with_claude",
+      "make_my_carousel",
     ]);
     const listed = await call(token, "list_playbooks");
     expect(listed.data.map((p: { title: string }) => p.title).slice(0, 2)).toEqual(["Monday check-in", "Make my 5 statics"]);

@@ -113,8 +113,9 @@ describe("AI launch kit: when the AI breaks, Day 1 still ends with a website", (
     if (!kit.ok) throw new Error(kit.error);
 
     const list = buttons(await markup(ws.id, { new: "1", failed: "1" }));
-    // The browser sends Enter to the first submit button, and that one is disabled.
-    expect(list[0]).toBe("submit(disabled):");
+    // The browser sends Enter to the first submit button, and that one is disabled. (Suggest buttons are type="button".)
+    expect(list.find((b) => b.startsWith("submit"))).toBe("submit(disabled):");
+    expect(list.filter((b) => !b.startsWith("submit")).every((b) => b.startsWith("button:"))).toBe(true);
     expect(list).toContain("button:Build my launch kit");
     expect(list).toContain("button:Use the starter template instead");
     expect(list.filter((b) => b.startsWith("submit")).every((b) => b.includes("(disabled)"))).toBe(true);
@@ -124,7 +125,8 @@ describe("AI launch kit: when the AI breaks, Day 1 still ends with a website", (
     env.aiEnabled = true;
     const { ws } = await signIn();
     const list = buttons(await markup(ws.id, {}));
-    expect(list[0]).toBe("submit(disabled):");
+    expect(list.find((b) => b.startsWith("submit"))).toBe("submit(disabled):");
+    expect(list).toContain("button:Suggest");
     expect(list).toContain("submit:Build my launch kit");
   });
 });

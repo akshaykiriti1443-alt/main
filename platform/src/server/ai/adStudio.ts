@@ -3,12 +3,15 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { aiGenerations, sites, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { midSentence } from "@/lib/util";
 import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
 import { AD_ANGLES, AD_FRAMEWORK_RULES, ANGLE_LABEL, type AdAngle } from "./adFramework";
 import type { ResearchAd } from "./adResearch";
 import { dealFor, trialInOffer, type Deal, type LaunchKitInput } from "./launchKit";
 import { latestCheckins, skoolLinkFor, skoolTargetFor } from "../growth";
 import { siteBaseUrl } from "../sites";
+import { updateWorkspaceSettings } from "../workspace";
+import type { Journey, WorkspaceSettings } from "@/lib/db/types";
 
 // The Ad studio: a beginner's first ads, the same day. Statics first (the safest bet). Four parts,
 // in the course's words:
@@ -17,8 +20,8 @@ import { siteBaseUrl } from "../sites";
 //                          near-identical ads and treats them as one, so every pair differs in at
 //                          least two of: format, persona, angle, benefit.
 //   Your launch plan       one campaign, one broad ad set, all 5 statics, to one of two places:
-//                            website  Day 1: a Leads campaign to the member's published funnel.
-//                            skool    Day 2: a separate Traffic campaign to the tracked Skool link.
+//                            website  Day 2: a Leads campaign to the member's published funnel.
+//                            skool    Day 3: a separate Traffic campaign to the tracked Skool link.
 //   Video script (later)   a 20–30 second selfie script on the winning angle.
 // AI writes the creative (on the member's own AI when connected); the numbers and the click-steps
 // are rules, so they are never made up. Without AI, a rule-based pack still gives all of it.
@@ -76,6 +79,113 @@ export const STUDIO_COUNTRIES: [code: string, label: string][] = [
   ["MX", "Mexico"],
 ];
 export const countryLabel = (code: string) => STUDIO_COUNTRIES.find(([c]) => c === code)?.[1] ?? code;
+export const isStudioCountry = (code: unknown): code is string => typeof code === "string" && STUDIO_COUNTRIES.some(([c]) => c === code);
+
+/** Names people write at the end of an address, beyond the plain country names above. */
+const COUNTRY_ALIASES: Record<string, string> = {
+  usa: "US",
+  us: "US",
+  "u.s.": "US",
+  "u.s.a.": "US",
+  "united states of america": "US",
+  america: "US",
+  uk: "GB",
+  "u.k.": "GB",
+  "great britain": "GB",
+  britain: "GB",
+  england: "GB",
+  scotland: "GB",
+  wales: "GB",
+  "northern ireland": "GB",
+  uae: "AE",
+  "the netherlands": "NL",
+  holland: "NL",
+  deutschland: "DE",
+  españa: "ES",
+  espana: "ES",
+  italia: "IT",
+  brasil: "BR",
+  méxico: "MX",
+};
+
+/**
+ * The member's country from the mailing address they gave us (its last part, like "…, USA"), or null.
+ * Two-letter states ("Austin, TX", "Los Angeles, CA") never count as a country.
+ */
+export function countryFromAddress(address: string | null | undefined): string | null {
+  const last = (address ?? "").split(/[,\n]/).map((p) => p.trim()).filter(Boolean).at(-1);
+  if (!last) return null;
+  const words = last.toLowerCase().replace(/\d+/g, " ").replace(/\s+/g, " ").trim();
+  if (!words) return null;
+  if (COUNTRY_ALIASES[words]) return COUNTRY_ALIASES[words];
+  return STUDIO_COUNTRIES.find(([, label]) => label.toLowerCase() === words)?.[0] ?? null;
+}
+
+/**
+ * The country Ad research and Ad studio start on: the one the member last picked on either screen,
+ * else their last Ad studio pack's, else the one in their mailing address. Null when we don't know.
+ */
+export function adCountryFor(settings: Pick<WorkspaceSettings, "adCountry" | "mailingAddress">, lastPackCountry?: unknown): string | null {
+  if (isStudioCountry(settings.adCountry)) return settings.adCountry;
+  if (isStudioCountry(lastPackCountry)) return lastPackCountry;
+  return countryFromAddress(settings.mailingAddress);
+}
+
+/** Keep the member's country pick, so the other ad screen starts on it too. "ALL" and unknown codes are ignored. */
+export async function rememberAdCountry(workspaceId: string, code: string): Promise<void> {
+  const c = code.trim().toUpperCase();
+  if (!isStudioCountry(c)) return;
+  const db = await getDb();
+  const [ws] = await db.select({ settings: workspaces.settings }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
+  if (!ws || ws.settings.adCountry === c) return;
+  await updateWorkspaceSettings(workspaceId, { adCountry: c });
+}
+
+/** One ad the member can pick in Ad review: the names Ad studio's launch plan told them to use. */
+export type ReviewAdChoice = { value: string; label: string; destination: "optin" | "skool" };
+
+/**
+ * "Which ad?" in Ad review: S1…S5 from the newest website pack (Web S1…) and the newest Skool-link
+ * pack (Skool S1…). Packs from before the website choice all went to the Skool link.
+ */
+export function reviewAdChoices(packs: { pack: Pick<AdStudioPack, "destination" | "statics"> }[]): ReviewAdChoice[] {
+  const out: ReviewAdChoice[] = [];
+  for (const dest of ["website", "skool"] as const) {
+    const newest = packs.find((p) => (p.pack.destination ?? "skool") === dest);
+    if (!newest) continue;
+    const prefix = dest === "website" ? "Web" : "Skool";
+    (newest.pack.statics ?? []).forEach((s, i) => {
+      const value = `${prefix} S${i + 1}`;
+      out.push({ value, label: FORMAT_LABEL[s.format] ? `${value} · ${FORMAT_LABEL[s.format]}` : value, destination: dest === "website" ? "optin" : "skool" });
+    });
+  }
+  return out;
+}
+
+/**
+ * When each kind of ad went live: the member's "I pressed Publish" tick on Your path (clicks for the
+ * website ads, live2 for the Skool-link ads), else the day they made that pack in Ad studio.
+ */
+export function adLaunchDates(
+  journey: Journey | undefined,
+  packs: { createdAt: Date; pack: Pick<AdStudioPack, "destination"> }[],
+): { optin: Date | null; skool: Date | null } {
+  const tick = (key: string) => {
+    const at = journey?.ticks?.[key]?.at;
+    const d = at ? new Date(at) : null;
+    return d && !Number.isNaN(d.getTime()) ? d : null;
+  };
+  // Packs come newest first; the oldest one of a kind is closest to the launch.
+  const made = (dest: StudioDestination) => packs.filter((p) => (p.pack.destination ?? "skool") === dest).at(-1)?.createdAt ?? null;
+  return { optin: tick("clicks") ?? made("website"), skool: tick("live2") ?? made("skool") };
+}
+
+/** Whole days an ad has been running since it went live (at least 1, at most 90), or null when we don't know. */
+export function daysRunningSince(launch: Date | null, now = new Date()): number | null {
+  if (!launch) return null;
+  const days = Math.round((now.getTime() - launch.getTime()) / 86_400_000);
+  return Math.min(90, Math.max(1, days));
+}
 
 /** A first ad's cost per About-page visit, until the member has their own number. */
 export const ASSUMED_CPV = { low: 0.5, high: 1.5 } as const;
@@ -87,7 +197,7 @@ export const STATICS_PER_PACK = 5;
 export const STUDIO_DESTINATIONS = ["website", "skool"] as const;
 export type StudioDestination = (typeof STUDIO_DESTINATIONS)[number];
 export const DESTINATION_LABEL: Record<StudioDestination, string> = { website: "My website", skool: "My Skool link" };
-/** Day 1's first pack goes to the website, when there is one. Everything after goes to the Skool link. */
+/** Day 2's first pack goes to the website, when there is one. Everything after goes to the Skool link. */
 export const defaultDestination = (funnelPublished: boolean, earlierPack: boolean): StudioDestination => (funnelPublished && !earlierPack ? "website" : "skool");
 
 /**
@@ -393,7 +503,7 @@ export function limitWords(text: string, n = 7): string {
   return words.slice(0, n).join(" ").replace(/[,;:–—-]+$/, "");
 }
 const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
-const lcFirst = (s: string) => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+const lcFirst = midSentence;
 const ucFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const bare = (s: string) => s.trim().replace(/[.!?]+$/, "");
 const clip = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1).trimEnd()}…`);
@@ -1085,7 +1195,7 @@ export async function adStudioDefaults(ws: WsRow): Promise<AdStudioInput> {
   const base = adStudioInputSchema.parse({});
   const destination = defaultDestination(Boolean(await publishedFunnelUrl(ws.id)), Boolean(last));
   // The course's budgets: $10 a day to the website, $5 to the Skool link. The last pack's budget
-  // only carries over to the same kind of pack, so Day 2 doesn't start at Day 1's $10.
+  // only carries over to the same kind of pack, so Day 3 doesn't start at Day 2's $10.
   const sameKind = (prev.destination ?? "skool") === destination;
   return {
     ...base,
@@ -1098,7 +1208,8 @@ export async function adStudioDefaults(ws: WsRow): Promise<AdStudioInput> {
     proof: String(prev.proof || ""),
     price: (await studioOffers(ws)).price || Number(prev.price) || 0,
     budget: (sameKind && Number(prev.budget)) || (destination === "website" ? 10 : 5),
-    country: typeof prev.country === "string" && /^[A-Z]{2}$/.test(prev.country) ? prev.country : "US",
+    // Not always the US: the country they picked last (here or in Ad research), else their last pack's, else their address's.
+    country: adCountryFor(s, prev.country) ?? (typeof prev.country === "string" && /^[A-Z]{2}$/.test(prev.country) ? prev.country : "US"),
     tone: STUDIO_TONES.includes(prev.tone as StudioTone) ? (prev.tone as StudioTone) : base.tone,
     destination,
   };

@@ -88,7 +88,7 @@ export function ProvenHooks({ findings, base, pickable = true, defaultOpen, note
         <p className="text-sm text-muted-foreground">ReelVault is still studying your competitors&apos; reels. Check back after the first pull.</p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          <Link href={`${base}/reelvault/competitors`}>Add 3 competitors in ReelVault</Link> and their best hooks show up here.
+          <Link href={`${base}/reelvault/competitors`}>Add 1 to 3 accounts in your niche in ReelVault</Link> and their best hooks show up here.
         </p>
       )}
     </MoreOptions>

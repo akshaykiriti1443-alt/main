@@ -38,6 +38,8 @@ export default async function ReelVaultLayout({ children, params }: { children: 
     );
   }
 
+  // ReelVault is open from the start (Day 1's first real step), never a reward behind a post.
+
   if (!(await isEmailVerified(user.id))) {
     return (
       <>

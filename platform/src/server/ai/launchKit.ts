@@ -8,7 +8,31 @@ import { DEFAULT_SEQUENCE } from "../defaults";
 import { createSite, getSite, newSectionId, type Site } from "../sites";
 import { AD_ANGLES, AD_FRAMEWORK_RULES } from "./adFramework";
 import { VOICE_RULES, chargeAi, describeAiError, generateStructured, refundAi } from "./client";
-import { isUuid } from "@/lib/util";
+import { isUuid, midSentence, ownerSignOff, personFirstName, startsWithAction } from "@/lib/util";
+import { COVER_HEADLINE_MAX, cleanCoverText, prizeHeadline, shortWho } from "../cover/cleanText";
+
+/**
+ * The owner's two ways to build the free gift. The member picks one; the domino is the default.
+ * domino: solve one insanely valuable problem for free; solving it creates the next problem, which the paid group solves.
+ * wide: speak to a wide audience, show them they have the problem, then offer the group as the solution.
+ */
+export const LEAD_MAGNET_FRAMEWORKS = {
+  domino: {
+    label: "The domino",
+    short: "Solve one valuable problem for free. Solving it creates the next problem, and your group solves that one.",
+    prompt:
+      "The domino. The free checklist completely solves ONE insanely valuable problem for this audience, for free, so it feels almost too good to give away. Solving it naturally creates the next problem they will hit. Name that next problem near the end of the checklist and say plainly that the paid Skool group is where it gets solved. Never hold back the first fix to force the sale.",
+  },
+  wide: {
+    label: "Go wide",
+    short: "Show a wide audience they have the problem, then offer your group as the answer.",
+    prompt:
+      "Go wide. The free checklist speaks to the widest group of people in this niche, not only experts. It helps them see clearly that they have the problem (a quick self-check they can tick through), shows what it costs them to leave it, gives a first small step, then offers the paid Skool group as the solution.",
+  },
+} as const;
+export type LeadMagnetFramework = keyof typeof LEAD_MAGNET_FRAMEWORKS;
+/** The member's pick, or the domino when they didn't make one. */
+export const frameworkOf = (v: unknown): LeadMagnetFramework => (v === "wide" ? "wide" : "domino");
 
 export const launchKitInputSchema = z.object({
   businessName: z.string().min(2).max(80),
@@ -18,7 +42,13 @@ export const launchKitInputSchema = z.object({
   outcome: z.string().min(3).max(200),
   /** The name the member gave their free checklist. Blank: the AI names it. */
   leadMagnetIdea: z.string().max(200).default(""),
+  /** How the free gift is built (LEAD_MAGNET_FRAMEWORKS). Blank or anything else: the domino. */
+  leadMagnetFramework: z.enum(["domino", "wide"]).optional().catch(undefined),
   offer: z.string().max(200).default(""),
+  /** The cover's big words: the Prize in 4 to 8 words ("Strong in 3 sessions a week"). Blank: the AI writes it. */
+  coverHeadline: z.string().trim().max(60).optional().catch(undefined),
+  /** What happens inside the paid group each week ("a weekly live class, a new lesson"). Blank: the kit keeps it general and invents nothing. */
+  groupWeekly: z.string().trim().max(200).optional().catch(undefined),
   /** What they charge a month, as they typed it ("$29"). With trialDays it becomes the offer line. */
   price: z.string().trim().max(20).optional(),
   /** Days of free trial on their group. 0 means no free trial. */
@@ -56,6 +86,10 @@ export const launchKitSchema = z.object({
   ads: z.array(z.object({ angle: z.enum(AD_ANGLES), hook: z.string(), turn: z.string(), door: z.string(), headline: z.string(), description: z.string() })),
   hooks: z.array(z.string()),
   skoolAboutPage: z.string(),
+  /** The group's short description in Skool › Settings › General. Skool cuts it at 150 characters. */
+  skoolGroupDescription: z.string().max(150),
+  /** The Skool cover's big words: the Prize, at most 40 characters. */
+  coverHeadline: z.string(),
   adPlan: z.object({
     dailyBudgetUsd: z.number(),
     audience: z.string(),
@@ -65,10 +99,27 @@ export const launchKitSchema = z.object({
 });
 export type LaunchKit = z.infer<typeof launchKitSchema>;
 
+/**
+ * How the Skool words are built, the way the top paid Skool groups do it: Who it's for → Pain → Path →
+ * Prize → Push. The cover carries the Prize; the description packs Who + Prize + Path + Push into one
+ * line; the About page opens with the Prize. Shared with the Claude road (the Day 1 playbook).
+ */
+export const SKOOL_WORDS_RULES = `Skool words (cover headline, group description, About page): build them as Who it's for, Pain, Path, Prize, Push.
+- Truth: never invent proof numbers, member counts, results, testimonials, income or guarantees. Use only numbers the owner gave in their answers (their result, their price, their free trial). No number given: no number.
+- coverHeadline is the big words on the Skool cover, shown tiny on Skool (about 335 pixels wide): the Prize in 4 to 8 words, at most ${COVER_HEADLINE_MAX} characters. A result the reader wants, with a number or a time only if the owner's answers give one ("Strong in 3 sessions a week"). No group name, no price, no free trial, no emojis.
+- skoolGroupDescription is the short line Skool shows under the group's name (Skool > Settings > General). At most 150 characters. Pack Who + Prize + Path + Push into one line, shaped like this model from another niche (copy its shape, never its numbers or claims): "For insurance agents doing $10K+/mo: start for $0, launch Meta ads in 72 hours, and get your first qualified lead in 14 days." Start with "For <who>:", then the path in a few words and the prize. Add the free trial as the push only if the offer states one. No emojis, no hashtags, no links.
+- The Skool About page is plain text with emojis as bullets (Skool has no bold, so keep structure with line breaks), in this order:
+  1. The Prize in one line (the result, in the reader's words).
+  2. One objection line that starts with "Even if" or "Without" (like "Even if you've tried before and quit by week 2.").
+  3. "This is for you if:" then 2 to 4 lines starting with ✅ (Who it's for).
+  4. The Pain: 2 or 3 lines starting with ❌ (what's going wrong for them now).
+  5. The Path: "What you get:" (or "What you get every week:" when the weekly line is given), 3 to 5 lines starting with 🔹.
+  6. One Push: the free trial if the offer states one ("Start your 7-day free trial: tap Join."), else simply "Tap Join."`;
+
 const SYSTEM = `You are a direct-response marketer who builds lead funnels for Skool community owners, coaches and personal trainers.
 You write a complete "launch kit" for one community: a free checklist (the lead magnet), a landing page, a thank-you page that sends people to the Skool group, three follow-up emails, Meta ad copy, hooks and a Skool About page.
-The owner grows with small paid ads, not social media. The first ads send people to the owner's website for the free checklist. The thank-you page then invites them into the Skool group.
-The lead magnet is always a free checklist someone can tick off in a week, so leadMagnetType is "checklist".
+The owner grows with small paid ads and short posts working together. The first ads send people to the owner's website for the free checklist. The thank-you page then invites them into the Skool group.
+The lead magnet is always a free checklist someone can tick off in a week, so leadMagnetType is "checklist". It is built on the framework the prompt names (the domino, or go wide), and the free checklist always leads naturally to the paid group.
 
 ${VOICE_RULES}
 
@@ -77,7 +128,76 @@ ${AD_FRAMEWORK_RULES}
 Formatting rules:
 - Email bodies and the lead magnet use plain text with blank lines between paragraphs. Use "- " for list items and **bold** for emphasis. No HTML.
 - In emails, use {{first_name}} for the reader's name, {{lead_magnet_url}} for the lead magnet link and {{skool_url}} for the group link. Sign emails with the owner's first name.
-- The Skool About page uses plain text with emojis as bullets. Skool has no bold, so keep structure with line breaks.`;
+${SKOOL_WORDS_RULES}`;
+
+/** Skool's limit on a group's description (Settings > General). */
+export const SKOOL_DESCRIPTION_MAX = 150;
+
+/**
+ * Text that fits Skool's 150-character group description: whitespace tidied, then cut at the last
+ * whole sentence that fits, or at a word with "…". Never longer than `max`.
+ */
+export function fitSkoolDescription(raw: string | null | undefined, max = SKOOL_DESCRIPTION_MAX): string {
+  const text = (raw ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  const head = text.slice(0, max + 1);
+  const sentence = Math.max(head.lastIndexOf(". "), head.lastIndexOf("! "), head.lastIndexOf("? "));
+  if (sentence >= 60) return head.slice(0, sentence + 1);
+  const cut = text.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space >= 40 ? cut.slice(0, space) : cut).replace(/[\s,;:.\-–—]+$/, "")}…`;
+}
+
+/** The weekly line as separate things: "a live class, a new lesson; feedback" → three items. */
+export function weeklyItems(raw: string | null | undefined): string[] {
+  return (raw ?? "")
+    .split(/\s*[,;\n•]\s*|\s+\+\s+/)
+    .map((s) => s.replace(/^[-*]\s*/, "").replace(/[.\s]+$/, "").trim())
+    .filter((s) => s.length > 1)
+    .slice(0, 5);
+}
+
+type DescriptionSource = { businessName?: string; audience?: string; outcome?: string; groupWeekly?: string; offer?: string; price?: string; trialDays?: number };
+
+/** "Lose 10 lbs" → "lose 10 lbs", but "AI ads" and "CEOs" stay. */
+const lowerFirst = midSentence;
+const andList = (items: string[]) => (items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
+
+/**
+ * The no-AI group description, from what the member told us, packed like the best Skool groups':
+ * Who + Prize + Path + Push in one line ("For busy dads: lose 10 lbs in 8 weeks, with a simple plan and a
+ * group that keeps you going. Start with a 7-day free trial."). The trial only when their deal has one.
+ * Always 150 characters or fewer: the push, then the path, shrink first.
+ */
+export function fallbackGroupDescription(input: DescriptionSource): string {
+  const outcome = (input.outcome ?? "").trim().replace(/[.\s]+$/, "");
+  const who = midSentence(shortWho(input.audience, 60));
+  const name = (input.businessName ?? "").trim() || "This group";
+  const weekly = weeklyItems(input.groupWeekly).slice(0, 2).map(lowerFirst);
+  const deal = dealFor({ offer: input.offer ?? "", price: input.price, trialDays: input.trialDays });
+  const push = deal && deal.days !== 0 ? (deal.days ? ` Start with a ${deal.days}-day free trial.` : " Start with a free trial.") : "";
+  const paths = [weekly.length ? `with ${andList(weekly)}` : "with a simple plan and a group that keeps you going", "with a simple plan", ""];
+  const line = (path: string, withWho: boolean, withPush: boolean) => {
+    const prize = outcome ? (withWho && who ? lowerFirst(outcome) : capitalize(outcome)) : "";
+    const body = prize ? `${prize}${path ? `, ${path}` : ""}` : `${withWho && who ? "" : `${name}: `}${path ? path.replace(/^with /, "") : "a plan and people who keep you going"}`;
+    return `${withWho && who ? `For ${who}: ` : ""}${body}.${withPush ? push : ""}`;
+  };
+  const tries = [
+    line(paths[0], true, true),
+    line(paths[1], true, true),
+    line(paths[0], true, false),
+    line(paths[1], true, false),
+    line(paths[2], true, true),
+    line(paths[2], true, false),
+    line(paths[1], false, false),
+  ];
+  return fitSkoolDescription(tries.find((t) => t.length <= SKOOL_DESCRIPTION_MAX) ?? tries[tries.length - 1]);
+}
+
+/** A kit's group description, fitted to Skool's limit. Kits from before it was written get the template line. */
+export function groupDescriptionFor(kit: Partial<Pick<LaunchKit, "skoolGroupDescription">>, input: DescriptionSource): string {
+  return fitSkoolDescription(kit.skoolGroupDescription) || fallbackGroupDescription(input);
+}
 
 /** days: null is a free trial of unstated length, 0 is no free trial at all. */
 export type Deal = { days: number | null; price: string | null };
@@ -144,8 +264,16 @@ Owner: ${input.ownerName}
 Niche: ${input.niche}
 Who it serves: ${input.audience}
 Main outcome members want: ${input.outcome}
+${input.coverHeadline ? `Cover headline: use "${input.coverHeadline}" as coverHeadline, word for word` : `Cover headline: (write coverHeadline: the Prize in 4 to 8 words, at most ${COVER_HEADLINE_MAX} characters, numbers only from the answers above)`}
 ${input.leadMagnetIdea ? `Free checklist name: use "${input.leadMagnetIdea}" as leadMagnetName, word for word` : "Free checklist: (pick the best quick-win checklist for this niche and give it a short name)"}
+Free checklist framework: ${LEAD_MAGNET_FRAMEWORKS[frameworkOf(input.leadMagnetFramework)].prompt}
 Offer inside the Skool group: ${input.offer || (deal ? offerLine(deal) : "(a paid Skool membership, no details given)")}
+${
+    input.groupWeekly
+      ? `What happens inside the group each week: ${input.groupWeekly}
+Use exactly these things for what members get: in the Skool About page (its WHAT YOU GET list) and on the website (the benefits, the about section and the FAQ answer about the group). Add no other weekly calls, classes or schedule.`
+      : `What happens inside the group each week: (not given). Keep what members get general. Never invent live calls, classes or a schedule.`
+  }
 Mention a free trial, a price or cancelling only if the offer line above states it. Never invent one, on any page or in any email.${
     deal && deal.days !== 0
       ? `
@@ -158,6 +286,8 @@ There is no free trial, so thankYouBody must state the price in plain words, rig
 Tone: ${input.tone}
 
 Counts: exactly 3 bullets, 3 benefits, 3 steps, 4 FAQ items, 3 emails (day 0, day 1, day 3), 3 ads (the 3-Pack: angle pain, dream and lesson, in that order) and 10 hooks.
+skoolGroupDescription: at most ${SKOOL_DESCRIPTION_MAX} characters (Skool's limit for the group description), as one line: "For <who>:", the path, the prize${deal && deal.days !== 0 ? ", then the free trial as the push" : " (no free trial: none was given)"}.
+skoolAboutPage: Prize line, "Even if" or "Without" line, "This is for you if:" with ✅ lines, ❌ pain lines, what you get with 🔹 lines, one push.
 The lead magnet content must be the full, usable checklist itself (300 to 600 words), not a description of it.`;
 }
 
@@ -197,17 +327,35 @@ export function normalizeKit(kit: LaunchKit): LaunchKit {
     emails: take(kit.emails, 3, (i) => ({ subject: DEFAULT_SEQUENCE.steps[i].subject, body: DEFAULT_SEQUENCE.steps[i].body })),
     ads: kit.ads.slice(0, 4),
     hooks: kit.hooks.slice(0, 15),
+    skoolGroupDescription: fitSkoolDescription(kit.skoolGroupDescription),
+    coverHeadline: prizeHeadline(kit.coverHeadline),
   };
+}
+
+/** The cover headline: the member's own words when they typed some, else the kit's, else a short form of their result. */
+export function coverHeadlineFor(kit: Partial<Pick<LaunchKit, "coverHeadline">>, input: Pick<LaunchKitInput, "outcome"> & { coverHeadline?: string }): string {
+  return cleanCoverText(input.coverHeadline, COVER_HEADLINE_MAX + 8) || prizeHeadline(kit.coverHeadline) || prizeHeadline(input.outcome);
 }
 
 // Deterministic copy used when no AI key is configured (local dev, demos, tests).
 export function fallbackKit(input: LaunchKitInput): LaunchKit {
-  const first = input.ownerName.split(" ")[0];
+  // Their first name only when the name box reads like a person's ("Dad Coach Demo" doesn't): else "me".
+  const first = personFirstName(input.ownerName);
+  const signOff = ownerSignOff(input.ownerName);
+  // What they typed, ready to sit mid-sentence ("Free for busy dads over 35", not "Free for Busy dads").
+  const who = midSentence(input.audience.trim().replace(/[.\s]+$/, ""));
+  const topic = midSentence(input.niche.trim().replace(/[.\s]+$/, ""));
+  const goal = midSentence(input.outcome.trim().replace(/[.\s]+$/, ""));
+  // "If you want to get strong", but "If you want a stronger back".
+  const wantGoal = startsWithAction(goal) && !/^\S+ing\b/i.test(goal) ? `to ${goal.replace(/^to\s+/i, "")}` : goal;
   const lm = checklistName(input.leadMagnetIdea) || `7-Day ${titleCase(input.niche)} Quick-Start Checklist`;
   const deal = dealFor(input);
   const trial = deal && deal.days !== 0 ? deal : null;
   // Only the price and trial boxes add where to cancel; a typed offer line keeps to the member's own words.
   const how = Boolean(cleanPrice(input.price ?? ""));
+  // What happens inside each week, in the member's words. Blank: nothing weekly is promised.
+  const weekly = weeklyItems(input.groupWeekly);
+  const weeklyLine = weekly.join(", ");
   return {
     leadMagnetName: lm,
     leadMagnetType: "checklist",
@@ -215,7 +363,7 @@ export function fallbackKit(input: LaunchKitInput): LaunchKit {
 
 This checklist gives you one small action a day for 7 days. Each action takes about 10 minutes.
 
-- Day 1: Write down your main goal: ${input.outcome}.
+- Day 1: Write down your main goal: ${goal}.
 - Day 2: Pick one habit that moves you toward it. Do it today.
 - Day 3: Remove one thing that slows you down.
 - Day 4: Do your habit again. Track it on paper.
@@ -224,9 +372,9 @@ This checklist gives you one small action a day for 7 days. Each action takes ab
 - Day 7: Plan next week. Join a group that keeps you going.
 
 Want help with every step? Join ${input.businessName}. We do this together.`,
-    eyebrow: `Free for ${input.audience}`,
-    headline: `${capitalize(input.outcome)}. Start today.`,
-    subheadline: `Get the free ${lm}. It shows ${input.audience} the first steps that work.`,
+    eyebrow: `Free for ${who}`,
+    headline: `${capitalize(goal)}. Start today.`,
+    subheadline: `Get the free ${lm}. It shows ${who} the first steps that work.`,
     bullets: ["One small action a day", "Takes 10 minutes", "Free to download"],
     ctaText: "Send me the checklist",
     formTitle: "Where should I send it?",
@@ -234,44 +382,47 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
     benefits: [
       { title: "A clear plan", body: "Know exactly what to do each day." },
       { title: "Quick wins", body: "See progress in your first week." },
-      { title: "Real support", body: `Get help from ${first} and the group.` },
+      weeklyLine ? { title: "Every week inside", body: `${capitalize(weeklyLine)}.` } : { title: "Real support", body: `Get help from ${first || "me"} and the group.` },
     ],
     steps: [
       { title: "Enter your email", body: "The checklist lands in your inbox." },
       { title: "Do day 1", body: "It takes about 10 minutes." },
       { title: "Join the group", body: `Get the full system inside ${input.businessName}.` },
     ],
-    aboutTitle: `Hi, I'm ${first}`,
-    aboutBody: `I help ${input.audience} with ${input.niche}. I built ${input.businessName} so you get a clear plan and people who keep you on track.`,
+    aboutTitle: first ? `Hi, I'm ${first}` : "A bit about me",
+    aboutBody: `I help ${who} with ${topic}. I built ${input.businessName} so you get a clear plan and people who keep you on track.`,
     faq: [
       { q: "Is it really free?", a: "Yes. The checklist is free." },
       { q: "How long does it take?", a: "About 10 minutes a day." },
-      { q: "What is the group?", a: `${input.businessName} is my Skool community. Members get the full plan and live help.` },
+      {
+        q: "What is the group?",
+        a: weeklyLine ? `${input.businessName} is my Skool community. Every week inside: ${weeklyLine}.` : `${input.businessName} is my Skool community. Members get the full plan and help from me.`,
+      },
       { q: "Can I start today?", a: "Yes. Enter your email and start with day 1." },
     ],
     thankYouHeadline: "It's in your inbox 📬",
     thankYouBody: trial
       ? `Want help putting it to work? Come and join ${input.businessName}. ${trialTerms(trial, { how })}`
-      : `Want the full system? Join ${input.businessName} and get live help every week.${deal && how ? ` ${trialTerms(deal, { how })}` : ""}`,
+      : `Want the full system? Join ${input.businessName}${weeklyLine ? `. Every week inside: ${weeklyLine}.` : " and get help every step of the way."}${deal && how ? ` ${trialTerms(deal, { how })}` : ""}`,
     thankYouButton: trial ? "Start my free trial" : "Join the group",
     emails: [
       {
         subject: `Here's your ${lm} 📥`,
-        body: `Hey {{first_name}},\n\nHere it is: [${lm}]({{lead_magnet_url}})\n\nDo day 1 today. It takes 10 minutes.\n\nTomorrow I'll send you the mistake that keeps most people stuck.\n\n${first}`,
+        body: `Hey {{first_name}},\n\nHere it is: [${lm}]({{lead_magnet_url}})\n\nDo day 1 today. It takes 10 minutes.\n\nTomorrow I'll send you the mistake that keeps most people stuck.\n\n${signOff}`,
       },
       {
         subject: "The #1 mistake I see",
-        body: `Hey {{first_name}},\n\nMost people try to change everything at once. They stop by day 3.\n\nPick one small action. Do it every day this week.\n\nWant help? Join us inside ${input.businessName}: {{skool_url}}\n\n${first}`,
+        body: `Hey {{first_name}},\n\nMost people try to change everything at once. They stop by day 3.\n\nPick one small action. Do it every day this week.\n\nWant help? Join us inside ${input.businessName}: {{skool_url}}\n\n${signOff}`,
       },
       {
         subject: "Still thinking about it?",
-        body: `Hey {{first_name}},\n\nInside ${input.businessName} you get the full plan, live calls and a group that keeps you going.\n\nCome and have a look: {{skool_url}}\n\nNot for you? No hard feelings.\n\n${first}`,
+        body: `Hey {{first_name}},\n\nInside ${input.businessName} you get the full plan, live calls and a group that keeps you going.\n\nCome and have a look: {{skool_url}}\n\nNot for you? No hard feelings.\n\n${signOff}`,
       },
     ],
     ads: [
       {
         angle: "pain",
-        hook: `Still stuck on ${input.niche}?`,
+        hook: `Still stuck on ${topic}?`,
         turn: `It's rarely effort. It's doing ten things at once. ${input.businessName} gives you one small step a day.`,
         door: "Tap Learn more to look inside the community.",
         headline: `${capitalize(input.outcome)}, one step a day`,
@@ -279,7 +430,7 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
       },
       {
         angle: "dream",
-        hook: `Picture this: ${input.outcome}.`,
+        hook: `Picture this: ${goal}.`,
         turn: `The people who get there aren't more talented. They follow a plan, with people who check in on them.`,
         door: `That's ${input.businessName}. Tap Learn more to see the plan.`,
         headline: `Join ${input.businessName}`,
@@ -287,7 +438,7 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
       },
       {
         angle: "lesson",
-        hook: `One thing that helps with ${input.niche} today:`,
+        hook: `One thing that helps with ${topic} today:`,
         turn: `Pick one small action and do it at the same time every day. Tiny beats perfect.`,
         door: `That's lesson 1 of ${input.businessName}. The rest is inside. Tap Learn more.`,
         headline: "Free lesson inside",
@@ -295,29 +446,49 @@ Want help with every step? Join ${input.businessName}. We do this together.`,
       },
     ],
     hooks: [
-      `If you want ${input.outcome}, watch this.`,
-      `3 mistakes that keep people stuck with ${input.niche}.`,
+      `If you want ${wantGoal}, watch this.`,
+      `3 mistakes that keep people stuck with ${topic}.`,
       "Do this before you start tomorrow.",
-      `The 10-minute plan for ${input.outcome}.`,
+      `The 10-minute plan ${wantGoal === goal ? `for ${goal}` : wantGoal}.`,
       "Save this if you want a simple start.",
-      `Most people get ${input.niche} wrong. Here's the fix.`,
+      startsWithAction(topic) ? "Most people get this wrong. Here's the fix." : `Most people get ${topic} wrong. Here's the fix.`,
       "This one change made the biggest difference.",
       "Here's my exact daily routine.",
       'Comment "PLAN" and I\'ll send you my checklist.',
       "Read this before you quit.",
     ],
-    skoolAboutPage: `🚀 ${input.businessName}\n\n${capitalize(input.outcome)} with a simple plan and real support.\n\n💎 WHAT YOU GET:\n🔹 Step-by-step plan\n🔹 Weekly live calls with ${first}\n🔹 A group that keeps you on track\n\n${input.offer || "Tap Join and come say hi."}`,
+    // Prize → objection → Who → Pain → Path → Push, like the best Skool About pages. Nothing invented:
+    // no numbers but theirs, no results, no member counts.
+    skoolAboutPage: [
+      `🏆 ${capitalize(input.outcome.trim().replace(/[.\s]+$/, ""))}.`,
+      "Even if you've tried before and it didn't stick.",
+      "",
+      "This is for you if:",
+      `✅ You're one of these people: ${who}`,
+      `✅ Your goal: ${lowerFirst(input.outcome.trim().replace(/[.\s]+$/, ""))}`,
+      "✅ You want a simple plan, not more noise",
+      "",
+      "❌ You've tried on your own and it didn't stick",
+      "❌ You're not sure what to do first",
+      "",
+      `💎 WHAT YOU GET${weekly.length ? " EVERY WEEK" : ""}:`,
+      ...(weekly.length ? weekly.map((w) => `🔹 ${capitalize(w)}`) : ["🔹 Step-by-step plan", `🔹 Help from ${first || "me"} when you're stuck`, "🔹 A group that keeps you on track"]),
+      "",
+      input.offer ? `👉 ${input.offer.trim().replace(/[.\s]+$/, "")}. Tap Join to start.` : "👉 Tap Join and come say hi.",
+    ].join("\n"),
+    skoolGroupDescription: fallbackGroupDescription(input),
+    coverHeadline: coverHeadlineFor({}, input),
     adPlan: {
       dailyBudgetUsd: 15,
       audience: "People in your country, 18 and over, broad with no interests. Your pictures do the targeting.",
       campaigns: [
         { name: "Website · Leads", objective: "Leads to your website, using your Meta Pixel and the Lead event", budgetUsd: 10, why: "Collects emails with your free checklist and teaches Meta who your real buyers are." },
-        { name: "Skool link · Traffic", objective: "Traffic to your Skool link, optimised for landing page views", budgetUsd: 5, why: "Starts on Day 2 in its own campaign. Feeds Skool's 100-visitor bar for Level 2." },
+        { name: "Skool link · Traffic", objective: "Traffic to your Skool link, optimised for landing page views", budgetUsd: 5, why: "Starts on Day 3 in its own campaign. Feeds Skool's 100-visitor bar for Level 2." },
       ],
       firstWeek: [
-        "Day 1: Add your free Gemini key, build this kit, publish your website, open your Skool group, connect your Meta Pixel, then launch 5 statics to your website at $10 a day.",
-        "Day 2: Launch 5 more statics to your Skool link at $5 a day, in their own campaign.",
-        "Day 3: Hands off the ads. Walk through your own website and sign-up, the way a stranger would.",
+        "Day 1: Connect your Claude, find a reel that already works in your niche, turn it into your first carousel and post it. Then open your Skool group and build this kit.",
+        "Day 2: Set up your Facebook Page and Instagram, publish your website, connect your Meta Pixel, launch 5 statics to your website at $10 a day and schedule this week's posts.",
+        "Day 3: Launch 5 more statics to your Skool link at $5 a day, in their own campaign. Then walk through your own website and sign-up, the way a stranger would.",
         "Day 4: Pin a welcome post, make your first Unlock and add your first lesson.",
         "Day 5: Text five people who already know you, by hand.",
         "Day 6: Read your first numbers in Ad review.",
@@ -392,7 +563,12 @@ export const KIT_OUT_OF_RUNS = "You've used your free AI runs for this month. Ad
 
 // The ad plan is never shown anywhere, so the AI isn't asked to write it: that keeps the reply
 // inside the smaller limit a free key allows. The kit still carries the rule-based plan.
-const aiKitSchema = launchKitSchema.omit({ adPlan: true });
+// The 150-character limit is in the prompt and fitted afterwards (fitSkoolDescription): a reply a few
+// characters over must never fail the whole kit.
+const aiKitSchema = launchKitSchema.omit({ adPlan: true }).extend({
+  skoolGroupDescription: z.string().describe(`The group description for Skool > Settings > General. At most ${SKOOL_DESCRIPTION_MAX} characters.`),
+  coverHeadline: z.string().describe(`The Skool cover's big words: the Prize in 4 to 8 words. At most ${COVER_HEADLINE_MAX} characters.`),
+});
 
 type KitPage = { slug: string; title: string; kind: PageKind; content: PageContent };
 
@@ -424,6 +600,9 @@ export async function kitSite(workspaceId: string): Promise<Site | null> {
  * Put a new kit into the website the last one built: same address, same name. Only the draft
  * changes, so a live website shows the old pages until the member presses Publish again.
  */
+/** No style chosen yet: the schema's default (or none saved). Anything else is the member's pick and stays. */
+const untouchedStyle = (theme: Partial<SiteTheme> | null | undefined) => !theme?.style || theme.style === siteThemeSchema.parse({}).style;
+
 async function rewriteSite(site: Site, next: { theme: Partial<SiteTheme>; skoolUrl: string; leadMagnetName: string; pages: KitPage[] }) {
   const db = await getDb();
   await db.transaction(async (tx) => {
@@ -473,7 +652,7 @@ export async function runLaunchKit(workspaceId: string, rawInput: unknown, opts:
       const res = await generateStructured({ workspaceId, creds: charge.creds, system: SYSTEM, prompt: buildPrompt(input), schema: aiKitSchema, effort: "medium" });
       const written = normalizeKit({ ...res.data, adPlan: fallbackKit(input).adPlan });
       const named = checklistName(input.leadMagnetIdea) || checklistName(written.leadMagnetName) || written.leadMagnetName;
-      kit = withTrialTerms({ ...written, leadMagnetName: named }, input);
+      kit = withTrialTerms({ ...written, leadMagnetName: named, skoolGroupDescription: groupDescriptionFor(written, input), coverHeadline: coverHeadlineFor(written, input) }, input);
       usage = res.usage;
       usedAi = true;
     } catch (err) {
@@ -495,13 +674,15 @@ export async function runLaunchKit(workspaceId: string, rawInput: unknown, opts:
   // A blank link box never wipes a link saved earlier.
   const skoolUrl = input.skoolUrl || ws?.settings.skoolUrl || "";
   const pagesContent = funnelPagesFromKit(kit, input);
-  const theme: Partial<SiteTheme> = { brandColor: input.brandColor, style: input.tone === "calm" ? "clean" : "bold" };
   const kitPages: KitPage[] = [
     { slug: "", title: "Opt-in page", kind: "optin", content: pagesContent.optin },
     { slug: "thank-you", title: "Thank-you page", kind: "thankyou", content: pagesContent.thankyou },
     { slug: "guide", title: kit.leadMagnetName, kind: "custom", content: pagesContent.guide },
   ];
   const earlier = await kitSite(workspaceId);
+  // A new kit website wears the premium Glass look (the Funnels page's premium template), in the member's
+  // brand colour. A rebuild keeps a style the member picked; only the untouched default turns Glass.
+  const theme: Partial<SiteTheme> = { brandColor: input.brandColor, ...(!earlier || untouchedStyle(earlier.theme) ? { style: "glass" as const } : {}) };
   const site = earlier
     ? await rewriteSite(earlier, { theme, skoolUrl, leadMagnetName: kit.leadMagnetName, pages: kitPages })
     : await createSite({ workspaceId, name: `${input.businessName} funnel`, theme: { ...theme, font: "sans" }, skoolUrl, leadMagnetName: kit.leadMagnetName, leadMagnetUrl: "/guide", pages: kitPages });
@@ -574,7 +755,7 @@ async function replaceDefaultEmails(workspaceId: string, kit: LaunchKit, ownerNa
     position: i,
     delayMinutes: delays[i],
     subject: e.subject,
-    body: e.body.replace(/\{\{owner_name\}\}/g, ownerName.split(" ")[0]),
+    body: e.body.replace(/\{\{owner_name\}\}/g, ownerSignOff(ownerName)),
   }));
   if (!seq) {
     const [created] = await db
@@ -590,13 +771,30 @@ async function replaceDefaultEmails(workspaceId: string, kit: LaunchKit, ownerNa
   });
 }
 
+/**
+ * The cover headline, changed on one of this workspace's kits: on the kit (what the cover draws) and on
+ * its answers (so "Change answers and rebuild" keeps it word for word). False when there's no such kit.
+ */
+export async function setKitCoverHeadline(workspaceId: string, generationId: string, headline: string): Promise<boolean> {
+  const row = await getLaunchKit(workspaceId, generationId);
+  if (!row) return false;
+  const text = cleanCoverText(headline, COVER_HEADLINE_MAX + 8);
+  const db = await getDb();
+  const updated = await db
+    .update(aiGenerations)
+    .set({ output: { ...row.output, coverHeadline: text }, input: { ...row.input, coverHeadline: text } })
+    .where(and(eq(aiGenerations.id, row.id), eq(aiGenerations.workspaceId, workspaceId), eq(aiGenerations.kind, "launch_kit")))
+    .returning({ id: aiGenerations.id });
+  return updated.length > 0;
+}
+
 export async function getLaunchKit(workspaceId: string, generationId: string) {
   if (!isUuid(generationId)) return null;
   const db = await getDb();
   const [row] = await db
     .select()
     .from(aiGenerations)
-    .where(and(eq(aiGenerations.id, generationId), eq(aiGenerations.workspaceId, workspaceId)))
+    .where(and(eq(aiGenerations.id, generationId), eq(aiGenerations.workspaceId, workspaceId), eq(aiGenerations.kind, "launch_kit")))
     .limit(1);
   return row ? { ...row, kit: row.output as unknown as LaunchKit, input: row.input as unknown as LaunchKitInput } : null;
 }

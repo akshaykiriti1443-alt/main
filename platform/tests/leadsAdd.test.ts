@@ -22,7 +22,11 @@ describe("Leads: Add contact for people who replied to a text", () => {
   });
 
   it("comes back to the open form after adding, ready for the next person", () => {
-    expect(action).toContain("const back = `/app/w/${wid}/leads?add=1`;");
+    expect(action).toContain("const back = `/app/w/${wid}/leads?add=1${");
+    // Opened from Day 5, the next friend keeps the tag "friend" filled in.
+    expect(action).toContain('=== "day5" ? "&from=day5" : ""');
+    expect(page).toContain("addContactPreset(sp.from)");
+    expect(page).toContain("defaultValue={preset.tags}");
     expect(action).toMatch(/go\(back, \{ ok: created \? "Contact added\."/);
   });
 

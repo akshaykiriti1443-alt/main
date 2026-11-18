@@ -16,6 +16,8 @@ import {
   updateSite,
 } from "@/server/sites";
 import { connectDomain, removeDomain } from "@/server/domains";
+import { glassStarter } from "@/server/siteTemplates";
+import { writePageCopy, type PageCopyRequest, type PageCopyResult } from "@/server/ai/pageCopy";
 import { siteThemeSchema } from "@/lib/db/types";
 import { safeUrl } from "@/lib/html";
 import { PLANS, hasFeature } from "@/server/plans";
@@ -26,10 +28,17 @@ export async function createSiteAction(wid: string, fd: FormData) {
   const sites = await listSites(wid);
   if (sites.length >= PLANS[workspace.plan].maxSites) go(`/app/w/${wid}/sites`, { error: "You already have as many funnels as your account holds. Delete one to start another." });
   const name = field(fd, "name", 80) || "New funnel";
+  const skoolUrl = await accountSkoolUrl(wid, workspace.settings.skoolUrl);
+  if (field(fd, "template") === "glass") {
+    // The premium template: our own Glass design with starter words for a Skool community page.
+    const starter = glassStarter({ name: workspace.settings.businessName || workspace.name, niche: workspace.settings.niche });
+    const site = await createSite({ workspaceId: wid, name, theme: starter.theme, skoolUrl, leadMagnetName: starter.leadMagnetName, pages: starter.pages });
+    go(`/app/w/${wid}/sites/${site.id}`, { ok: "Funnel created in the premium Glass style. Edit the words, then publish." });
+  }
   const site = await createSite({
     workspaceId: wid,
     name,
-    skoolUrl: await accountSkoolUrl(wid, workspace.settings.skoolUrl),
+    skoolUrl,
     pages: [
       { slug: "", title: "Opt-in page", kind: "optin", content: { sections: [defaultSection("hero"), defaultSection("benefits"), defaultSection("faq"), defaultSection("form")] } },
       { slug: "thank-you", title: "Thank-you page", kind: "thankyou", content: { sections: [defaultSection("cta")] } },
@@ -106,6 +115,16 @@ export async function savePageAction(wid: string, pageId: string, content: unkno
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error && err.name === "ZodError" ? "Some fields are too long. Shorten them and save again." : errMsg(err) };
+  }
+}
+
+/** "Write it for me" / "Rewrite in my voice" in the page editor. Fills the box only; Save still saves. */
+export async function writePageCopyAction(wid: string, pageId: string, req: PageCopyRequest): Promise<PageCopyResult> {
+  await requireWorkspace(wid, "admin");
+  try {
+    return await writePageCopy(wid, pageId, req);
+  } catch (err) {
+    return { ok: false, error: errMsg(err) };
   }
 }
 

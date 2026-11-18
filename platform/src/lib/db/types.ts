@@ -73,8 +73,8 @@ export const pageContentSchema = z.object({ sections: z.array(sectionSchema).max
 export type PageContent = z.infer<typeof pageContentSchema>;
 
 export const siteThemeSchema = z.object({
-  // "editorial" and "luxe" were added later; older sites keep their value and render as before.
-  style: z.enum(["bold", "clean", "dark", "editorial", "luxe"]).default("bold"),
+  // "editorial", "luxe" and "glass" were added later; older sites keep their value and render as before.
+  style: z.enum(["bold", "clean", "dark", "editorial", "luxe", "glass"]).default("bold"),
   brandColor: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
@@ -100,6 +100,8 @@ export type WorkspaceSettings = {
   metaCapiTokenEnc?: string;
   metaTestEventCode?: string;
   launchKitId?: string;
+  /** The country last picked in Ad research or Ad studio (two letters), so the other screen starts on it. */
+  adCountry?: string;
   // Bring your own AI: when set, AI features run on this key and are not billed to the wallet.
   aiProvider?: "anthropic" | "openai" | "gemini" | "groq" | "openrouter" | "custom";
   aiKeyEnc?: string;
@@ -114,13 +116,39 @@ export type WorkspaceSettings = {
   journey?: Journey;
 };
 
-/** ISO times. `ticks` holds the member's own word; `as: "waiting"` is a clock, not a done to-do. */
+/**
+ * ISO times. `ticks` holds the member's own word; `as: "waiting"` is a clock, not a done to-do;
+ * `as: "link"` is a day's post the app saw through its pasted link (course unlocks).
+ */
 export type Journey = {
-  ticks?: Record<string, { at: string; as?: "waiting" }>;
+  ticks?: Record<string, { at: string; as?: "waiting" | "link" }>;
   later?: Record<string, string>;
   started?: Record<string, string>;
   metaOk?: string;
+  /** Steps carried over from the old day order (see withCarriedTicks) that the member undid since: key -> when. */
+  uncarried?: Record<string, string>;
+  /** Course unlocks: each day's pasted post link, by day ("1".."7"). */
+  posts?: Record<string, CoursePost>;
 };
+
+/** A day's Skool post link, pasted by the member. Flagged ones wait for the owner before anything fires. */
+export type CoursePost = {
+  url: string;
+  at: string;
+  email: string;
+  name: string;
+  flagged?: boolean;
+  reason?: string;
+  approvedAt?: string;
+  /** The day's Zapier send, kept up to date by the job that makes it. Missing on links saved before it was tracked. */
+  hook?: CourseHook;
+};
+
+/**
+ * queued: waiting to send (or retrying). sent: Zapier answered OK. failed: every retry failed.
+ * no-hook: there was no Zapier link for that day. attempt numbers the sends, so a resend gets a fresh job.
+ */
+export type CourseHook = { state: "queued" | "sent" | "failed" | "no-hook"; attempt: number; at: string; error?: string };
 
 export type BrandSettings = {
   name?: string;

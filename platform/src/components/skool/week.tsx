@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Parallax, Rise, Tilt } from "./fx/motion";
 import { WeekNode, WeekRail } from "./fx/week-rail";
 import { CARD, Container, Em, MenuChip, Pete, SectionHead } from "./parts";
-import { Browser, FiveAds, MiniLanding } from "./visuals";
+import { Browser, MiniLanding } from "./visuals";
 
 /** One day of the course. `tools` are menu items in the app, spelled the way the menu spells them. */
 export type Day = { day: number; title: string; body: string; win: string; tools: string[] };
@@ -177,11 +177,10 @@ function DayOne({ day }: { day: Day }) {
               </span>
               <span className="absolute -bottom-4 left-4 flex items-center gap-2 rounded-full bg-[var(--card)] py-1.5 pr-3.5 pl-2 text-[11.5px] font-semibold text-white shadow-[0_10px_30px_-8px_rgb(0_0_0/0.8)] ring-1 ring-white/15 [transform:translateZ(60px)]">
                 <span className="size-2 rounded-full bg-[var(--sk-mint)] shadow-[0_0_10px_rgb(111_242_196/0.9)]" />
-                Meta Pixel connected
+                Free checklist on it
               </span>
             </Tilt>
-            <FiveAds className="relative mx-auto mt-3 w-full max-w-[440px]" />
-            <p className="relative text-center text-[12px] text-white/45">An example: one website, one Pixel, five ads.</p>
+            <p className="relative mt-3 text-center text-[12px] text-white/45">An example: one group, one website, one free checklist.</p>
           </div>
         </article>
       </div>

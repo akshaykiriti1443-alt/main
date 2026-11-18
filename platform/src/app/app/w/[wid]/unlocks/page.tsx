@@ -16,6 +16,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { BigCopyButton } from "./copy-big";
+import { SuggestUnlockButton } from "./suggest";
 
 export const metadata = { title: "Unlocks" };
 
@@ -64,6 +65,7 @@ export default async function UnlocksPage({ params, searchParams }: { params: Pr
 
   const createForm = canEdit ? (
     <form data-guide="unlock-create" action={createUnlockAction.bind(null, wid)} className="flex flex-col gap-5">
+      <SuggestUnlockButton wid={wid} />
       <UnlockFields draft={draft} />
       <div className="flex flex-wrap items-center gap-3">
         <SubmitButton variant={first ? "cta" : "default"} size={first ? "lg" : "default"} pendingText="Creating…">

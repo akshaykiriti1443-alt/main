@@ -19,11 +19,12 @@ export type StepHowTo = {
 
 export const STEP_HOWTO: Record<string, StepHowTo> = {
   ai: {
-    target: "ai-key",
+    target: "ai-connect",
     how: [
-      "Press Open Google AI Studio and sign in with any Google account. It opens in a new tab.",
-      "Press Create API key, then copy the key.",
-      "Paste it into Your Gemini key here and press Save key. It's free, and every AI button runs on it. You'll see Your key works.",
+      "Press Create connector URL, then copy the link it shows. It's private, like a password.",
+      "In Claude, open Customize › Connectors, press + Add › Add custom connector, paste the link and press Add.",
+      "In a new Claude chat, switch it on in the tools menu and say the line in step 3. Claude builds your website and emails and saves them here.",
+      "No Claude? Get a free Gemini key further down this page and press Save key.",
     ],
   },
   hello: {
@@ -34,8 +35,8 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   skool: {
     target: "skool-link",
     how: [
-      "Press Start my group on your home page, or use the link in your Day 1 lesson. Skool opens in a new tab.",
-      "Name your group, set your price and switch on the 7-day free trial in its settings.",
+      "Press Start my group on your home page, or use the link in your Day 1 lesson. Skool opens in a new tab. Already have a group? Use that one.",
+      "Name your group, set a monthly price and switch on the 7-day free trial in its settings.",
       "Copy your group's address from the top of the browser, like https://www.skool.com/your-group.",
       "Paste it into Your group's link and press Save link.",
     ],
@@ -55,7 +56,39 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
       "Open your opt-in page (the one asking for an email).",
       "Change three lines: the headline, who it's for and the button.",
       "Open your Thank-you page and check it states the deal in plain words: 7 days free, then your price a month.",
-      "Press Publish. Your Meta Pixel is the very next step.",
+      "Press Publish. Half-time: the Pixel and your ads are the second sitting.",
+    ],
+  },
+  reel1: {
+    how: [
+      "In ReelVault, add 1 to 3 accounts in your niche, or let it find the top ones for you.",
+      "Open the outliers: the reels that got 3 times that creator's normal views, or more.",
+      "Pick one and press Remake this. You get a script in your own words. Copy the hook, not the video.",
+      "Come back and press I've got my script.",
+    ],
+  },
+  carousel: {
+    how: [
+      "Paste your script and press Turn my script into slides. No script? Type your topic and press Write it for me.",
+      "Read every slide. Change any word that doesn't sound like you, and press Try another look if you like.",
+      "Press Download all slides. This step ticks itself once your carousel is saved.",
+      "Rather be on camera? Film it as a talking-head video: phone at eye level, window light, one take. Then press I filmed a video instead.",
+    ],
+  },
+  firstpost: {
+    how: [
+      "Carousel: in Instagram, press + › Post, pick all your slides in order, then Add music.",
+      "Video: post it as a reel. Trimming the start and end is all the editing it needs.",
+      "Write one line under it, then press Share.",
+      "Come back and press I posted it.",
+    ],
+  },
+  pages: {
+    how: [
+      "Make a Facebook Page for your group, and an Instagram account set to business or creator.",
+      "In Meta Business Suite, link the Instagram account to your Page.",
+      "Put your Skool group's link in your Instagram bio.",
+      "Come back and press Both are set up.",
     ],
   },
   pixel: {
@@ -78,17 +111,25 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   statics: {
     target: "ad-studio-make",
     how: [
-      "Check your answers: where these ads go (Day 1 is My website), $10 a day, country, who it's for and the result you promise.",
+      "Check your answers: where these ads go (Day 2 is My website), $10 a day, country, who it's for and the result you promise.",
       "Press Make my 5 statics. Your ads offer your free checklist by themselves.",
-      "Paste each image prompt into ChatGPT or Gemini to make the images. Your Skool post comes next, before Your launch plan.",
+      "Paste each image prompt into ChatGPT or Gemini to make the images. Your launch plan is the next step.",
     ],
   },
   clicks: {
     how: [
       "Open Your launch plan and follow it in Meta Ads Manager, one click at a time.",
-      "Day 1's ads go to your website as a Leads campaign, with your Pixel under Dataset and Lead as the event.",
+      "Day 2's ads go to your website as a Leads campaign at $10 a day, with your Pixel under Dataset and Lead as the event.",
       "Press Publish in Ads Manager, then come back and press I pressed Publish.",
       "Meta checks new ads before they run. There's nothing for you to do while it does.",
+    ],
+  },
+  planweek: {
+    how: [
+      "Make 3 more carousels or scripts, the same way as yesterday.",
+      "Open the Planner in Meta Business Suite and press Create post.",
+      "Tick both Facebook and Instagram, add your slides or video, then press Schedule and pick a day for each.",
+      "Come back and press They're scheduled.",
     ],
   },
   refresh: {
@@ -102,7 +143,7 @@ export const STEP_HOWTO: Record<string, StepHowTo> = {
   live2: {
     how: [
       "Open Your launch plan for the Skool-link pack and follow it in Ads Manager.",
-      "Make it a new Traffic campaign, so yesterday's website ads stay untouched.",
+      "Make it a new Traffic campaign at $5 a day, so yesterday's website ads stay untouched.",
       "Press Publish, then come back and press I pressed Publish.",
     ],
   },
@@ -301,10 +342,10 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
   },
   ai: {
     title: "Your AI",
-    what: "Plug in the AI you already use, so it writes and runs things for you on your plan.",
+    what: "Connect your Claude, so it writes your website, emails and ads and saves them here.",
     tips: [
-      "A free Google Gemini key is all your week needs.",
-      "Pay for Claude or ChatGPT? A connector lets that app work on your account from its own chat.",
+      "Claude first: make a connector URL and paste it into Claude. The free Claude plan works.",
+      "No Claude? A free Google Gemini key works too.",
     ],
   },
   launch: {
@@ -313,6 +354,14 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     tips: [
       "Every block has its own Copy button.",
       "Your ads come from Ad studio: Make my 5 statics.",
+    ],
+  },
+  carousel: {
+    title: "Make my carousel",
+    what: "Turn a script into Instagram slides, ready to download and post.",
+    tips: [
+      "Paste a ReelVault script, or type a topic and let your AI write it.",
+      "On Instagram: + › Post › pick all slides in order › Add music.",
     ],
   },
   sites: {
@@ -366,7 +415,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     title: "Ad studio",
     what: "Your first ads, same day: your numbers, 5 statics ready to make, and the exact clicks to launch them.",
     tips: [
-      "Day 1 goes to your website at $10 a day. Day 2 goes to your Skool link at $5, in its own campaign.",
+      "Day 2 goes to your website at $10 a day. Day 3 goes to your Skool link at $5, in its own campaign.",
       "Five different looks, so Meta tests five real ideas.",
       "Hands off till Day 6 after you publish.",
     ],
@@ -414,7 +463,7 @@ export const PAGE_GUIDES: Record<string, PageGuide> = {
     title: "Social planner",
     what: "Optional. Schedule a few posts a week if you want organic reach too.",
     tips: [
-      "You don't need social media to grow here. Ads do the heavy lifting.",
+      "Ads get you seen fast, and your posts make it stick. ReelVault shows you what to post.",
     ],
   },
   settings: {

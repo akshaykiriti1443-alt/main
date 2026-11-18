@@ -99,12 +99,31 @@ export function readableOn(color: string, backgrounds: string[], target = 4.5): 
 
 const WHITE = "#ffffff";
 
-export type LandingStyle = "bold" | "clean" | "dark" | "editorial" | "luxe";
+export type LandingStyle = "bold" | "clean" | "dark" | "editorial" | "luxe" | "glass";
 
 // Fixed neutrals per style (brand-tinted ones are computed below).
 export const PAPER = "#f6f2ea";
 export const PAPER_ALT = "#eee8dc";
 export const PAPER_INK = "#1d1a16";
+
+/**
+ * Glass: the strongest any one aurora blob may tint the page behind text (landing.css keeps every
+ * blob's peak at or under this). Text colours for Glass are checked against the page at this tint.
+ */
+export const GLASS_AURORA_MAX = 0.22;
+
+/** The surfaces Glass text can sit on: the page, and the page under the peak of each aurora blob. */
+export function glassBackdrops(p: BrandPalette): string[] {
+  const bg = p["--lp-glass-bg"];
+  const blobs = [p["--lp-aurora-1"], p["--lp-aurora-2"], p["--lp-aurora-3"]];
+  return [
+    "#ffffff",
+    bg,
+    ...blobs.map((c) => mix(bg, c, GLASS_AURORA_MAX)),
+    // Where two blobs overlap at their edges.
+    mix(mix(bg, blobs[0], GLASS_AURORA_MAX / 2), blobs[1], GLASS_AURORA_MAX / 2),
+  ];
+}
 
 export type BrandPalette = Record<`--lp-${string}`, string>;
 
@@ -180,6 +199,30 @@ export function brandPalette(brandHex: string): BrandPalette {
   // Light pages with a pale brand: the button fill gets an ink edge so it never melts into white.
   const btnEdge = contrast(brand, WHITE) < 1.6 ? mix(brand, lightInk, 0.28) : brand;
 
+  // Glass (the /skool look): a pale brand-tinted page under three soft aurora blobs (the brand, a warm
+  // neighbour and a cool one), frosted white cards, and a headline that pans through four brand-led hues.
+  const glassBg = mix(WHITE, brand, 0.05);
+  const auroraC = Math.min(C, 0.2);
+  const aurora1 = brand;
+  const aurora2 = oklch(0.66, auroraC, h + 70);
+  const aurora3 = oklch(0.82, Math.min(C, 0.12), h - 80);
+  const glassPartial = {
+    "--lp-glass-bg": glassBg,
+    "--lp-aurora-1": aurora1,
+    "--lp-aurora-2": aurora2,
+    "--lp-aurora-3": aurora3,
+  } as BrandPalette;
+  const glassBgs = glassBackdrops(glassPartial);
+  const glassInk = readableOn(lightInk, glassBgs);
+  const glassMuted = readableOn(lightMuted, glassBgs);
+  const glassAccent = readableOn(brandText, glassBgs);
+  // Headline gradient stops. Headlines are large text, so AA there is 3:1; the deep stop clears 4.5.
+  const glassText1 = readableOn(oklch(Math.min(bL, 0.55) - 0.14, Math.min(bC, 0.22), h + 4), glassBgs);
+  const glassText2 = readableOn(brand, glassBgs, 3);
+  const glassText3 = readableOn(oklch(0.6, Math.min(bC * 1.1, 0.2), h + 70), glassBgs, 3);
+  const glassText4 = readableOn(oklch(0.66, Math.min(bC, 0.16), h + 125), glassBgs, 3);
+  const rgbOf = (hex: string) => hexToRgb(hex).join(" ");
+
   const [r, g, b] = hexToRgb(brand);
   return {
     "--lp-brand": brand,
@@ -217,6 +260,20 @@ export function brandPalette(brandHex: string): BrandPalette {
     "--lp-luxe-accent": luxeAccent,
     "--lp-btn-luxe": btnLuxe,
     "--lp-on-btn-luxe": onBtnLuxe,
+    "--lp-glass-bg": glassBg,
+    "--lp-glass-ink": glassInk,
+    "--lp-glass-muted": glassMuted,
+    "--lp-glass-accent": glassAccent,
+    "--lp-glass-text-1": glassText1,
+    "--lp-glass-text-2": glassText2,
+    "--lp-glass-text-3": glassText3,
+    "--lp-glass-text-4": glassText4,
+    "--lp-aurora-1": aurora1,
+    "--lp-aurora-2": aurora2,
+    "--lp-aurora-3": aurora3,
+    "--lp-aurora-1-rgb": rgbOf(aurora1),
+    "--lp-aurora-2-rgb": rgbOf(aurora2),
+    "--lp-aurora-3-rgb": rgbOf(aurora3),
   };
 }
 
@@ -226,5 +283,6 @@ export function pageBackground(style: string, brandHex: string): string {
   if (style === "dark") return p["--lp-dark-bg"];
   if (style === "luxe") return p["--lp-luxe-bg"];
   if (style === "editorial") return PAPER;
+  if (style === "glass") return p["--lp-glass-bg"];
   return WHITE;
 }

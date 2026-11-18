@@ -19,13 +19,14 @@ import { disconnectChannel } from "@/server/inbox";
 import { buyNumber, searchNumbers } from "@/server/sms";
 import { hasFeature } from "@/server/plans";
 import { isSkoolUrl } from "@/server/growth";
+import { skoolAboutLink } from "@/lib/skoolLink";
 import { setAccountSkoolUrl, syncSkoolUrlToSites } from "@/server/sites";
 import { checkPixel, cleanPixelId, type PixelTestResult, type TrackingSettings } from "@/server/meta/capi";
 import { takeRateLimit } from "@/server/rateLimit";
 import { settingsKeepingJourney } from "@/server/settingsWrite";
 import { errMsg, field, go } from "./helpers";
 
-const SKOOL_URL_ERROR = "Your Skool link must be a skool.com link, like https://www.skool.com/your-group";
+const SKOOL_URL_ERROR = "Your Skool link must be a skool.com link, like https://www.skool.com/your-group/about";
 
 /**
  * Send the "Confirm your email" link again (the signup one may have expired or gone to spam).
@@ -76,7 +77,8 @@ export async function saveBusinessAction(wid: string, fd: FormData) {
   const { workspace } = await requireWorkspace(wid, "admin");
   const replyTo = field(fd, "replyToEmail", 200);
   if (replyTo && !isEmail(replyTo)) go(`/app/w/${wid}/settings`, { error: "Reply-to must be a valid email." });
-  const skoolUrl = field(fd, "skoolUrl", 300);
+  // A group link becomes its About page, the page every Join button and Skool-link ad should open.
+  const skoolUrl = skoolAboutLink(field(fd, "skoolUrl", 300));
   if (skoolUrl && !isSkoolUrl(skoolUrl)) go(`/app/w/${wid}/settings`, { error: SKOOL_URL_ERROR });
   const db = await getDb();
   await db

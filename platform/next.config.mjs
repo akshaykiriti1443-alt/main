@@ -11,6 +11,8 @@ const nextConfig = {
   // PGlite ships WASM + data files that must not be bundled.
   serverExternalPackages: ["@electric-sql/pglite"],
   poweredByHeader: false,
+  // The Skool cover and carousel routes read their bundled fonts from disk; make sure they ship with the functions.
+  outputFileTracingIncludes: { "/api/skool-cover": ["./src/server/cover/fonts/*.ttf"], "/api/carousel": ["./src/server/cover/fonts/*.ttf"] },
   // Local preview of the marketing host: MARKETING_HOSTS=scaleitads.localhost -> http://scaleitads.localhost:3000
   allowedDevOrigins: ["*.localhost"],
   experimental: {

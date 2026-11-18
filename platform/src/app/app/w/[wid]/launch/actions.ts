@@ -2,12 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { requireWorkspace } from "@/server/tenancy";
-import { kitSite, runLaunchKit } from "@/server/ai/launchKit";
+import { kitSite, runLaunchKit, setKitCoverHeadline } from "@/server/ai/launchKit";
+import { COVER_PHOTO_MAX_BYTES, deleteCoverPhoto, saveCoverPhoto } from "@/server/cover/photo";
+import { COVER_HEADLINE_MAX, cleanCoverText } from "@/server/cover/cleanText";
 import { accountSkoolUrl, listSites, syncSkoolUrlToSites } from "@/server/sites";
 import { PLANS } from "@/server/plans";
 import { isSkoolUrl } from "@/server/growth";
 import { safeUrl } from "@/lib/html";
-import { field, go } from "@/actions/helpers";
+import { errMsg, field, go } from "@/actions/helpers";
+import { suggestKitAnswer, type KitSuggestRequest, type KitSuggestResult } from "@/server/ai/kitSuggest";
 import { KIT_FIELDS, readDeal, type KitField } from "./deal";
 
 async function build(wid: string, fd: FormData, useAi: boolean) {
@@ -50,4 +53,54 @@ export async function buildLaunchKitAction(wid: string, fd: FormData) {
 /** The starter template, for a member out of AI runs who wants to keep going now. */
 export async function buildStarterKitAction(wid: string, fd: FormData) {
   await build(wid, fd, false);
+}
+
+export type CoverActionResult = { ok: true; message: string } | { ok: false; error: string };
+
+/**
+ * "Add my photo": the member's photo for their Skool cover, one per workspace (a new one replaces it).
+ * The browser shrinks it first; the server checks the real bytes (PNG or JPEG only, never SVG) and
+ * drops camera and location data before saving.
+ */
+export async function uploadCoverPhotoAction(wid: string, fd: FormData): Promise<CoverActionResult> {
+  const { workspace } = await requireWorkspace(wid, "admin");
+  const file = fd.get("photo");
+  if (!(file instanceof Blob) || !file.size) return { ok: false, error: "Pick a photo first." };
+  if (file.size > COVER_PHOTO_MAX_BYTES) return { ok: false, error: "That photo is too big. Try a smaller one (under 1.5 MB), or a screenshot of it." };
+  try {
+    const res = await saveCoverPhoto(workspace.id, new Uint8Array(await file.arrayBuffer()), { cutout: fd.get("cutout") !== "0" });
+    if (!res.ok) return res;
+    revalidatePath(`/app/w/${wid}/launch`);
+    return { ok: true, message: res.photo.cutout ? "Your photo is on your cover, no background. Nice." : "Your photo is on your cover." };
+  } catch (err) {
+    return { ok: false, error: errMsg(err) };
+  }
+}
+
+export async function removeCoverPhotoAction(wid: string): Promise<CoverActionResult> {
+  const { workspace } = await requireWorkspace(wid, "admin");
+  await deleteCoverPhoto(workspace.id);
+  revalidatePath(`/app/w/${wid}/launch`);
+  return { ok: true, message: "Your photo is off your cover." };
+}
+
+/** The cover's big words, saved on this kit (and as its answer, so a rebuild keeps them word for word). */
+export async function saveCoverHeadlineAction(wid: string, kitId: string, raw: string): Promise<CoverActionResult> {
+  const { workspace } = await requireWorkspace(wid, "admin");
+  const text = cleanCoverText(raw, COVER_HEADLINE_MAX + 8);
+  if (text.length < 3) return { ok: false, error: "Type your cover headline first: the result, in 4 to 8 words." };
+  const saved = await setKitCoverHeadline(workspace.id, kitId, text);
+  if (!saved) return { ok: false, error: "That kit doesn't exist any more. Reload the page." };
+  revalidatePath(`/app/w/${wid}/launch`);
+  return { ok: true, message: "Saved. Your cover uses it now." };
+}
+
+/** "Suggest" beside a launch kit box: 2 or 3 answers to pick from. Nothing is saved; a click only fills the box. */
+export async function suggestKitAnswerAction(wid: string, req: KitSuggestRequest): Promise<KitSuggestResult> {
+  await requireWorkspace(wid, "admin");
+  try {
+    return await suggestKitAnswer(wid, req);
+  } catch (err) {
+    return { ok: false, error: errMsg(err) };
+  }
 }

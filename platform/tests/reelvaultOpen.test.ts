@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 const WID = "11111111-2222-3333-4444-555555555555";
 const OTHER = "99999999-2222-3333-4444-555555555555";
 
-type Ws = { id: string; status: "active" | "grace" | "paused"; accessSource: string };
+type Ws = { id: string; status: "active" | "grace" | "paused"; accessSource: string; settings?: Record<string, unknown> };
 const state = vi.hoisted(() => ({
   user: null as null | { id: string; email: string; name: string; isPlatformAdmin: boolean },
   verified: true,
@@ -26,7 +26,9 @@ vi.mock("@/server/tenancy", () => ({
   listUserWorkspaces: async () =>
     state.memberships.map((id) => ({ workspace: state.workspaces[id].ws, role: "owner", agency: { status: state.workspaces[id].agencyPaused ? "paused" : "active" } })),
 }));
-vi.mock("@/server/unlocks", () => ({
+vi.mock("@/server/unlocks", async (importOriginal) => ({
+  // Course unlocks read the group from SKOOL_GROUP_URL with the real helper.
+  skoolGroupOf: (await importOriginal<typeof import("@/server/unlocks")>()).skoolGroupOf,
   getEntryTicket: async () => ({ on: true }),
   entryTicketPending: async (_t: unknown, ws: { id: string }) => state.entryPending.has(ws.id),
 }));
@@ -165,5 +167,29 @@ describe("/api/reelvault/open as a new tab (no embed)", () => {
     expect(new URL((await open()).headers.get("Location")!).pathname).toBe("/app");
     state.user = { id: "u1", email: "owner@x.test", name: "", isPlatformAdmin: true };
     expect((await open()).status).toBe(307);
+  });
+});
+
+describe("/api/reelvault/open with course unlocks on (ReelVault is open from the start)", () => {
+  it("gives a member a ticket before any post link is in; nothing about a post gates it", async () => {
+    const { setCourseUnlocks } = await import("@/server/courseUnlocks");
+    const { env } = await import("@/lib/env");
+    // The switch only goes on with the platform's group set.
+    env.skoolGroupUrl = "https://www.skool.com/the-community/about";
+    await setCourseUnlocks({ on: true, hooks: {} });
+    try {
+      // A brand-new member: no Day 1 post, no link. Day 1 starts in ReelVault, so it opens.
+      expect((await open(embedQ())).status).toBe(307);
+      expect((await open()).status).toBe(307);
+      // A flagged link waiting for the owner changes nothing either.
+      state.workspaces[WID].ws.settings = { journey: { posts: { "1": { url: "https://www.skool.com/g/p", at: "", email: "", name: "", flagged: true } } } };
+      expect((await open(embedQ())).status).toBe(307);
+      // The other gates still hold: a paused account gets no ticket.
+      state.workspaces[WID].ws.status = "paused";
+      expect((await open(embedQ())).status).toBe(403);
+    } finally {
+      await setCourseUnlocks({ on: false, hooks: {} });
+      env.skoolGroupUrl = "";
+    }
   });
 });

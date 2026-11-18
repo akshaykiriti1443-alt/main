@@ -99,8 +99,8 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
             <Input id="aboutVisitors" name="aboutVisitors" inputMode="numeric" defaultValue={last?.aboutVisitors ?? ""} placeholder="0" className="tabular-nums" />
           </Field>
           <Field>
-            <FieldLabel htmlFor="newPaid">New customers</FieldLabel>
-            <Input id="newPaid" name="newPaid" inputMode="numeric" defaultValue={last?.newPaid ?? ""} placeholder="0" className="tabular-nums" />
+            <FieldLabel htmlFor="newPaid">New paying members</FieldLabel>
+            <Input id="newPaid" name="newPaid" inputMode="numeric" defaultValue={last?.newPaid ?? ""} placeholder="0" aria-describedby="newPaid-where" className="tabular-nums" />
           </Field>
           <Field>
             <FieldLabel htmlFor="networkSignups">Skool Network sign-ups</FieldLabel>
@@ -117,6 +117,9 @@ export default async function GrowthPage({ params, searchParams }: { params: Pro
             </NativeSelect>
           </Field>
         </div>
+        <p id="newPaid-where" className="-mt-1 text-[13px] text-muted-foreground">
+          New paying members: people who started paying in the last 30 days. Where to find it: your group&apos;s <b className="font-semibold text-foreground">Settings › Growth</b> tab.
+        </p>
         {/* Open by itself once the bio tick matters (from Level 3), so nobody hunts for it. */}
         <MoreOptions title="A few extra numbers" sub="Optional. The bio tick Level 3 checks, and numbers that sharpen your next moves." defaultOpen={Boolean(ladder.next?.req.linkInBio)}>
           <Label className="flex cursor-pointer items-start gap-3 rounded-xl bg-muted/50 px-4 py-3 text-sm font-normal ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">

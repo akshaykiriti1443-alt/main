@@ -140,7 +140,7 @@ export async function firstEightDayMembers(limit = 100) {
     .from(activities)
     .where(and(inArray(activities.workspaceId, rows.map((r) => r.id)), eq(activities.type, "skool_visit"), sql`${activities.data}->>'source' is not null`));
   const clicked = new Set(sources.filter((s) => isAdSource(s.source)).map((s) => s.workspaceId));
-  // Day 1's ads go to the website, so a lead from an ad counts as an ad reaching someone too.
+  // Day 2's ads go to the website, so a lead from an ad counts as an ad reaching someone too.
   const adLeads = await db
     .selectDistinct({ workspaceId: activities.workspaceId })
     .from(activities)

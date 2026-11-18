@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ArrowRightIcon, CheckIcon, ChevronDownIcon, CrosshairIcon, ExternalLinkIcon, LifeBuoyIcon, PowerIcon } from "lucide-react";
-import { companionSnapshotAction } from "@/actions/companion";
 import { laterStepAction, saveGroupLinkAction, tickStepAction } from "@/actions/journey";
 import type { CompanionSnapshot } from "@/server/companion";
 import type { WeekStep } from "@/server/path";
@@ -15,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { SubmitButton } from "./client";
 import { StuckSheet } from "./journey/stuck-sheet";
 import { PENNY_POINT, PENNY_WAVE, PENNY_WINK } from "./penny-art";
+import { PostLinkForm } from "./journey/post-link";
 
 // Penny: how to do this exact step, on the page where it happens. She never picks a step; she
 // reads path.current (through the snapshot), so she can't disagree with the big card. She can be
@@ -22,6 +22,20 @@ import { PENNY_POINT, PENNY_WAVE, PENNY_WINK } from "./penny-art";
 // on/off state lives in a cookie so the server renders it right first time.
 
 const P = JOURNEY_COPY.penny;
+
+/**
+ * Her fresh snapshot, by a plain GET (/api/companion). Never a server action: the browser runs those one
+ * at a time and ties them to page changes, so a look-up here used to hold up the member's own buttons
+ * (Build my launch kit queued behind it) and could stall the page change after a tool's redirect.
+ */
+async function fetchSnapshot(wid: string): Promise<CompanionSnapshot | null> {
+  try {
+    const res = await fetch(`/api/companion?w=${encodeURIComponent(wid)}`, { cache: "no-store", credentials: "same-origin" });
+    return res.ok ? ((await res.json()) as CompanionSnapshot | null) : null;
+  } catch {
+    return null;
+  }
+}
 
 // ---- shared state between the card and the top-bar button ----
 let current: GuideMode | null = null;
@@ -99,8 +113,9 @@ function isOnStepPage(pathname: string, step: WeekStep) {
   if (!step.href || step.external) return false;
   const p = pathOf(step.href);
   if (pathname === p) return true;
-  // Publishing happens on a single page of a site.
-  return step.key === "publish" && pathname.startsWith(`${p}/`);
+  // Publishing happens on a single page of a site, a script is remade deeper inside ReelVault, and a
+  // saved carousel opens on its own page under Make my carousel.
+  return (step.key === "publish" || step.key === "reel1" || step.key === "carousel") && pathname.startsWith(`${p}/`);
 }
 
 /** A tick form for Penny's card, posting back to the page she's on. */
@@ -155,10 +170,12 @@ function OutsideControls({ step, wid, back }: { step: WeekStep; wid: string; bac
       ) : null}
       {isPost ? (
         <div className="flex flex-wrap gap-2">
-          {step.halves?.posted ? (
+          {step.halves?.posted && !step.postLink?.catchUp ? (
             <span className="guide-here">
-              <CheckIcon aria-hidden="true" /> {JOURNEY_COPY.post.posted}
+              <CheckIcon aria-hidden="true" /> {step.postLink ? JOURNEY_COPY.post.linkSaved : JOURNEY_COPY.post.posted}
             </span>
+          ) : step.postLink ? (
+            <PostLinkForm step={step} wid={wid} back={back} compact />
           ) : (
             <PennyTick wid={wid} stepKey={step.key} back={back} label={step.selfLabel ?? ""} />
           )}
@@ -220,7 +237,7 @@ export function Companion({
       return;
     }
     let live = true;
-    companionSnapshotAction(wid).then((s) => {
+    fetchSnapshot(wid).then((s) => {
       if (live && s) setSnap(s);
     });
     return () => {
@@ -232,7 +249,7 @@ export function Companion({
   useEffect(() => {
     if (mode === "off" || snap) return;
     let live = true;
-    companionSnapshotAction(wid).then((s) => {
+    fetchSnapshot(wid).then((s) => {
       if (live && s) setSnap(s);
     });
     return () => {

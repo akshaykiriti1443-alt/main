@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { agencies, agencyMembers, apiTokens, users, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { randomToken, sha256hex } from "@/lib/crypto";
@@ -26,6 +26,21 @@ export async function listConnectorTokens(workspaceId: string) {
     .leftJoin(users, eq(users.id, apiTokens.createdBy))
     .where(and(eq(apiTokens.workspaceId, workspaceId), isNull(apiTokens.revokedAt)))
     .orderBy(desc(apiTokens.createdAt));
+}
+
+/**
+ * Is the owner's own AI app (their Claude) connected? A connector link that hasn't been revoked and
+ * that their AI has used at least once: the same test as Day 1's AI step (see path.ts). A link that
+ * was only made isn't a connected Claude.
+ */
+export async function connectorInUse(workspaceId: string): Promise<boolean> {
+  const db = await getDb();
+  const [row] = await db
+    .select({ id: apiTokens.id })
+    .from(apiTokens)
+    .where(and(eq(apiTokens.workspaceId, workspaceId), isNull(apiTokens.revokedAt), isNotNull(apiTokens.lastUsedAt)))
+    .limit(1);
+  return Boolean(row);
 }
 
 export async function revokeConnectorToken(workspaceId: string, id: string) {

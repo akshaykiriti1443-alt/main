@@ -88,7 +88,7 @@ export function computeLadder(c: CheckinInput | null): Ladder {
   const gaps: Gap[] = [];
   if (next) {
     gaps.push({ label: "About-page visitors (30 days)", have: v.aboutVisitors, need: next.req.visitors, done: v.aboutVisitors >= next.req.visitors });
-    if (next.req.newPaid) gaps.push({ label: "New customers (30 days)", have: v.newPaid, need: next.req.newPaid, done: v.newPaid >= next.req.newPaid });
+    if (next.req.newPaid) gaps.push({ label: "New paying members (30 days)", have: v.newPaid, need: next.req.newPaid, done: v.newPaid >= next.req.newPaid });
     if (next.req.linkInBio) gaps.push({ label: "Skool link in bio on socials", have: v.linkInBio ? 1 : 0, need: 1, done: v.linkInBio, toggle: true });
     if (next.req.organic) gaps.push({ label: "Consistent organic promo (3+ posts a week or your own ads)", have: organic ? 1 : 0, need: 1, done: organic, toggle: true });
     if (next.req.networkSignups) gaps.push({ label: "Skool Network sign-ups (30 days)", have: v.networkSignups, need: next.req.networkSignups, done: v.networkSignups >= next.req.networkSignups });

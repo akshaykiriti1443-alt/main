@@ -18,7 +18,8 @@ const STAGES: Stage[] = ["new", "engaged", "trial", "member", "lost"];
 export async function addContactAction(wid: string, fd: FormData) {
   await requireWorkspace(wid);
   // Back to Leads with the form still open, so the next person who replied is one press away.
-  const back = `/app/w/${wid}/leads?add=1`;
+  // Added from Day 5: the next friend gets the "friend" tag filled in too.
+  const back = `/app/w/${wid}/leads?add=1${field(fd, "from", 10) === "day5" ? "&from=day5" : ""}`;
   const email = field(fd, "email", 200);
   const phone = field(fd, "phone", 40);
   if (!email && !phone) go(back, { error: "Add a phone number or an email." });

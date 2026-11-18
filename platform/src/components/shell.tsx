@@ -16,6 +16,7 @@ import {
   ClapperboardIcon,
   ExternalLinkIcon,
   CreditCardIcon,
+  GalleryHorizontalEndIcon,
   GlobeIcon,
   InboxIcon,
   KeyRoundIcon,
@@ -116,6 +117,7 @@ const ICONS = {
   pipeline: SquareKanbanIcon,
   booking: CalendarClockIcon,
   reel: ClapperboardIcon,
+  carousel: GalleryHorizontalEndIcon,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;
@@ -130,6 +132,8 @@ export type NavItem = {
   exact?: boolean;
   badge?: number;
   locked?: boolean;
+  /** Why it's locked, when it isn't the Growth plan (e.g. "Post your Day 1 to open it"). */
+  lockNote?: string;
   external?: boolean;
   hint?: string;
   children?: { href: string; label: string; also?: string[] }[];
@@ -280,7 +284,7 @@ function NavItems({ items, active }: { items: NavItem[]; active: NavItem | undef
             <SidebarMenuButton
               asChild
               isActive={item === active}
-              tooltip={item.locked ? `${item.label} · Growth plan` : item.label}
+              tooltip={item.locked ? `${item.label} · ${item.lockNote ?? "Growth plan"}` : item.label}
               className="h-9 gap-2.5 rounded-[10px] px-2.5 text-[13.5px] font-medium text-sidebar-foreground [&>svg]:size-[17px] [&>svg]:text-sidebar-foreground/55 [&>svg]:transition-colors hover:[&>svg]:text-sidebar-accent-foreground data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground data-active:shadow-[0_1px_2px_rgb(28_21_56/0.06),0_0_0_1px_rgb(28_21_56/0.05)] data-active:[&>svg]:text-primary dark:data-active:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)] dark:data-active:[&>svg]:text-violet-300"
             >
               {item.external ? (
@@ -296,7 +300,7 @@ function NavItems({ items, active }: { items: NavItem[]; active: NavItem | undef
               )}
             </SidebarMenuButton>
             {item.locked ? (
-              <SidebarMenuBadge aria-label="Growth plan">
+              <SidebarMenuBadge aria-label={item.lockNote ?? "Growth plan"}>
                 <LockIcon className="size-3 text-sidebar-foreground/40" />
               </SidebarMenuBadge>
             ) : item.external ? (

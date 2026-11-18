@@ -47,7 +47,7 @@ const APPS: App[] = [
     steps: [
       "Customize › Connectors, then + Add › Add custom connector.",
       "Give it a name (e.g. OneX), paste your connector URL and click Continue. Click Continue again, set Authentication to No sign in, then click Add.",
-      "In a chat, open the tools menu and switch the connector on. Then say: “Run my Monday check-in.”",
+      "In a chat, open the tools menu and switch the connector on. Then say the line in step 3 below.",
     ],
   },
   {
@@ -94,9 +94,9 @@ const APPS: App[] = [
     snippet: JSON.stringify({ mcpServers: { onex: { url: URL_PH } } }, null, 2),
   },
 ];
-// Claude and ChatGPT are what most people pay for; everything else lives under "More apps & playbooks".
-const FEATURED = APPS.slice(0, 2);
-const OTHER_APPS = APPS.slice(2);
+// Claude comes first: it's how Day 1 gets written. ChatGPT and everything else live under "Playbooks and more apps".
+const CLAUDE = APPS[0];
+const OTHER_APPS = APPS.slice(1);
 
 /** Who finished an AI task, in plain words. */
 function doneByLabel(doneBy: string) {
@@ -174,7 +174,8 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
   const provider = s.aiKeyEnc && s.aiProvider ? (s.aiProvider as AiProvider) : null;
   const isAdmin = role !== "user";
   const base = `/app/w/${wid}`;
-  const firstPlaybook = PLAYBOOKS[0];
+  // Day 1 is when most people connect, so the first job to try is the one that builds Day 1 for them.
+  const firstPlaybook = PLAYBOOKS.find((p) => p.name === "day_1_with_claude") ?? PLAYBOOKS[0];
 
   const tasksPanel = (
     <section id="tasks" className="scroll-mt-20">
@@ -256,7 +257,8 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
     </section>
   );
 
-  // Saving a key checks it with the provider first, so a saved key is a key that worked.
+  // Saving a key checks it with the provider first, so a saved key is a key that worked. Save key is
+  // never pink: the screen's one pink button is Create connector URL (Claude first).
   const keyForm = (
     <form data-guide="ai-key" action={saveAiKeyAction.bind(null, wid)} className="flex flex-col">
       <ol className="flex flex-col">
@@ -328,7 +330,7 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
             </ul>
           </MoreOptions>
           {isAdmin ? (
-            <SubmitButton variant={provider ? "default" : "cta"} size="lg" className="self-start" pendingText="Checking your key with Google…">
+            <SubmitButton variant="default" size="lg" className="self-start" pendingText="Checking your key with Google…">
               <KeyRoundIcon data-icon="inline-start" />
               Save key
             </SubmitButton>
@@ -340,55 +342,55 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
     </form>
   );
 
+  // Connected means Claude has used a link at least once. A link nobody has pasted in yet is only made,
+  // and Day 1's AI step doesn't tick from it.
+  const connected = connectors.some((c) => c.lastUsedAt);
+  const linkMade = connectors.length > 0;
+  // No link and no key yet: making the link is the one thing to do here.
+  const fresh = !linkMade && !provider;
+
   return (
     <>
       <PageHead
         lesson="Day 1"
         title="Your AI"
-        sub="Add a free Google Gemini key and every AI button in this app runs on it: your launch kit, ad research and your ads. It's free, takes about two minutes, and you never count AI runs again."
-        first={provider ? "Your key works. Head back to Your path for the next step." : "Follow the three steps below. Have your Google account ready."}
+        sub="Connect your Claude and it writes your website, your emails and your ads, then saves them straight into this app. No Claude? A free Gemini key works too."
+        first={
+          connected
+            ? "Your Claude is connected. Ask it to build your Day 1, then head back to Your path."
+            : provider
+              ? "Your key works. Head back to Your path for the next step."
+              : linkMade
+                ? "Your connector URL is made. Paste it into Claude (step 2) and say the line in step 3. Your path ticks this step once Claude uses it."
+                : "Start with step 1 under Connect your Claude. Have Claude open in another tab."
+        }
       />
       <Flash searchParams={await searchParams} />
 
       {pending.length ? tasksPanel : null}
 
-      {provider ? (
-        <>
-          <KeyWorks wid={wid} provider={provider} hint={s.aiKeyHint} model={s.aiModel} isAdmin={isAdmin} />
-          <MoreOptions icon={KeyRoundIcon} title="Use a different key" sub="Paste a new key to replace the one you have. It's checked before it's saved.">
-            {keyForm}
-          </MoreOptions>
-        </>
-      ) : (
-        <Card id="key" className="relative scroll-mt-20 shadow-lift ring-2 ring-primary/20 dark:ring-primary/40">
-          {/* The one thing to do here carries a faint violet glow along its top edge. */}
+      <Card id="connect" className={cn("relative scroll-mt-20", fresh ? "shadow-lift ring-2 ring-primary/20 dark:ring-primary/40" : connected ? "shadow-lift ring-2 ring-success/25" : "")}>
+        {/* The one thing to do here carries a faint violet glow along its top edge. */}
+        {fresh ? (
           <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(70%_100%_at_25%_0%,var(--accent),transparent_75%)] dark:bg-[radial-gradient(70%_100%_at_25%_0%,rgb(118_85_245/0.12),transparent_75%)]" />
-          <CardContent className="relative flex flex-col gap-7">
-            <div className="flex items-start gap-3.5">
-              <IconTile icon={KeyRoundIcon} tone="success" className="size-11 rounded-2xl [&_svg]:size-5" />
-              <div className="grid min-w-0 flex-1 gap-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-[19px] tracking-[-0.015em]">Get your free Gemini key</h2>
-                  <Badge variant="success">Free · about 2 minutes</Badge>
-                </div>
-                <p className="text-sm leading-relaxed text-muted-foreground">Three steps. You only need a Google account: the free tier doesn&apos;t ask for a card.</p>
+        ) : null}
+        <CardContent className="relative flex flex-col gap-7">
+          <div className="flex items-start gap-3.5">
+            <IconTile icon={connected ? CheckCircle2Icon : PlugIcon} tone={connected ? "success" : "primary"} className="size-11 rounded-2xl [&_svg]:size-5" />
+            <div className="grid min-w-0 flex-1 gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-[19px] tracking-[-0.015em]">Connect your Claude</h2>
+                <Badge variant={connected ? "success" : "soft"}>{connected ? "Connected" : linkMade ? "Link made · waiting for Claude" : "Best way · about 3 minutes"}</Badge>
               </div>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Claude writes your website, your free checklist, your emails and your ads, and saves them straight into this app. It runs on your own Claude plan, and the free plan works too.
+              </p>
             </div>
-            <RunsStatus runs={runs} />
-            {keyForm}
-          </CardContent>
-        </Card>
-      )}
-
-      <MoreOptions
-        id="connect"
-        icon={PlugIcon}
-        title="Pay for Claude or ChatGPT? Chat with your account from there (optional)"
-        sub="A private link lets that app read and work on your account from its own chat. The buttons in this app still use your key above."
-      >
-        <ol className="flex flex-col">
-          <PathStep n={1} title="Make your private link">
-            {isAdmin ? <NewConnector wid={wid} /> : <Callout tone="info">Ask the account owner or an admin to make the link.</Callout>}
+          </div>
+          <ol className="flex flex-col">
+            <PathStep n={1} title="Make your connector URL">
+              <p className="text-sm leading-relaxed text-muted-foreground">It&apos;s a private link to your account, like a password. Copy it as soon as it shows.</p>
+              {isAdmin ? <NewConnector wid={wid} cta={fresh} /> : <Callout tone="info">Ask the account owner or an admin to make the link.</Callout>}
             {connectors.length ? (
               <ul className="flex flex-col divide-y divide-border/80 overflow-hidden rounded-xl bg-background/60 ring-1 ring-ink/[0.06] dark:ring-white/[0.07]">
                 {connectors.map((c) => (
@@ -415,17 +417,16 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
               </ul>
             ) : null}
           </PathStep>
-          <PathStep n={2} title="Paste it into your app">
-            <div className="flex flex-col gap-2">
-              {FEATURED.map((app, i) => (
-                <AppSteps key={app.name} app={app} open={i === 0 && connectors.length > 0} />
-              ))}
-            </div>
+          <PathStep n={2} title="Paste it into Claude">
+            <AppSteps app={CLAUDE} open />
             <p className="text-xs text-muted-foreground">
-              Using something else? More apps are under <a href="#more">Playbooks and more apps</a>. Apps change their menus often: if a step looks different, search your app&apos;s help for &ldquo;custom connector&rdquo;.
+              Use ChatGPT or another app? Its steps are under <a href="#more">Playbooks and more apps</a>. Apps change their menus often: if a step looks different, search your app&apos;s help for &ldquo;custom connector&rdquo;.
             </p>
           </PathStep>
-          <PathStep n={3} title="Ask it for a job" last>
+          <PathStep n={3} title="Ask Claude to build your Day 1" last>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              It builds your website from our premium template, writes your free checklist and your welcome emails, and can fix any page. Your website stays a draft until you say &ldquo;publish it&rdquo;, and a new email sequence starts switched off.
+            </p>
             <div className="flex flex-wrap items-center gap-2.5 rounded-2xl rounded-bl-md bg-accent p-2 pl-3.5 ring-1 ring-violet-200/70 ring-inset dark:ring-white/[0.06]">
               <MessageSquareTextIcon className="size-4 shrink-0 text-primary dark:text-violet-300" aria-hidden />
               <span className="min-w-0 flex-1 text-[14px] font-medium text-accent-foreground">&ldquo;{firstPlaybook?.say ?? "Run my Monday check-in in OneX."}&rdquo;</span>
@@ -433,7 +434,36 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
             </div>
           </PathStep>
         </ol>
-      </MoreOptions>
+        </CardContent>
+      </Card>
+
+      {provider ? (
+        <>
+          <KeyWorks wid={wid} provider={provider} hint={s.aiKeyHint} model={s.aiModel} isAdmin={isAdmin} />
+          <MoreOptions icon={KeyRoundIcon} title="Use a different key" sub="Paste a new key to replace the one you have. It's checked before it's saved.">
+            {keyForm}
+          </MoreOptions>
+        </>
+      ) : (
+        <Card id="key" className="scroll-mt-20">
+          <CardContent className="flex flex-col gap-7">
+            <div className="flex items-start gap-3.5">
+              <IconTile icon={KeyRoundIcon} tone="success" className="size-11 rounded-2xl [&_svg]:size-5" />
+              <div className="grid min-w-0 flex-1 gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-[19px] tracking-[-0.015em]">No Claude? A free Gemini key works too</h2>
+                  <Badge variant="success">Free · about 2 minutes</Badge>
+                </div>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  Three steps with any Google account, and the free tier doesn&apos;t ask for a card. A key also runs the AI buttons inside this app (your launch kit, ad research and your ads) with no runs to count.
+                </p>
+              </div>
+            </div>
+            <RunsStatus runs={runs} />
+            {keyForm}
+          </CardContent>
+        </Card>
+      )}
 
       <MoreOptions id="more" title="Playbooks and more apps" sub="Ready-made jobs to ask your connected app for, other apps it works in, and AI tasks from your automations." icon={SparklesIcon} defaultOpen={false}>
         <section id="playbooks" className="flex scroll-mt-20 flex-col gap-3">
@@ -458,7 +488,7 @@ export default async function YourAiPage({ params, searchParams }: { params: Pro
         <section className="flex flex-col gap-3">
           <div className="grid gap-0.5">
             <h3>Other AI apps</h3>
-            <p className="text-sm text-muted-foreground">The same private link, pasted somewhere else.</p>
+            <p className="text-sm text-muted-foreground">ChatGPT and the rest: the same connector URL, pasted somewhere else.</p>
           </div>
           <div className="grid gap-2 @3xl/main:grid-cols-2">
             {OTHER_APPS.map((app) => (

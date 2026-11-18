@@ -1,8 +1,12 @@
 import {
   ActivityIcon,
+  AtSignIcon,
   BotIcon,
+  CalendarDaysIcon,
   ClipboardCheckIcon,
   CodeIcon,
+  FilmIcon,
+  GalleryHorizontalIcon,
   GiftIcon,
   GlobeIcon,
   GraduationCapIcon,
@@ -21,12 +25,13 @@ import {
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { laterStepAction, saveGroupLinkAction, tickStepAction } from "@/actions/journey";
 import { SubmitButton } from "@/components/client";
 import { NextStep } from "@/components/ui";
 import { Input } from "@/components/ui/input";
 import { howFor } from "@/lib/guides";
-import { fill, JOURNEY_COPY, POST_KEYS, type Where } from "@/lib/week";
+import { DAY5_ADD_CONTACT, fill, JOURNEY_COPY, POST_KEYS, type Where } from "@/lib/week";
 import type { Path, WeekStep } from "@/server/path";
 import { DayDone, ShelfList, WeekDone } from "./day-done";
 import { SkoolPostCard } from "./skool-post-card";
@@ -40,11 +45,16 @@ const STEP_ICON: Record<string, LucideIcon> = {
   ai: BotIcon,
   skool: UsersIcon,
   kit: SparklesIcon,
+  reel1: FilmIcon,
+  carousel: GalleryHorizontalIcon,
+  firstpost: SmartphoneIcon,
   publish: GlobeIcon,
+  pages: AtSignIcon,
   pixel: CodeIcon,
   research: SearchIcon,
   statics: PaletteIcon,
   clicks: RocketIcon,
+  planweek: CalendarDaysIcon,
   refresh: PaletteIcon,
   live2: RocketIcon,
   lead1: UserCheckIcon,
@@ -117,7 +127,7 @@ export function JourneyHero({ path, wid, back }: { path: Path; wid: string; back
   const quiet = <QuietControls step={step} wid={wid} back={back} skoolGroupUrl={path.links.skoolGroup} />;
   const common = { eyebrow, icon, "data-step": step.key } as const;
 
-  // Day 1, step 2: start the group on Skool, then paste its link right here.
+  // Day 1's group step: start the group on Skool, then paste its link right here.
   if (step.key === "skool") {
     return (
       <NextStep {...common} title={step.title} body={body} href={path.links.referral || undefined} cta={path.links.referral ? step.verb : undefined}>
@@ -148,12 +158,12 @@ export function JourneyHero({ path, wid, back }: { path: Path; wid: string; back
   }
 
   // Every day's Skool post: post in that day's section, review the one before, two ticks. It ends
-  // Days 3 to 7; on Days 1 and 2 it comes before Publish, so the eyebrow only says "Last step" when it is.
+  // every day, so the eyebrow says "Last step" (unless a saved-for-later step is still open).
   if (isPost) {
     return (
       <NextStep {...common} title={step.title} body={step.href ? body : `${body} ${JOURNEY_COPY.post.noSkool}.`} href={step.href ?? undefined} cta={step.href ? JOURNEY_COPY.post.openSkool : undefined}>
         <div className="flex flex-col gap-5">
-          <SkoolPostCard step={step} wid={wid} back={back} website={path.links.website} />
+          <SkoolPostCard step={step} wid={wid} back={back} website={path.links.website} group={path.links.ownGroup} />
           {quiet}
         </div>
       </NextStep>
@@ -202,18 +212,47 @@ export function JourneyHero({ path, wid, back }: { path: Path; wid: string; back
     );
   }
 
-  // Done outside the app (Ads Manager, Events Manager, their own group, their phone): the
-  // outside link is the pink button, and the tick beside it is the member's word.
+  // Day 1's AI step: connecting Claude is the pink button. The free Gemini key is the quiet way
+  // round, and the included runs are the member's word for "neither today".
+  if (step.key === "ai" && step.tick === null && step.href) {
+    return (
+      <NextStep {...common} title={step.title} body={body} href={step.href} cta={step.verb}>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3">
+            <Link href={`${step.href}#key`} className="self-start text-sm font-semibold text-white underline decoration-white/40 underline-offset-4 hover:decoration-white">
+              {H.aiFallback}
+            </Link>
+            {step.selfLabel ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <TickButton step={step} wid={wid} back={back} label={step.selfLabel} />
+                <p className={small}>{H.aiRunsNote}</p>
+              </div>
+            ) : null}
+          </div>
+          {quiet}
+        </div>
+      </NextStep>
+    );
+  }
+
+  // Done outside the app (Ads Manager, Events Manager, their own group, their phone, ReelVault), or a
+  // carousel that might be a video instead: the
+  // link, when there is one, is the pink button, and the tick beside it is the member's word.
   if (step.tick === null && step.selfLabel) {
     return (
       <NextStep {...common} title={step.title} body={body} href={step.href ?? undefined} cta={step.href ? step.verb : undefined}>
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
-            {!step.href ? <p className="text-sm text-white/85">{H.noOwnGroup}</p> : null}
+            {!step.href && step.where === "skool" ? <p className="text-sm text-white/85">{H.noOwnGroup}</p> : null}
             <div className="flex flex-wrap items-center gap-3">
               <TickButton step={step} wid={wid} back={back} label={step.selfLabel} />
             </div>
             <p className={small}>{step.note ?? WORD[step.where]}</p>
+            {step.key === "warm" ? (
+              <Link href={`/app/w/${wid}/${DAY5_ADD_CONTACT}`} className="self-start text-sm font-semibold text-white underline decoration-white/40 underline-offset-4 hover:decoration-white">
+                {H.warmAdd}
+              </Link>
+            ) : null}
           </div>
           {quiet}
         </div>

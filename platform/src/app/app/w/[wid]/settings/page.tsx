@@ -38,6 +38,9 @@ import { accountSkoolUrl } from "@/server/sites";
 import { PIXEL_TEST_EVENT, pixelStatus, type PixelStatus } from "@/server/meta/capi";
 import { relativeTime } from "@/lib/util";
 import { OpenOnHash } from "./open-on-hash";
+import { PixelIdInput, SkoolLinkInput } from "./fill-help";
+import { latestKitAnswers } from "@/server/ai/businessContext";
+import { cleanPrice, offerLine } from "@/server/ai/launchKit";
 
 const KIND: Record<string, string> = { facebook_page: "Facebook Page", instagram: "Instagram", whatsapp: "WhatsApp", sms: "SMS number" };
 
@@ -125,6 +128,14 @@ export default async function SettingsPage({ params, searchParams }: { params: P
   // pressing Save here never wipes it.
   const skoolLink = await accountSkoolUrl(wid, s.skoolUrl);
   const pixel = pixelStatus(s);
+  // Blank boxes start from what they told their launch kit, so nobody types the same answer twice.
+  const kit = await latestKitAnswers(wid);
+  const kitPrice = cleanPrice(kit?.input.price ?? "");
+  const kitNiche = kit?.input.niche?.trim() ?? "";
+  const kitOffer = kit?.input.offer?.trim() || (kitPrice ? offerLine({ price: kitPrice, days: kit?.input.trialDays ?? 0 }) : "");
+  const niche = s.niche?.trim() || kitNiche;
+  const offer = s.offer?.trim() || kitOffer;
+  const fromKit = (!s.niche?.trim() && Boolean(kitNiche)) || (!s.offer?.trim() && Boolean(kitOffer));
 
   const first = !skoolLink
     ? "Paste your Skool group link in Business details and press Save."
@@ -169,9 +180,9 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                   </Badge>
                 ) : null}
               </FieldLabel>
-              <Input id="skoolUrl" name="skoolUrl" type="url" defaultValue={skoolLink} placeholder="https://www.skool.com/your-group/about" className="h-12 rounded-xl px-4 text-[15px]" />
+              <SkoolLinkInput defaultValue={skoolLink} />
               <FieldDescription>
-                Open your group in Skool, go to its About page and copy the address bar.{" "}
+                Open your group in Skool and copy the address bar, then press Paste. We turn it into your group&apos;s About page link for you.{" "}
                 {skoolLink ? "Change it here and every website follows." : "Until it's saved, the Join button stays hidden on your pages."}
               </FieldDescription>
             </Field>
@@ -180,15 +191,22 @@ export default async function SettingsPage({ params, searchParams }: { params: P
               <Input id="businessName" name="businessName" defaultValue={s.businessName ?? workspace.name} />
             </Field>
           </div>
-          <MoreOptions title="More business details" sub="What you help with, your offer, reply-to email and mailing address." className={INNER_MORE}>
+          <MoreOptions
+            title="More business details"
+            sub={fromKit ? "Filled in from your launch kit. Check it and press Save." : "What you help with, your offer, reply-to email and mailing address."}
+            className={INNER_MORE}
+            defaultOpen={fromKit}
+          >
             <div className="grid gap-4 @2xl/main:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="niche">What you help with</FieldLabel>
-                <Input id="niche" name="niche" defaultValue={s.niche ?? ""} />
+                <Input id="niche" name="niche" defaultValue={niche} placeholder="Fat loss for busy dads" />
+                <FieldDescription>One short line. For example &quot;Fat loss for busy dads&quot; or &quot;Piano for adult beginners&quot;. Your AI writes your pages and ads from it.</FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="offer">Your offer</FieldLabel>
-                <Input id="offer" name="offer" defaultValue={s.offer ?? ""} />
+                <Input id="offer" name="offer" defaultValue={offer} placeholder="$29 a month with a 7-day free trial" />
+                <FieldDescription>What joining costs, in your words. For example &quot;$29 a month with a 7-day free trial&quot;. Only write a free trial if your group has one.</FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="replyToEmail">Reply-to email</FieldLabel>
@@ -215,8 +233,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
         className="scroll-mt-20"
         step={2}
         title="Meta Pixel & Conversions API"
-        sub="A Day 1 step, right after you publish. Your website ads need it, so Meta can see who gave you their email and find more people like them. Works on Skool's $9 plan too."
-        action={<LessonTag lesson="Day 1" />}
+        sub="A Day 2 step, before your first ads. Your website ads need it, so Meta can see who gave you their email and find more people like them. Works on Skool's $9 plan too."
+        action={<LessonTag lesson="Day 2" />}
       >
         <PixelCheck wid={wid} status={pixel} highlight={Boolean(skoolLink)} />
         <form action={saveTrackingAction.bind(null, wid)} className="flex flex-col gap-4">
@@ -227,8 +245,8 @@ export default async function SettingsPage({ params, searchParams }: { params: P
                   Pixel (dataset) ID
                   <PixelBadge status={pixel} />
                 </FieldLabel>
-                <Input id="metaPixelId" name="metaPixelId" defaultValue={s.metaPixelId ?? ""} placeholder="123456789012345" inputMode="numeric" className="@2xl/main:max-w-sm" />
-                <FieldDescription>Meta Events Manager › your Pixel › Settings tab. Copy the Dataset ID. It&apos;s a long number, about 15 digits.</FieldDescription>
+                <PixelIdInput defaultValue={s.metaPixelId ?? ""} />
+                <FieldDescription>Meta Events Manager › your Pixel › Settings tab. Copy the Dataset ID. It&apos;s a long number, 15 or 16 digits.</FieldDescription>
               </Field>
             </FieldStep>
             <FieldStep n={2}>

@@ -75,6 +75,41 @@ export const PLAYBOOKS: Playbook[] = [
 3. When I pick one, ask me for the reward link, then call create_unlock.
 4. Give me the Skool post text it returns, ready to paste and pin.`,
   },
+  {
+    name: "day_1_with_claude",
+    title: "Day 1 with Claude",
+    description: "Your AI builds Day 1 for you: your website from the premium template, your free checklist, your 3 welcome emails and your Skool About page.",
+    say: `Build my website from the premium template, then write my free checklist and my 3 welcome emails in ${env.platformName}.`,
+    steps: `1. Call get_overview (my business, niche, offer, Skool link), list_pages (do I already have a website?) and list_email_sequences.
+2. Ask me, in one short message, only what you don't know yet: who it's for, the result they want, my checklist idea (or let you pick one), which of the two free-gift frameworks below I want (if I don't say, use the domino), my price and free trial in my own words (or none), my tone (friendly, bold or calm) and my brand colour.
+3. Website. Write the opt-in page: hero (an eyebrow, a headline with the result in my reader's words, a subheadline that says why this works, 3 short bullets, button text, showForm true), benefits (3), steps (3), a text section "Hi, I'm <my first name>" (2-3 honest lines), faq (4) and a form. Write the thank-you page: a cta whose buttonUrl is {{skool_url}} (it states my price and free trial only if I gave them, and that they can cancel before it bills), then a text section linking the checklist with [Get it here]({{lead_magnet_url}}).
+   - No website yet: build it from the premium template. Call create_site with template "premium" (our Glass look), a name, theme.brandColor if I gave one (leave style out unless I asked for a different look) and both pages' sections.
+   - Already have one: get_page each page and save your new sections with update_page. If it isn't on the premium look yet, offer set_site_theme with style "glass"; change the look only when I say yes.
+4. Free checklist. Build it on one of my two frameworks:
+   - The domino (the default): solve one insanely valuable problem for my reader completely, for free. Solving it creates the next problem they'll hit; name that next problem near the end and say my paid Skool group is where it gets solved.
+   - Go wide: speak to the widest group of people in my niche, help them see clearly that they have the problem (a quick self-check), give them a first small step, then offer my Skool group as the solution.
+   Write the checklist itself, not a description of it: 300 to 600 words, one small action a day for 7 days, each about 10 minutes. Call set_lead_magnet with the siteId, its name and the content (it goes on /guide). If I already have one somewhere else, pass its name and url instead.
+5. Welcome emails. Write 3: day 0 hands over the checklist with [its name]({{lead_magnet_url}}) and one thing to do today; day 1 the #1 mistake people make and the fix; day 3 a warm invite into my Skool group at {{skool_url}}. Start each with "Hey {{first_name}}," and sign with my first name. Call upsert_email_sequence with the sequenceId of the sequence that starts when someone becomes a lead, so new leads get one set, not two.
+6. My Skool words, built as Who it's for, Pain, Path, Prize, Push. Plain text, ready to paste (Skool has no bold, so keep the structure with line breaks and emojis as bullets):
+   - About page: the Prize in one line; one "Even if…" or "Without…" line; "This is for you if:" with 2-4 ✅ lines; 2-3 ❌ pain lines; "What you get:" with 3-5 🔹 lines; one push (my free trial only if I gave one, else "Tap Join.").
+   - Group description, at most 150 characters, one line: "For <who>:", the path and the prize, then my free trial if I have one.
+   - Cover headline: the Prize in 4 to 8 words, at most 40 characters, like "Strong in 3 sessions a week". Tell me to paste it into Cover headline in AI launch kit, where I also add my photo and make my cover.
+   Nothing to save: show them to me to paste.
+7. Show me: the preview link, the checklist link, the 3 email subjects, the About page, the group description and the cover headline. Ask "publish it?". Only call publish_site when I say yes; the sign-up form and the /guide page only work once the website is published.
+Rules everywhere: simple words, short sentences, no invented testimonials, results, numbers, member counts, guarantees or income claims (only numbers I gave you), and a price or free trial only if I said it.`,
+  },
+  {
+    name: "make_my_carousel",
+    title: "Make my carousel",
+    description: "Your first post: your ReelVault script (or a topic) as a 6-slide Instagram carousel, saved in your app ready to download.",
+    say: `Turn my ReelVault script into a 6-slide carousel and save it in ${env.platformName}.`,
+    steps: `1. Call get_overview for my niche and who I help.
+2. Ask me to paste my ReelVault script (the one from Remake this), unless I already did. No script? Ask what the post is about in a few words.
+3. Write 6 slides. Slide 1: the script's hook as big words, under 10 words, no lines. Slides 2 to 5: one idea each, a heading under 6 words plus 1 to 3 short lines (a list is one item per line). Slide 6: what to do next, like "Save this for later." and "More in my group. Link in bio." Keep my script's own words where you can. Drop camera notes, timings and labels like "Hook:".
+4. Rules: simple words, short sentences, no emojis or hashtags, no invented results, numbers or testimonials.
+5. Ask for my Instagram name if I want it on the slides (optional), then call save_carousel with a short title, the 6 slides and my name.
+6. Give me the link it returns and say: open it, check the slides, press Download all slides. Then on Instagram: + › Post › pick all slides in order › Add music.`,
+  },
 ];
 
 // Earlier names, so chats that saved them still work. The 3-Pack is retired: the course makes ads

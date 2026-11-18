@@ -79,7 +79,9 @@ describe("journey actions", () => {
 
   it("only offers self-ticks for what the app can't see", () => {
     for (const s of WEEK_STEPS.filter((x) => x.tick === "app")) expect(SELF_TICK_KEYS, s.key).not.toContain(s.key);
-    for (const k of ["ai", "clicks", "live2", "events", "welcome", "lesson", "warm", "decide", "post1", "post1r", "post7r", "review"]) expect(SELF_TICK_KEYS).toContain(k);
+    for (const k of ["ai", "reel1", "carousel", "firstpost", "pages", "planweek", "clicks", "live2", "events", "welcome", "lesson", "warm", "decide", "post1", "post1r", "post7r", "review"]) expect(SELF_TICK_KEYS).toContain(k);
+    // Steps the week no longer has can't be ticked any more.
+    for (const k of ["rivals", "video1"]) expect(SELF_TICK_KEYS).not.toContain(k);
   });
 
   it("takes 'I'll use my 3 included runs' on the AI step, and never says a key was saved", async () => {
@@ -88,6 +90,35 @@ describe("journey actions", () => {
     expect(r.ok).toBe(AI_RUNS_WIN);
     expect(r.ok).not.toContain("key is saved");
     expect(Object.keys((await settingsOf(ws.id)).journey?.ticks ?? {})).toEqual(["ai"]);
+  });
+
+  it("takes the member's word for Day 1's script, video and Instagram post, and Day 2's Page and Planner", async () => {
+    const { ws } = await makeWorkspace();
+    const back = `/app/w/${ws.id}`;
+    expect((await run(tickStepAction(ws.id, "reel1", form({ back })))).ok).toBe("Done: you have a script, borrowed from a reel that already works.");
+    expect((await run(tickStepAction(ws.id, "carousel", form({ back })))).ok).toBe("Done: your first post is made.");
+    expect((await run(tickStepAction(ws.id, "firstpost", form({ back })))).ok).toBe("Done: your first post is out. That's your first win.");
+    expect((await run(tickStepAction(ws.id, "pages", form({ back })))).ok).toBe("Done: your Page and Instagram are linked, with your Skool link in the bio.");
+    expect((await run(tickStepAction(ws.id, "planweek", form({ back })))).ok).toBe("Done: this week's posts are scheduled.");
+    expect(Object.keys((await settingsOf(ws.id)).journey?.ticks ?? {}).sort()).toEqual(["carousel", "firstpost", "pages", "planweek", "reel1"]);
+    // The old keys are gone from the week, so they can't be ticked.
+    for (const k of ["rivals", "video1"]) expect((await run(tickStepAction(ws.id, k, form({ back })))).error, k).toBe("That step ticks itself when the app sees it done.");
+  });
+
+  it("Undo on a step ticked through an old key leaves its other step ticked", async () => {
+    const { ws } = await makeWorkspace();
+    const back = `/app/w/${ws.id}`;
+    const db = await getDb();
+    const old = "2026-11-15T10:00:00.000Z";
+    // Ticked before the week changed: "Post your first video or carousel" (video1) counts for carousel and firstpost.
+    await db.update(workspaces).set({ settings: sql`jsonb_set(${workspaces.settings}, '{journey}', ${JSON.stringify({ ticks: { video1: { at: old }, rivals: { at: old } } })}::jsonb, true)` }).where(eq(workspaces.id, ws.id));
+    await run(untickStepAction(ws.id, "firstpost", form({ back })));
+    const ticks = (await settingsOf(ws.id)).journey?.ticks ?? {};
+    expect(ticks.video1).toBeUndefined();
+    expect(ticks.firstpost).toBeUndefined();
+    expect(ticks.carousel).toEqual({ at: old });
+    // A key with no step now is left alone: it counts for nothing.
+    expect(ticks.rivals).toEqual({ at: old });
   });
 
   it("writes only the journey key, so other settings survive even a stale read", async () => {
@@ -157,7 +188,12 @@ describe("journey actions", () => {
     const back = `/app/w/${ws.id}`;
     expect((await run(laterStepAction(ws.id, "kit", form({ back })))).error).toBeTruthy();
     expect((await run(laterStepAction(ws.id, "post1", form({ back })))).error).toBeTruthy();
-    expect((await run(laterStepAction(ws.id, "pixel", form({ back })))).ok).toBe("Saved for later. It comes back before Day 2 starts.");
+    for (const k of ["reel1", "carousel", "firstpost", "rivals"]) expect((await run(laterStepAction(ws.id, k, form({ back })))).error, k).toBeTruthy();
+    expect((await run(laterStepAction(ws.id, "planweek", form({ back })))).ok).toBe("Saved for later. It comes back before Day 3 starts.");
+    await run(unlaterStepAction(ws.id, "planweek", form({ back })));
+    expect((await run(laterStepAction(ws.id, "ai", form({ back })))).ok).toBe("Saved for later. It comes back before Day 2 starts.");
+    await run(unlaterStepAction(ws.id, "ai", form({ back })));
+    expect((await run(laterStepAction(ws.id, "pixel", form({ back })))).ok).toBe("Saved for later. It comes back before Day 3 starts.");
     expect((await settingsOf(ws.id)).journey?.later?.pixel).toBeTruthy();
     await run(unlaterStepAction(ws.id, "pixel", form({ back })));
     expect((await settingsOf(ws.id)).journey?.later).toEqual({});
@@ -197,5 +233,32 @@ describe("the home page's win line", () => {
     expect(pickWin(["skool", "kit", "ev:adLead"], "kit|skool,kit").show).toBe("ev:adLead");
     // An undone step's win goes with it.
     expect(pickWin(["skool"], "kit|skool,kit").show).toBeNull();
+  });
+});
+
+describe("journey actions with course unlocks on", () => {
+  it("asks for the post link instead of a tick, and Undo never drops a post the link already opened", async () => {
+    const { setCourseUnlocks, claimCoursePost } = await import("@/server/courseUnlocks");
+    const { ws } = await makeWorkspace();
+    const back = `/app/w/${ws.id}`;
+    const { env } = await import("@/lib/env");
+    // The switch only goes on with the platform's group set, and links are checked against it.
+    env.skoolGroupUrl = "https://www.skool.com/fit-dads";
+    await setCourseUnlocks({ on: true, hooks: {} });
+    try {
+      expect((await run(tickStepAction(ws.id, "post1", form({ back })))).error).toBe("Paste your post's link to tick this one.");
+      // The review half is still the member's word.
+      expect((await run(tickStepAction(ws.id, "post1r", form({ back })))).ok).toBeTruthy();
+      expect((await claimCoursePost(ws.id, { email: "jo@example.com", name: "Jo" }, 1, "https://www.skool.com/fit-dads/day-1-post")).ok).toBe(true);
+      await run(untickStepAction(ws.id, "post1", form({ back, both: "1" })));
+      const ticks = (await settingsOf(ws.id)).journey?.ticks ?? {};
+      expect(ticks.post1).toMatchObject({ as: "link" });
+      expect(ticks.post1r).toBeUndefined();
+    } finally {
+      await setCourseUnlocks({ on: false, hooks: {} });
+      env.skoolGroupUrl = "";
+    }
+    // Off: the post ticks on the member's word, as before.
+    expect((await run(tickStepAction(ws.id, "post2", form({ back })))).ok).toBe("Ticked: you posted yours. Next, review the post right before it.");
   });
 });

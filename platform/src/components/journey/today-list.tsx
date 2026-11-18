@@ -2,15 +2,15 @@ import Link from "next/link";
 import { ArrowRightIcon, CoffeeIcon, ListChecksIcon } from "lucide-react";
 import { Panel } from "@/components/ui";
 import { Button } from "@/components/ui/button";
-import { fill, JOURNEY_COPY } from "@/lib/week";
+import { fill, HALF_TIME, JOURNEY_COPY } from "@/lib/week";
 import type { WeekDay, WeekStep } from "@/server/path";
 import { StepRow } from "./step-row";
 
 const T = JOURNEY_COPY.today;
 
-/** Day 1 is two sittings. Once the website is live, a calm half-time line says stopping is fine. */
+/** Day 2 is two sittings. Once the website is live, a calm half-time line says stopping is fine. */
 function HalfTimeNote({ day }: { day: WeekDay }) {
-  const at = day.steps.findIndex((s) => s.key === "publish");
+  const at = day.steps.findIndex((s) => s.key === HALF_TIME.after);
   const firstHalfDone = at >= 0 && day.steps.slice(0, at + 1).every((s) => s.done);
   return (
     <li className="my-1 flex items-start gap-3 rounded-xl border border-dashed border-border-strong px-3 py-2.5 text-[13px] leading-relaxed text-muted-foreground">
@@ -49,7 +49,7 @@ function StepFragment({ step, day, current, wid, back }: { step: WeekStep; day: 
   return (
     <>
       <StepRow step={step} wid={wid} back={back} current={current} />
-      {day.day === 1 && step.key === "publish" ? <HalfTimeNote day={day} /> : null}
+      {day.day === HALF_TIME.day && step.key === HALF_TIME.after ? <HalfTimeNote day={day} /> : null}
     </>
   );
 }

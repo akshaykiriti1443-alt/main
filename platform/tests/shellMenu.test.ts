@@ -42,14 +42,15 @@ describe("which menu item an address belongs to", () => {
 });
 
 describe("the Member menu", () => {
-  it("is 11 rows in the course's order, then a closed More", () => {
+  it("is 12 rows in the course's order, then a closed More", () => {
     const groups = nav();
     expect(labels(groups)).toEqual([
       ["", ["Dashboard", "Your path"]],
-      ["Your week", ["Your AI", "AI launch kit", "Funnels & pages", "Ad research", "Ad studio", "Leads", "Growth ladder", "Unlocks", "Ad review"]],
+      ["Your week", ["Your AI", "Make my carousel", "AI launch kit", "Funnels & pages", "Ad research", "Ad studio", "Leads", "Growth ladder", "Unlocks", "Ad review"]],
       ["More", ["Emails", "Settings", "Plan & wallet"]],
     ]);
-    expect(groups[0].items.length + groups[1].items.length).toBe(11);
+    expect(groups[0].items.length + groups[1].items.length).toBe(12);
+    expect(groups[1].items[1]).toMatchObject({ href: `${base}/carousel`, icon: "carousel" });
     expect(groups[2]).toMatchObject({ id: "more", collapsible: true, defaultOpen: false });
   });
 
@@ -73,13 +74,21 @@ describe("the Member menu", () => {
     expect(nav({ nextHref: null })[2].defaultOpen).toBe(false);
   });
 
-  it("puts ReelVault at the top of More, inside the app, only when it's set up", () => {
+  it("puts ReelVault in Your week right before Make my carousel (Day 1 step 2), inside the app, only when it's set up", () => {
     expect(nav().flatMap((g) => g.items).map((i) => i.label)).not.toContain("ReelVault");
-    const more = nav({ reelVault: true })[2].items;
-    expect(more[0]).toMatchObject({ href: `${base}/reelvault`, label: "ReelVault", icon: "reel" });
-    expect(more[0].external).toBeUndefined();
-    expect(more[0].children?.map((c) => c.label)).toEqual(["Competitors", "Reels", "What works", "Create", "Outputs", "Settings"]);
-    expect(more[0].hint).toBeTruthy();
+    const groups = nav({ reelVault: true });
+    expect(labels(groups)).toEqual([
+      ["", ["Dashboard", "Your path"]],
+      ["Your week", ["Your AI", "ReelVault", "Make my carousel", "AI launch kit", "Funnels & pages", "Ad research", "Ad studio", "Leads", "Growth ladder", "Unlocks", "Ad review"]],
+      ["More", ["Emails", "Settings", "Plan & wallet"]],
+    ]);
+    const reel = groups[1].items[1];
+    expect(reel).toMatchObject({ href: `${base}/reelvault`, label: "ReelVault", icon: "reel" });
+    expect(reel.external).toBeUndefined();
+    expect(reel.children?.map((c) => c.label)).toEqual(["Competitors", "Reels", "What works", "Create", "Outputs", "Settings"]);
+    expect(reel.hint).toBeTruthy();
+    // Its pages don't open More: it lives in Your week now.
+    expect(nav({ reelVault: true, nextHref: `${base}/reelvault` })[2].defaultOpen).toBe(false);
   });
 });
 
@@ -87,7 +96,7 @@ describe("every other account keeps today's menu", () => {
   const today = (reel: boolean) => [
     ["", ["Dashboard", "Your path"]],
     ["Start here", ["Your AI", "AI launch kit", "Funnels & pages"]],
-    ["Get members", ["Ad research", ...(reel ? ["ReelVault"] : []), "Ad studio", "Ad review", "Growth ladder", "Leads", "Pipeline"]],
+    ["Get members", ["Ad research", ...(reel ? ["ReelVault"] : []), "Make my carousel", "Ad studio", "Ad review", "Growth ladder", "Leads", "Pipeline"]],
     ["Keep members", ["Automations", "Unlocks", "Emails"]],
     ["Talk", ["Inbox", "Social planner", "Calendar"]],
     ["Account", ["Plan & wallet", "Settings"]],
@@ -132,9 +141,11 @@ describe("the folding More group", () => {
     expect(more).toMatch(/^<div id="[^"]+" data-state="closed"/);
     expect(more).not.toMatch(/^<div[^>]*\shidden[\s=>]/);
     expect(more).toContain("group-data-[collapsible=icon]:block!");
-    for (const href of [`${base}/emails`, `${base}/settings`, `${base}/billing`, `${base}/reelvault`]) {
+    for (const href of [`${base}/emails`, `${base}/settings`, `${base}/billing`]) {
       expect(more).toContain(`data-nav="${href}"`);
     }
+    expect(more).not.toContain(`data-nav="${base}/reelvault"`);
+    expect(html).toContain(`data-nav="${base}/reelvault"`);
   });
 
   it("starts open when the next step lives there or you're on one of its pages", async () => {

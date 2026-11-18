@@ -6,6 +6,7 @@ import { workspaces } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { chargeUsage } from "@/server/wallet";
+import { createConnectorToken, resolveConnectorToken } from "@/server/connectors";
 import { runLaunchKit } from "@/server/ai/launchKit";
 import { makeWorkspace } from "./helpers";
 
@@ -39,18 +40,41 @@ async function html(page: Promise<{ default: unknown }>, wid: string, sp: Record
 const JARGON = /server|platform owner|wallet|add funds|AI generation|ANTHROPIC/i;
 
 describe("Day 1 screens", () => {
-  it("Your AI leads with the free key in three steps, and confirms a saved key works", async () => {
+  it("Your AI leads with connecting Claude, keeps the free key as the fallback, and confirms a saved key works", async () => {
     env.aiEnabled = true;
-    const { ws, refresh } = await signIn();
+    const { ws, user, refresh } = await signIn();
     const before = await html(import("@/app/app/w/[wid]/ai/page"), ws.id);
-    expect(before).toContain("Get your free Gemini key");
+    expect(before).toContain("Connect your Claude");
+    expect(before).toContain("Make your connector URL");
+    expect(before).toContain("Create connector URL");
+    expect(before).toContain("Paste it into Claude");
+    expect(before).toContain("Ask Claude to build your Day 1");
+    expect(before).toContain("Build my website from the premium template");
+    expect(before).toContain("No Claude? A free Gemini key works too");
     expect(before).toContain("Open Google AI Studio");
     expect(before).toContain("Press Create API key, then copy it");
     expect(before).toContain("Paste it here and press Save key");
     expect(before).toContain("You have 3 of 3 free AI runs left this month");
-    expect(before.indexOf("Get your free Gemini key")).toBeLessThan(before.indexOf("Pay for Claude or ChatGPT?"));
+    // Claude first, the key second, ChatGPT and the rest under the fold.
+    expect(before.indexOf("Connect your Claude")).toBeLessThan(before.indexOf("No Claude? A free Gemini key works too"));
+    expect(before.indexOf("No Claude? A free Gemini key works too")).toBeLessThan(before.indexOf("chatgpt.com/plugins"));
+    expect(before).not.toContain("Pay for Claude or ChatGPT?");
     // The main path, up to the optional folds (those quote other apps' own menus, like "custom MCP server").
     expect(before.slice(0, before.indexOf("Use a different AI"))).not.toMatch(JARGON);
+
+    // Connected through the connector: it says so, and the key stays there as the second way.
+    const { token } = await createConnectorToken(ws.id, user.id, "My Claude");
+    // Only made: it says it's waiting for Claude, not that Claude is connected.
+    const made = await html(import("@/app/app/w/[wid]/ai/page"), ws.id);
+    expect(made).toContain("Link made · waiting for Claude");
+    expect(made).toContain("Your path ticks this step once Claude uses it");
+    expect(made).not.toContain("Your Claude is connected");
+    await resolveConnectorToken(token);
+    const linked = await html(import("@/app/app/w/[wid]/ai/page"), ws.id);
+    expect(linked).toContain("Connected");
+    expect(linked).toContain("My Claude");
+    expect(linked).toContain("Your Claude is connected. Ask it to build your Day 1");
+    expect(linked).toContain("No Claude? A free Gemini key works too");
 
     const db = await getDb();
     await db.update(workspaces).set({ settings: { ...ws.settings, aiProvider: "gemini", aiKeyEnc: encrypt("AIza-test"), aiKeyHint: "…test", aiModel: "gemini-2.5-flash" } }).where(eq(workspaces.id, ws.id));

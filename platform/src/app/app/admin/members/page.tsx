@@ -2,7 +2,8 @@ import { requirePlatformAdmin } from "@/server/auth";
 import { lastRosterImport, listMemberAccess, memberStats } from "@/server/access";
 import { firstEightDayMembers } from "@/server/admin";
 import { grantMemberAction, revokeMemberAction } from "@/actions/admin";
-import { saveEntryTicketAction } from "@/actions/unlocks";
+import { approveCoursePostAction, resendCoursePostAction, saveCourseUnlocksAction, saveEntryTicketAction } from "@/actions/unlocks";
+import { courseClaimStatus, courseGroup, courseUnlocksBlocker, getCourseUnlocks, listCourseClaims, missingCourseHooks } from "@/server/courseUnlocks";
 import { getEntryTicket } from "@/server/unlocks";
 import { getDb } from "@/lib/db";
 import { unlocks, workspaceMembers, workspaces as workspacesTable } from "@/lib/db/schema";
@@ -19,7 +20,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RosterUpload } from "./roster";
-import { CheckIcon, CloudUploadIcon, GraduationCapIcon, HandHelpingIcon, KeyRoundIcon, RefreshCwIcon, ShoppingBagIcon, TicketIcon, UsersIcon, ZapIcon } from "lucide-react";
+import { CheckIcon, CloudUploadIcon, ExternalLinkIcon, GraduationCapIcon, HandHelpingIcon, KeyRoundIcon, LockOpenIcon, RefreshCwIcon, ShoppingBagIcon, TicketIcon, UsersIcon, ZapIcon } from "lucide-react";
 import { Avatar, EdgeTable } from "@/components/crm-ui";
 import { SkoolInviteCard } from "@/components/skool-invite-card";
 import { platformInviteHint } from "@/server/skoolInvite";
@@ -42,7 +43,10 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
       .innerJoin(workspacesTable, eq(workspacesTable.id, unlocks.workspaceId))
       .where(eq(workspaceMembers.userId, admin.id)),
   ]);
-  const [stats, last, rows, firstDays] = await Promise.all([memberStats(), lastRosterImport(), listMemberAccess({ q: sp.q }), firstEightDayMembers()]);
+  const [stats, last, rows, firstDays, course, courseClaims] = await Promise.all([memberStats(), lastRosterImport(), listMemberAccess({ q: sp.q }), firstEightDayMembers(), getCourseUnlocks(), listCourseClaims(100)]);
+  const group = courseGroup();
+  const blocker = courseUnlocksBlocker();
+  const missingHooks = missingCourseHooks(course);
   const staleDays = last ? Math.floor((Date.now() - last.createdAt.getTime()) / 86_400_000) : null;
   const zapUrl = `${env.appUrl}/api/webhooks/skool?secret=${env.skoolWebhookSecret || "<SKOOL_WEBHOOK_SECRET>"}`;
   const now = Date.now();
@@ -143,6 +147,118 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
           )}
         </Panel>
       </form>
+
+      <form action={saveCourseUnlocksAction} id="course-unlocks" className="scroll-mt-20">
+        <Panel
+          icon={LockOpenIcon}
+          tone="success"
+          title="Course unlocks: post to open the next day"
+          sub="Your 7-day course opens one day at a time, by posting. Each day ends with the member's post in that day's section. They paste its link in Your path, and that ticks their post, and fires the Zapier link below, which opens the next day's lesson in Skool and that day's bonus lesson. ReelVault and the app's tools are open from the start, so nothing in the app waits on a post. The app never signs in to Skool: members paste their own links."
+          action={<SubmitButton size="sm" variant="outline">Save</SubmitButton>}
+        >
+          <div className="flex flex-col gap-5">
+            <Label className="flex items-center gap-2.5 font-normal">
+              <input type="checkbox" name="on" defaultChecked={course.on} /> Turn course unlocks on
+            </Label>
+            <span className="-mt-3 text-xs text-muted-foreground">
+              {course.on ? "On now: each day's post is a pasted link that opens the next day in Skool." : "Off now: members tick their posts on their word."}{" "}
+              {group ? `Links must be posts in skool.com/${group} (from SKOOL_GROUP_URL).` : null}
+            </span>
+            {blocker ? (
+              <Callout tone="warn" title="Course unlocks can't go on yet">
+                {blocker}
+                {course.on ? " Until then members can't paste post links, so nothing opens." : ""}
+              </Callout>
+            ) : null}
+            {missingHooks.length ? (
+              <Callout tone="warn" title={`No Zapier link for Day ${missingHooks.join(", Day ")}`}>
+                Course unlocks are on, so members finishing {missingHooks.length === 1 ? "that day" : "those days"} get nothing opened in Skool. Add the link below and press Save, then use Send again on their posts under Course post links.
+              </Callout>
+            ) : null}
+            <ol className="flex list-decimal flex-col gap-1.5 rounded-xl bg-muted/40 py-4 pr-4 pl-9 text-[13px] leading-relaxed ring-1 ring-ink/[0.03] ring-inset dark:ring-white/[0.04]">
+              <li>You need Skool&apos;s Pro plan: Zapier only works with Pro groups.</li>
+              <li>In Skool › Classroom, set the Day 2 to Day 7 courses to Private (course settings › Access › Private). Skool can only unlock Private courses. Day 1 stays open.</li>
+              <li>In Zapier, make one Zap per day. Trigger: Webhooks by Zapier › Catch Hook. Copy its URL into that day below.</li>
+              <li>Press Save here, then paste a test post link for that day in your own Your path, so Zapier sees one sample: email, name, day and post_url.</li>
+              <li>Action: Skool › Unlock Course for Member. Pick your group, pick the next day&apos;s course (the Day 1 link opens Day 2), and set Email to the hook&apos;s email. Add a second Unlock Course for Member step for that day&apos;s bonus lesson (Day 1: Steal the Hook, Day 2: Ten Posts From One Reel, Day 3: The Text That Gets a Reply, Day 4: The About Page Swipe, Day 5: Your Second Week), set to Private too. Turn the Zap on.</li>
+              <li>Day 7&apos;s link is optional: point it at a bonus course, or leave it empty.</li>
+            </ol>
+            <div className="grid gap-4 @2xl/main:grid-cols-2">
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                <Field key={d}>
+                  <FieldLabel htmlFor={`hook${d}`}>Day {d} Zapier link</FieldLabel>
+                  <Input id={`hook${d}`} name={`hook${d}`} type="url" defaultValue={course.hooks[String(d)] ?? ""} placeholder="https://hooks.zapier.com/hooks/catch/…" className="font-mono text-xs" />
+                  <FieldDescription>
+                    Fires when a member finishes Day {d}.{" "}
+                    {d < 7 ? `Point it at Skool › Unlock Course for Member for Day ${d + 1}.` : "Point it at a bonus course, or leave it empty."}
+                  </FieldDescription>
+                </Field>
+              ))}
+            </div>
+          </div>
+        </Panel>
+      </form>
+
+      <Panel icon={GraduationCapIcon} title="Course post links" sub="Every day's post link members pasted, for spot-checks. A flagged one (a link they already used, or someone else's post) fired nothing: look at it in Skool, then approve it if it's fine.">
+        {courseClaims.length === 0 ? (
+          <Empty icon={GraduationCapIcon} tone="muted" title="No post links yet" body="They show up here as members paste them in Your path." />
+        ) : (
+          <EdgeTable>
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Member</TableHead>
+                  <TableHead>Day</TableHead>
+                  <TableHead>Link</TableHead>
+                  <TableHead className="hidden @2xl/main:table-cell">When</TableHead>
+                  <TableHead className="text-right">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {courseClaims.map((c) => (
+                  <TableRow key={`${c.workspaceId}-${c.day}`}>
+                    <TableCell className="py-2.5">
+                      <div className="grid min-w-0 leading-tight">
+                        <span className="max-w-56 truncate font-medium">{c.name || c.email}</span>
+                        <span className="mt-0.5 max-w-56 truncate text-xs text-muted-foreground">{c.name ? `${c.email} · ` : ""}{c.workspace}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="tabular-nums">{c.day}</TableCell>
+                    <TableCell>
+                      <a href={c.url} target="_blank" rel="noreferrer" className="inline-flex max-w-56 items-center gap-1 truncate text-[13px]">
+                        <span className="truncate">{c.url.replace(/^https:\/\/(www\.)?/, "")}</span>
+                        <ExternalLinkIcon className="size-3 shrink-0" aria-hidden />
+                      </a>
+                    </TableCell>
+                    <TableCell className="hidden text-[13px] text-subtle-foreground @2xl/main:table-cell">{relativeTime(new Date(c.at))}</TableCell>
+                    <TableCell className="text-right">
+                      {(() => {
+                        const st = courseClaimStatus(c);
+                        const variant = st.tone === "danger" ? "destructive" : st.tone === "muted" ? "secondary" : st.tone;
+                        return (
+                          <div className="flex flex-col items-end gap-1.5">
+                            <Badge variant={variant} title={c.hook?.error || undefined}>{st.label}</Badge>
+                            {c.hook?.state === "failed" && c.hook.error ? <span className="max-w-56 truncate text-xs text-muted-foreground">{c.hook.error}</span> : null}
+                            {c.flagged ? (
+                              <form action={approveCoursePostAction.bind(null, c.workspaceId, c.day)}>
+                                <SubmitButton size="sm" variant="outline">Looks fine, open the next day</SubmitButton>
+                              </form>
+                            ) : st.canResend ? (
+                              <form action={resendCoursePostAction.bind(null, c.workspaceId, c.day)}>
+                                <SubmitButton size="sm" variant="outline">Send again</SubmitButton>
+                              </form>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </EdgeTable>
+        )}
+      </Panel>
 
       <SkoolInviteCard
         connected={await platformInviteHint()}

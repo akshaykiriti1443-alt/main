@@ -24,8 +24,23 @@ import { getDb } from "@/lib/db";
 import { aiGenerations } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 import { requireWorkspace } from "@/server/tenancy";
-import { dealFor, getLaunchKit, kitWebsite, termsCheck, trialInOffer, type LaunchKitInput } from "@/server/ai/launchKit";
-import { siteBaseUrl } from "@/server/sites";
+import {
+  LEAD_MAGNET_FRAMEWORKS,
+  SKOOL_DESCRIPTION_MAX,
+  cleanPrice,
+  coverHeadlineFor,
+  dealFor,
+  frameworkOf,
+  getLaunchKit,
+  groupDescriptionFor,
+  kitWebsite,
+  termsCheck,
+  trialInOffer,
+  type LaunchKitInput,
+  type LeadMagnetFramework,
+} from "@/server/ai/launchKit";
+import { businessContext } from "@/server/ai/businessContext";
+import { accountSkoolUrl, siteBaseUrl } from "@/server/sites";
 import { Callout, Flash, IconTile, MoreOptions, NextStep, PageHead, Panel, StepDot } from "@/components/ui";
 import { CopyButton } from "@/components/client";
 import { Badge } from "@/components/ui/badge";
@@ -35,10 +50,14 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { aiRunsFor } from "../ai/runs";
-import { OutOfRunsCard, RunsNote } from "../ai/runs-card";
+import { AiGateCard, RunsNote } from "../ai/runs-card";
+import { connectorInUse } from "@/server/connectors";
+import { hasCoverPhoto } from "@/server/cover/photo";
 import { buildLaunchKitAction, buildStarterKitAction } from "./actions";
 import { DEFAULT_TRIAL_DAYS, TRIAL_CHOICES } from "./deal";
+import { CoverMaker } from "./cover-maker";
 import { KitButtons } from "./kit-buttons";
+import { SuggestAnswers } from "./kit-suggest";
 
 export const maxDuration = 300;
 
@@ -72,6 +91,12 @@ function Step({ n, title, hint, children }: { n: number; title: string; hint?: s
 
 const YOU_GET = ["Your website, ready to publish", "Your free checklist", "3 follow-up emails", "Your Skool About page"];
 const trialLabel = (d: number) => (d === 0 ? "No free trial" : `${d}-day free trial`);
+/** A price in an offer line they saved ("$29 a month"), for the price box. Empty when there's none. */
+const priceIn = (offer: string) => cleanPrice(offer.match(/[$£€₹]\s?\d[\d,.]*/)?.[0] ?? "");
+const FRAMEWORK_CHOICES: { id: LeadMagnetFramework; title: string; body: string }[] = [
+  { id: "domino", title: `${LEAD_MAGNET_FRAMEWORKS.domino.label} (recommended)`, body: LEAD_MAGNET_FRAMEWORKS.domino.short },
+  { id: "wide", title: LEAD_MAGNET_FRAMEWORKS.wide.label, body: LEAD_MAGNET_FRAMEWORKS.wide.short },
+];
 
 export default async function LaunchPage({ params, searchParams }: { params: Promise<{ wid: string }>; searchParams: Promise<Record<string, string>> }) {
   const { wid } = await params;
@@ -84,18 +109,22 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
     .where(and(eq(aiGenerations.workspaceId, wid), eq(aiGenerations.kind, "launch_kit")))
     .orderBy(desc(aiGenerations.createdAt))
     .limit(1);
-  const [result, lastKit, runs] = await Promise.all([
+  const [result, lastKit, runs, claude] = await Promise.all([
     sp.new ? null : getLaunchKit(wid, sp.kit ?? latest?.id ?? ""),
     latest ? getLaunchKit(wid, latest.id) : null,
     aiRunsFor(workspace),
+    connectorInUse(wid),
   ]);
 
   if (!result) {
     const s = workspace.settings;
+    // What the member already told us anywhere in the app, so a first kit never asks twice.
+    const [ctx, skoolLink] = await Promise.all([businessContext(wid), accountSkoolUrl(wid, s.skoolUrl)]);
     // What they typed (sent back after an error), else their last kit's answers, else what the account knows.
     const last: Partial<LaunchKitInput> = lastKit?.input ?? {};
-    const lastDeal = lastKit ? dealFor({ offer: last.offer ?? "", price: last.price, trialDays: last.trialDays }) : trialInOffer(s.offer ?? "");
-    const v = (k: keyof LaunchKitInput, fallback = "") => sp[k] ?? (last[k] !== undefined && last[k] !== null ? String(last[k]) : fallback);
+    const lastDeal = lastKit ? dealFor({ offer: last.offer ?? "", price: last.price, trialDays: last.trialDays }) : trialInOffer(ctx.offer);
+    const v = (k: keyof LaunchKitInput, fallback = "") => sp[k] ?? (last[k] !== undefined && last[k] !== null && last[k] !== "" ? String(last[k]) : fallback);
+    const framework = frameworkOf(v("leadMagnetFramework", "domino"));
     const trialDefault = sp.trialDays ?? String(lastDeal?.days ?? DEFAULT_TRIAL_DAYS);
     // A trial length they saved before that isn't on the menu stays pickable, so a rebuild never changes it quietly.
     const saved = Number(trialDefault);
@@ -120,7 +149,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
           }
         />
         <Flash searchParams={sp} />
-        <OutOfRunsCard runs={runs} wid={wid} then="come back and press Build my launch kit" />
+        <AiGateCard runs={runs} wid={wid} claude={claude} job="launch_kit" then="come back and press Build my launch kit" />
 
         {/* What you get, as a strip on narrow pages (the side card shows on wide ones). */}
         <ul className="-mt-2 flex flex-wrap gap-2 @4xl/main:hidden" aria-label="What you get">
@@ -142,11 +171,11 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                   <div className="grid gap-5 @2xl/main:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="businessName">Community name</FieldLabel>
-                      <Input id="businessName" name="businessName" required minLength={2} maxLength={80} defaultValue={v("businessName", s.businessName ?? workspace.name)} />
+                      <Input id="businessName" name="businessName" required minLength={2} maxLength={80} defaultValue={v("businessName", ctx.businessName || workspace.name)} />
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="ownerName">Your name</FieldLabel>
-                      <Input id="ownerName" name="ownerName" required maxLength={60} defaultValue={v("ownerName", user.name)} />
+                      <Input id="ownerName" name="ownerName" required maxLength={60} defaultValue={v("ownerName", ctx.ownerName || user.name || "")} />
                     </Field>
                   </div>
                 </Step>
@@ -155,33 +184,64 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                   <div className="grid gap-5 @2xl/main:grid-cols-2">
                     <Field className="@2xl/main:col-span-2">
                       <FieldLabel htmlFor="niche">What do you help with?</FieldLabel>
-                      <Input id="niche" name="niche" required minLength={3} maxLength={160} placeholder="Fat loss for busy dads" defaultValue={v("niche", s.niche ?? "")} />
+                      <Input id="niche" name="niche" required minLength={3} maxLength={160} placeholder="Fat loss for busy dads" defaultValue={v("niche", ctx.niche)} />
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="audience">Who is it for?</FieldLabel>
-                      <Input id="audience" name="audience" required minLength={3} maxLength={200} placeholder="Dads 30-50 with desk jobs" defaultValue={v("audience", s.audience ?? "")} />
+                      <Input id="audience" name="audience" required minLength={3} maxLength={200} placeholder="Dads 30-50 with desk jobs" defaultValue={v("audience", ctx.audience)} />
+                      <SuggestAnswers wid={wid} field="audience" what="who it's for" />
                     </Field>
                     <Field>
                       <FieldLabel htmlFor="outcome">What result do they want?</FieldLabel>
-                      <Input id="outcome" name="outcome" required minLength={3} maxLength={200} placeholder="Lose 10 lbs in 8 weeks without a gym" defaultValue={v("outcome")} />
+                      <Input id="outcome" name="outcome" required minLength={3} maxLength={200} placeholder="Lose 10 lbs in 8 weeks without a gym" defaultValue={v("outcome", ctx.outcome)} />
+                      <SuggestAnswers wid={wid} field="outcome" what="a result" />
+                    </Field>
+                    <Field className="@2xl/main:col-span-2">
+                      <FieldLabel htmlFor="coverHeadline">
+                        Cover headline <span className="font-normal text-muted-foreground">(or leave it blank and AI writes it)</span>
+                      </FieldLabel>
+                      <Input id="coverHeadline" name="coverHeadline" maxLength={40} placeholder="Strong in 3 sessions a week" defaultValue={v("coverHeadline")} />
+                      <FieldDescription>The big words on your Skool cover: the result, in 4 to 8 words. A number helps, if it&apos;s true.</FieldDescription>
+                      <SuggestAnswers wid={wid} field="coverHeadline" what="a headline" />
                     </Field>
                   </div>
                 </Step>
 
-                <Step n={3} title="Your free checklist" hint="People get it free on your website in return for their email. It's what your Day 1 ads offer.">
-                  <Field>
-                    <FieldLabel htmlFor="leadMagnetIdea">
-                      Name your free checklist <span className="font-normal text-muted-foreground">(or leave it blank and AI names it)</span>
-                    </FieldLabel>
-                    <Input id="leadMagnetIdea" name="leadMagnetIdea" maxLength={200} placeholder="The 7-Day Dad Reset" defaultValue={v("leadMagnetIdea")} />
-                  </Field>
+                <Step n={3} title="Your free checklist" hint="People get it free on your website in return for their email. It's what your Day 2 ads offer.">
+                  <div className="flex flex-col gap-5">
+                    <fieldset className="flex flex-col gap-3">
+                      <legend className="mb-3 text-sm font-medium">How should your free checklist work?</legend>
+                      <div className="grid gap-3 @2xl/main:grid-cols-2">
+                        {FRAMEWORK_CHOICES.map((c) => (
+                          <label
+                            key={c.id}
+                            className="flex cursor-pointer items-start gap-3 rounded-xl bg-background/60 p-4 ring-1 ring-border transition-colors ring-inset hover:bg-accent/40 has-[:checked]:bg-accent/50 has-[:checked]:ring-2 has-[:checked]:ring-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary dark:bg-white/[0.02]"
+                          >
+                            <input type="radio" name="leadMagnetFramework" value={c.id} defaultChecked={framework === c.id} className="mt-1 size-4 shrink-0 accent-primary" />
+                            <span className="grid gap-1">
+                              <span className="text-[14px] font-semibold">{c.title}</span>
+                              <span className="text-[13px] leading-relaxed text-muted-foreground">{c.body}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <FieldDescription>Not sure? Keep the domino. It&apos;s what the course teaches.</FieldDescription>
+                    </fieldset>
+                    <Field>
+                      <FieldLabel htmlFor="leadMagnetIdea">
+                        Name your free checklist <span className="font-normal text-muted-foreground">(or leave it blank and AI names it)</span>
+                      </FieldLabel>
+                      <Input id="leadMagnetIdea" name="leadMagnetIdea" maxLength={200} placeholder="The 7-Day Dad Reset" defaultValue={v("leadMagnetIdea")} />
+                      <SuggestAnswers wid={wid} field="leadMagnetIdea" what="a name" />
+                    </Field>
+                  </div>
                 </Step>
 
                 <Step n={4} title="Your paid Skool group" hint="Your thank-you page states your price, your free trial and how to cancel, right above the Join button.">
                   <div className="grid gap-5 @2xl/main:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="price">What will you charge a month?</FieldLabel>
-                      <Input id="price" name="price" required inputMode="decimal" maxLength={20} pattern=".*[1-9].*" placeholder="$29" className="tabular-nums" defaultValue={sp.price ?? lastDeal?.price ?? ""} />
+                      <Input id="price" name="price" required inputMode="decimal" maxLength={20} pattern=".*[1-9].*" placeholder="$29" className="tabular-nums" defaultValue={sp.price ?? lastDeal?.price ?? priceIn(ctx.offer)} />
                       <FieldDescription>The same price you set in Skool, like $29.</FieldDescription>
                     </Field>
                     <Field>
@@ -196,10 +256,17 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
                       <FieldDescription>The course uses a 7-day free trial. Match what you switch on in Skool.</FieldDescription>
                     </Field>
                     <Field className="@2xl/main:col-span-2">
+                      <FieldLabel htmlFor="groupWeekly">
+                        What happens inside your group each week? <span className="font-normal text-muted-foreground">(optional)</span>
+                      </FieldLabel>
+                      <Input id="groupWeekly" name="groupWeekly" maxLength={200} placeholder="A weekly live class, a new lesson, feedback on your work" defaultValue={v("groupWeekly")} />
+                      <FieldDescription>Your Skool About page and your website list exactly this. Blank? They keep it general and promise nothing weekly.</FieldDescription>
+                    </Field>
+                    <Field className="@2xl/main:col-span-2">
                       <FieldLabel htmlFor="skoolUrl">
                         Your Skool group link <span className="font-normal text-muted-foreground">(if you have it yet)</span>
                       </FieldLabel>
-                      <Input id="skoolUrl" name="skoolUrl" type="url" maxLength={300} placeholder="https://www.skool.com/your-group/about" defaultValue={sp.skoolUrl ?? s.skoolUrl ?? ""} />
+                      <Input id="skoolUrl" name="skoolUrl" type="url" maxLength={300} placeholder="https://www.skool.com/your-group/about" defaultValue={sp.skoolUrl ?? (skoolLink || ctx.skoolUrl)} />
                       <FieldDescription>Every Join button points here. No group yet? Leave it blank and save the link in Settings once your group is open.</FieldDescription>
                     </Field>
                   </div>
@@ -224,8 +291,8 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
               </CardContent>
               <CardFooter className="flex-col items-start gap-3 border-border/80 bg-background/60 py-5 md:px-8 dark:bg-white/[0.02]">
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-                  <KitButtons starterAction={buildStarterKitAction.bind(null, wid)} rebuild={rebuild} aiDisabled={outOfRuns} offerStarter={outOfRuns || aiFailed} />
-                  <RunsNote runs={runs} wid={wid} />
+                  <KitButtons starterAction={buildStarterKitAction.bind(null, wid)} rebuild={rebuild} aiDisabled={outOfRuns} offerStarter={outOfRuns || aiFailed} noAi={runs.kind === "off"} />
+                  <RunsNote runs={runs} wid={wid} claude={claude} />
                 </div>
                 <p className="max-w-[70ch] text-xs leading-relaxed text-muted-foreground">
                   {aiFailed
@@ -266,11 +333,13 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
   }
 
   const { kit } = result;
-  const web = await kitWebsite(wid);
+  const [web, coverPhoto] = await Promise.all([kitWebsite(wid), hasCoverPhoto(wid)]);
   const site = web?.site ?? null;
   const live = site?.published ? siteBaseUrl(site) : null;
   const deal = dealFor({ offer: result.input.offer ?? "", price: result.input.price, trialDays: result.input.trialDays });
   const adsText = kit.ads.map((a, i) => `${a.angle ? ANGLE_LABEL[a.angle].toUpperCase() : `AD ${i + 1}`}\nPrimary text:\n${adText(a)}\n\nHeadline: ${a.headline}\nDescription: ${a.description}`).join("\n\n---\n\n");
+  // Kits from before the description was written get one made from their answers.
+  const groupDescription = groupDescriptionFor(kit, result.input);
   const emailsText = kit.emails.map((e, i) => `EMAIL ${i + 1}: ${e.subject}\n\n${e.body}`).join("\n\n---\n\n");
 
   return (
@@ -293,7 +362,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
 
       {site ? (
         <NextStep
-          eyebrow="Up next · Day 1"
+          eyebrow="Up next · Day 2"
           title="Review and publish your website"
           body="Your pages are written. Change three lines (headline, who it's for, button), then press Publish."
           href={`/app/w/${wid}/sites/${site.id}`}
@@ -305,7 +374,7 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
       <DealPanel wid={wid} deal={deal} siteId={site?.id ?? null} thankYou={web?.thankYou ?? null} />
 
       <div className="grid gap-6 @3xl/main:grid-cols-2">
-        <Panel icon={ClipboardCheckIcon} tone="gold" title="Your free checklist" sub="What people get on your website for their email. Your Day 1 ads offer it by this name.">
+        <Panel icon={ClipboardCheckIcon} tone="gold" title="Your free checklist" sub="What people get on your website for their email. Your Day 2 ads offer it by this name.">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[17px] font-semibold tracking-[-0.012em]">{kit.leadMagnetName}</span>
             <Badge variant="gold">Free checklist</Badge>
@@ -328,12 +397,38 @@ export default async function LaunchPage({ params, searchParams }: { params: Pro
           <Copy text={kit.leadMagnetContent} />
         </Panel>
 
-        <Panel icon={GraduationCapIcon} title="Your Skool About page" sub="Copy this and paste it into your Skool group's About page, so the page your ads and Join buttons lead to says the same thing.">
-          <Copy text={kit.skoolAboutPage} />
+        <Panel
+          icon={GraduationCapIcon}
+          title="Your Skool About page"
+          sub="Copy this and paste it into your Skool group's About page, so the page your ads and Join buttons lead to says the same thing."
+          action={<CopyButton text={kit.skoolAboutPage} label="Copy About page" />}
+        >
+          <div className="max-h-96 overflow-y-auto rounded-xl bg-background/70 px-4 py-3.5 text-sm leading-relaxed break-words whitespace-pre-wrap ring-1 ring-ink/[0.06] ring-inset dark:bg-white/[0.02] dark:ring-white/[0.07]">{kit.skoolAboutPage}</div>
+          <div className="flex min-w-0 flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11.5px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">Skool group description</span>
+              <CopyButton text={groupDescription} label="Copy description" />
+            </div>
+            <div className="rounded-xl bg-background/70 px-4 py-3.5 text-sm leading-relaxed break-words ring-1 ring-ink/[0.06] ring-inset dark:bg-white/[0.02] dark:ring-white/[0.07]">{groupDescription}</div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Paste it in Skool › Settings › General, as your group&apos;s description.{" "}
+              <span className="tabular-nums">
+                {groupDescription.length} of {SKOOL_DESCRIPTION_MAX} characters
+              </span>
+              , Skool&apos;s limit.
+            </p>
+          </div>
+          <CoverMaker
+            wid={wid}
+            kitId={result.id}
+            photo={coverPhoto}
+            headline={coverHeadlineFor(kit, result.input)}
+            context={{ businessName: result.input.businessName ?? "", niche: result.input.niche ?? "", audience: result.input.audience ?? "", outcome: result.input.outcome ?? "" }}
+          />
         </Panel>
       </div>
 
-      <Panel icon={ImageIcon} tone="success" title="Your ads come from Ad studio" sub="Not from this kit. Today's five ads are made in Ad research and Ad studio, right after your Pixel.">
+      <Panel icon={ImageIcon} tone="success" title="Your ads come from Ad studio" sub="Not from this kit. Your five Day 2 ads are made in Ad research and Ad studio, right after your Pixel.">
         <ol className="flex flex-col gap-2.5">
           {[
             <>

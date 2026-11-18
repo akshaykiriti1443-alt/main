@@ -6,7 +6,7 @@ import { setAccountSkoolUrl } from "@/server/sites";
 import { isSkoolUrl } from "@/server/growth";
 import { isUuid } from "@/lib/util";
 import { parsePastedAds, type ResearchAd } from "@/server/ai/adResearch";
-import { latestResearchAds, makeAdStudioPack, STUDIO_DESTINATIONS, type StudioDestination } from "@/server/ai/adStudio";
+import { latestResearchAds, makeAdStudioPack, rememberAdCountry, STUDIO_DESTINATIONS, type StudioDestination } from "@/server/ai/adStudio";
 import { provenHooksFromForm } from "@/server/reelvault";
 import { field, go } from "./helpers";
 
@@ -55,12 +55,14 @@ export async function adStudioAction(wid: string, fd: FormData) {
   // the account's offer is the paid deal from the launch kit, and a pack's offer follows where its ads go.
   const s = workspace.settings;
   const skoolUrl = field(fd, "skoolUrl", 300);
-  if (skoolUrl && !isSkoolUrl(skoolUrl)) go(back, { error: "Your Skool link must be a skool.com link, like https://www.skool.com/your-group" });
+  if (skoolUrl && !isSkoolUrl(skoolUrl)) go(back, { error: "Your Skool link must be a skool.com link, like https://www.skool.com/your-group/about" });
   const patch = {
     ...(!s.niche && answers.niche ? { niche: answers.niche } : {}),
     ...(!s.audience && answers.audience ? { audience: answers.audience } : {}),
   };
   if (Object.keys(patch).length) await updateWorkspaceSettings(wid, patch);
+  // Ad research starts on this country next time.
+  await rememberAdCountry(wid, answers.country);
   // One link per account: the Join buttons on their website use it too.
   if (!s.skoolUrl && skoolUrl) await setAccountSkoolUrl(wid, skoolUrl);
 

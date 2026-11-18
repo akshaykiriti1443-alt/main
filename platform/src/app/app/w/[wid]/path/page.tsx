@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowRightIcon, CheckIcon, ChevronDownIcon, FlagIcon, TrendingUpIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, ChevronDownIcon, Clock3Icon, FlagIcon, TrendingUpIcon } from "lucide-react";
 import { requireWorkspace } from "@/server/tenancy";
-import { loadPath } from "@/server/path";
+import { loadPath, pathIntro } from "@/server/path";
 import { startDayAction } from "@/actions/journey";
 import { cn } from "@/lib/utils";
 import { fill, JOURNEY_COPY } from "@/lib/week";
@@ -34,7 +34,7 @@ export default async function PathPage({ params, searchParams }: { params: Promi
 
   return (
     <>
-      <PageHead eyebrow={C.eyebrow} title={C.title} sub={C.sub} />
+      <PageHead eyebrow={C.eyebrow} title={C.title} sub={pathIntro(path)} />
       <Flash searchParams={await searchParams} />
 
       <div className="flex flex-col gap-3">
@@ -94,6 +94,13 @@ export default async function PathPage({ params, searchParams }: { params: Promi
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="text-[11.5px] font-semibold tracking-[0.12em] text-muted-foreground uppercase">{fill(C.dayTag, { day: day.day })}</span>
                       {isCurrent ? <Badge variant="soft">{C.youreHere}</Badge> : day.complete ? <Badge variant="success">{C.done}</Badge> : null}
+                      {/* Course unlocks: when this day's lesson opens in Skool. The app's tools stay open. */}
+                      {day.opens && !day.complete ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock3Icon className="size-3" aria-hidden />
+                          {day.opens}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="text-[16.5px] leading-snug font-semibold tracking-[-0.011em]">{day.title}</span>
                   </span>

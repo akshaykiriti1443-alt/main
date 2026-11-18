@@ -10,7 +10,7 @@ import { allWeekStrings, postFor, WEEK } from "@/lib/week";
 import { CANCEL_ROUTE, IF_YOU_CANCEL } from "@/lib/leaving";
 import { firstEightDayMembers } from "@/server/admin";
 import { runAdReview } from "@/server/ai/adReview";
-import { buildPrompt, fallbackKit, funnelPagesFromKit, trialInOffer, withTrialTerms } from "@/server/ai/launchKit";
+import { buildPrompt, fallbackKit, frameworkOf, funnelPagesFromKit, launchKitInputSchema, LEAD_MAGNET_FRAMEWORKS, trialInOffer, withTrialTerms } from "@/server/ai/launchKit";
 import { fallbackReply } from "@/server/ai/replies";
 import { DEFAULT_SEQUENCE } from "@/server/defaults";
 import { leadsCsv } from "@/server/contacts";
@@ -61,12 +61,14 @@ describe("the week's words press nobody", () => {
     }
   });
 
-  it("uses the course's seven section names and puts the member's own website in the post", () => {
-    expect(WEEK.map((d) => d.section)).toEqual(["Day 1: 5-Second Test", "Day 2: Thumb-Stop Vote", "Day 3: Live or Stuck", "Day 4: Would You Answer?", "Day 5: Would You Reply?", "Day 6: Three Numbers", "Day 7: Before and After"]);
-    expect(postFor(1, "https://fit-dads.example.com")).toContain("My website: https://fit-dads.example.com");
+  it("uses the course's seven section names and puts the member's own website and group in the post", () => {
+    expect(WEEK.map((d) => d.section)).toEqual(["Day 1: My First Post", "Day 2: Website + Ads Live", "Day 3: Live or Stuck", "Day 4: Would You Answer?", "Day 5: Would You Reply?", "Day 6: Three Numbers", "Day 7: Before and After"]);
+    expect(postFor(2, "https://fit-dads.example.com")).toContain("My website: https://fit-dads.example.com");
     expect(postFor(3, "https://fit-dads.example.com")).toContain("Live: https://fit-dads.example.com");
-    expect(postFor(1)).toContain("[your link]");
-    for (const d of WEEK) expect(postFor(d.day), `Day ${d.day}`).not.toContain("{website}");
+    expect(postFor(1, undefined, "https://www.skool.com/fit-dads")).toContain("My group: https://www.skool.com/fit-dads");
+    expect(postFor(1)).toContain("My group: [your link]");
+    expect(postFor(2)).toContain("[your link]");
+    for (const d of WEEK) expect(postFor(d.day), `Day ${d.day}`).not.toMatch(/\{(website|group)\}/);
   });
 });
 
@@ -79,7 +81,7 @@ describe("nothing locks, and working ahead counts", () => {
     for (const n of [1, 2, 5, 9, 30]) {
       const p = await computePath(onDay(started, n), user.id);
       for (const s of [...p.days.flatMap((d) => d.steps), ...p.after]) expect(s, `${s.key} on Day ${n}`).not.toHaveProperty("locked");
-      // The free key is still Day 1's first step, whatever the date.
+      // Connecting Claude is still the first open step of Day 1, whatever the date.
       expect(p.current?.key, `Day ${n}`).toBe("ai");
     }
   });
@@ -239,7 +241,7 @@ describe("honest about money, across the app", () => {
     // Its day titles are the app's own (src/lib/week.ts), so the two can never disagree.
     expect(page).toContain('import { WEEK } from "@/lib/week"');
     expect(page).toContain("title: dayTitle(7)");
-    expect(WEEK[6].title).toBe("The scoreboard, and your decision");
+    expect(WEEK[6].title).toBe("The Level 2 checkpoint, and your decision");
     expect(page).not.toMatch(/Launch Week|Teardown|Lesson \d\.\d|Day 9|No Pixel needed/);
   });
 
@@ -252,6 +254,17 @@ describe("honest about money, across the app", () => {
       expect(prompt).not.toContain("7-day free trial");
       expect(prompt).toContain("(a paid Skool membership, no details given)");
       expect(prompt).toContain("only if the offer line above states it");
+    });
+
+    it("builds the free checklist on the owner's framework: the domino unless the member picks go wide", () => {
+      expect(buildPrompt(input)).toContain(`Free checklist framework: ${LEAD_MAGNET_FRAMEWORKS.domino.prompt}`);
+      expect(buildPrompt({ ...input, leadMagnetFramework: "wide" })).toContain(`Free checklist framework: ${LEAD_MAGNET_FRAMEWORKS.wide.prompt}`);
+      expect(LEAD_MAGNET_FRAMEWORKS.domino.prompt).toMatch(/next problem/);
+      // A blank or unknown pick from a form is the domino, never an error.
+      const base = { businessName: "Fit Dads", ownerName: "Sam", niche: "fitness for dads", audience: "busy dads", outcome: "lose the dad belly" };
+      expect(launchKitInputSchema.parse({ ...base, leadMagnetFramework: "" }).leadMagnetFramework).toBeUndefined();
+      expect(launchKitInputSchema.parse({ ...base, leadMagnetFramework: "wide" }).leadMagnetFramework).toBe("wide");
+      expect(frameworkOf(undefined)).toBe("domino");
     });
 
     it("the offer a member typed goes to the AI in their words", () => {

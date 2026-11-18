@@ -137,7 +137,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
         ? { title: firstName ? fill(H.firstTitle, { name: firstName }) : H.firstTitleNoName, sub: H.firstSub }
         : { title: fill(H.doingTitle, { day: day.day, title: day.title }), sub: day.done === 0 && day.day > 1 ? fill(H.newDaySub, { prev: day.day - 1 }) : fill(H.doingSub, { done: day.done, total: day.total }) };
     const captionDay = finished ?? day;
-    const clicksStep = path.days[0].steps.find((s) => s.key === "clicks");
+    const clicksStep = path.days.flatMap((d) => d.steps).find((s) => s.key === "clicks");
     return (
       <>
         <PageHead eyebrow={workspace.name} title={head.title} sub={head.sub} />

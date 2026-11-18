@@ -21,6 +21,7 @@ import { requireWorkspace } from "@/server/tenancy";
 import { skoolLinkFor } from "@/server/growth";
 import { launchDay } from "@/server/path";
 import { adTotals, computeMetrics, doNextNote, spendFrom, twoSums, type AdCall, type AdReview, type PriceLine } from "@/server/ai/adReview";
+import { adLaunchDates, daysRunningSince, listAdStudioPacks, reviewAdChoices } from "@/server/ai/adStudio";
 import { adReviewAction } from "@/actions/marketing";
 import { isUuid } from "@/lib/util";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { AdPick } from "./ad-pick";
 
 export const metadata = { title: "Ad review" };
 export const maxDuration = 300;
@@ -56,12 +58,12 @@ const CALL_TONE: Record<AdCall, { badge: "success" | "warning" | "destructive" |
 
 /** The numbers Meta shows you, in the order the course quotes them. Leads: blank means "not known". */
 const MAIN: { name: string; label: string; step: string; required?: boolean; placeholder?: string; hint?: string }[] = [
-  { name: "spend", label: "Spend ($)", step: "0.01", required: true, hint: "Amount spent, in Ads Manager." },
-  { name: "days", label: "Days running", step: "1", required: true },
-  { name: "impressions", label: "Impressions", step: "1", required: true },
-  { name: "linkClicks", label: "Link clicks", step: "1", required: true },
-  { name: "leads", label: "Leads", step: "1", placeholder: "Not sure", hint: "Website ads: this ad's own leads (Results, on a Leads campaign). Not sure? Leave it blank." },
-  { name: "members", label: "New members", step: "1", placeholder: "Not sure", hint: "Joins in Skool since your ads went live." },
+  { name: "spend", label: "Spend ($)", step: "0.01", required: true, placeholder: "e.g. 18.40", hint: "Amount spent, in Ads Manager." },
+  { name: "days", label: "Days running", step: "1", required: true, placeholder: "e.g. 4" },
+  { name: "impressions", label: "Impressions", step: "1", required: true, placeholder: "e.g. 2400" },
+  { name: "linkClicks", label: "Link clicks", step: "1", required: true, placeholder: "e.g. 31" },
+  { name: "leads", label: "Leads", step: "1", placeholder: "e.g. 3, or blank", hint: "Website ads: this ad's own leads (Results, on a Leads campaign). Not sure? Leave it blank." },
+  { name: "members", label: "New members", step: "1", placeholder: "e.g. 1, or blank", hint: "Joins in Skool since your ads went live." },
 ];
 
 const CHOICE =
@@ -77,7 +79,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
   const { workspace } = await requireWorkspace(wid);
   const db = await getDb();
   const cols = { id: aiGenerations.id, createdAt: aiGenerations.createdAt, input: aiGenerations.input, output: aiGenerations.output, model: aiGenerations.model };
-  const [[row], recent, totals] = await Promise.all([
+  const [[row], recent, totals, packs] = await Promise.all([
     db
       .select(cols)
       .from(aiGenerations)
@@ -91,6 +93,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
       .orderBy(desc(aiGenerations.createdAt))
       .limit(40),
     adTotals(wid),
+    listAdStudioPacks(wid, 20),
   ]);
   const review = row?.output as unknown as AdReview | undefined;
   const last = row?.input as Record<string, number | string> | undefined;
@@ -102,6 +105,11 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
   const webSpend = spendFrom(sp.web);
   const skoolSpend = spendFrom(sp.skool);
   const sums = twoSums({ webSpend, skoolSpend, ...totals });
+  // "Which ad?" offers the names Ad studio gave their ads; Days running counts from the day each kind went live.
+  const adChoices = reviewAdChoices(packs);
+  const launched = adLaunchDates(workspace.settings.journey, packs);
+  const launchDays = { optin: daysRunningSince(launched.optin), skool: daysRunningSince(launched.skool) };
+  const daysNow = launchDays[destination];
 
   // This week's verdicts: the latest review of each ad (by name), so Day 6 ends with one per ad.
   const seen = new Set<string>();
@@ -129,10 +137,14 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
         step={f.step}
         required={f.required}
         placeholder={f.placeholder}
-        defaultValue={f.name === "days" ? String(last?.days ?? 3) : f.name === "members" && last?.members !== undefined ? String(last.members) : undefined}
+        defaultValue={f.name === "days" ? String(daysNow ?? last?.days ?? 3) : f.name === "members" && last?.members !== undefined ? String(last.members) : undefined}
         className="tabular-nums"
       />
-      {f.hint ? <FieldDescription>{f.hint}</FieldDescription> : null}
+      {f.name === "days" && (launchDays.optin || launchDays.skool) ? (
+        <FieldDescription>Counted from the day your ads went live. Change it if that&apos;s off.</FieldDescription>
+      ) : f.hint ? (
+        <FieldDescription>{f.hint}</FieldDescription>
+      ) : null}
     </Field>
   );
 
@@ -157,14 +169,14 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
           <div className="grid items-start gap-4 @xl/main:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="web">Website ads: Amount spent ($)</FieldLabel>
-              <Input id="web" name="web" type="number" min={0} step="0.01" defaultValue={webSpend ?? ""} className="tabular-nums" />
+              <Input id="web" name="web" type="number" min={0} step="0.01" defaultValue={webSpend ?? ""} placeholder="e.g. 40.00" className="tabular-nums" />
               <FieldDescription>
                 Divided by your Leads from your ads: <b className="font-semibold text-foreground tabular-nums">{totals.adLeads.toLocaleString()}</b> so far.
               </FieldDescription>
             </Field>
             <Field>
               <FieldLabel htmlFor="skool">Skool ads: Amount spent ($)</FieldLabel>
-              <Input id="skool" name="skool" type="number" min={0} step="0.01" defaultValue={skoolSpend ?? ""} className="tabular-nums" />
+              <Input id="skool" name="skool" type="number" min={0} step="0.01" defaultValue={skoolSpend ?? ""} placeholder="e.g. 20.00" className="tabular-nums" />
               <FieldDescription>
                 Divided by your Skool link&apos;s visits from ads: <b className="font-semibold text-foreground tabular-nums">{totals.adVisits.toLocaleString()}</b> so far.
               </FieldDescription>
@@ -229,7 +241,7 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
             <div className="grid grid-cols-2 items-start gap-4">
               <Field>
                 <FieldLabel htmlFor="adName">Which ad?</FieldLabel>
-                <Input id="adName" name="adName" placeholder="Web S1" maxLength={80} />
+                <AdPick choices={adChoices} launchDays={launchDays} />
               </Field>
               <Field>
                 <FieldLabel htmlFor="fixes">Fixed it before?</FieldLabel>
@@ -247,11 +259,11 @@ export default async function AdsPage({ params, searchParams }: { params: Promis
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="followers">New followers</FieldLabel>
-                  <Input id="followers" name="followers" type="number" min={0} step="1" className="tabular-nums" />
+                  <Input id="followers" name="followers" type="number" min={0} step="1" placeholder="e.g. 12" className="tabular-nums" />
                 </Field>
                 <Field className="sm:col-span-2">
                   <FieldLabel htmlFor="totalSpent">Total spent on all ads so far ($)</FieldLabel>
-                  <Input id="totalSpent" name="totalSpent" type="number" min={0} step="0.01" className="tabular-nums" />
+                  <Input id="totalSpent" name="totalSpent" type="number" min={0} step="0.01" placeholder="e.g. 60.00" className="tabular-nums" />
                   <FieldDescription>Ads Manager, date range Maximum, your campaign&apos;s Amount spent. Blank is fine: we add up the ads you&apos;ve reviewed this week.</FieldDescription>
                 </Field>
                 <Field className="sm:col-span-2">

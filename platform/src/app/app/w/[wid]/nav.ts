@@ -25,6 +25,7 @@ export function workspaceNav(o: WorkspaceNavInput): NavGroup[] {
     path: { href: `${base}/path`, label: "Your path", icon: "route" },
     ai: { href: `${base}/ai`, label: "Your AI", icon: "bot" },
     launch: { href: `${base}/launch`, label: "AI launch kit", icon: "sparkles" },
+    carousel: { href: `${base}/carousel`, label: "Make my carousel", icon: "carousel" },
     sites: { href: `${base}/sites`, label: "Funnels & pages", icon: "globe" },
     research: { href: `${base}/ads/research`, label: "Ad research", icon: "search" },
     studio: { href: `${base}/ads/studio`, label: "Ad studio", icon: "palette" },
@@ -38,14 +39,17 @@ export function workspaceNav(o: WorkspaceNavInput): NavGroup[] {
   } satisfies Record<string, NavItem>;
   // ReelVault opens right inside the app (/reelvault), already signed in, with its screens as sub-items.
   // Only shown once the shared secret is set, so nobody is sent to a ReelVault that isn't there.
+  // It is open from the start, never locked.
   const reelVault: NavItem[] = o.reelVault ? [reelVaultNavItem(base)] : [];
 
   if (o.member) {
     // In the order the course's days first use them, and the same every day so nothing moves.
     // A Member never sees a Growth-plan tool, so there is nothing locked to show.
     const first: NavItem[] = [item.dashboard, item.path];
-    const week: NavItem[] = [item.ai, item.launch, item.sites, item.research, item.studio, item.leads, item.growth, item.unlocks, item.review];
-    const more: NavItem[] = [...reelVault, item.emails, item.settings, item.billing];
+    // Day 1 is the first post: find a reel that works in ReelVault (step 2), then Make my carousel,
+    // right after Your AI.
+    const week: NavItem[] = [item.ai, ...reelVault, item.carousel, item.launch, item.sites, item.research, item.studio, item.leads, item.growth, item.unlocks, item.review];
+    const more: NavItem[] = [item.emails, item.settings, item.billing];
     // Open "More" on the server when the next step lives there (the Pixel step is /settings#tracking),
     // so its glowing dot is visible on first paint.
     const next = matchNavItem([...first, ...week, ...more], o.nextHref);
@@ -64,6 +68,7 @@ export function workspaceNav(o: WorkspaceNavInput): NavGroup[] {
       items: [
         item.research,
         ...reelVault,
+        item.carousel,
         item.studio,
         item.review,
         item.growth,

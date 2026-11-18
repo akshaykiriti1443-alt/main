@@ -58,8 +58,8 @@ function Scene({ variant = "member" }: { variant?: "member" | "agency" }) {
         <>
           <div className={`${CARD} top-0 left-0 w-[82%] -rotate-[3deg] p-4`}>
             <div className="text-[10.5px] font-semibold tracking-[0.12em] text-accent-foreground uppercase">Up next · Day 1</div>
-            <div className="mt-1.5 font-display text-[24px] leading-[1.05]">Publish your website</div>
-            <div className="mt-1 text-[13px] text-muted-foreground">Edit three lines, then press the scary button.</div>
+            <div className="mt-1.5 font-display text-[24px] leading-[1.05]">Make your first post</div>
+            <div className="mt-1 text-[13px] text-muted-foreground">Turn the script you picked into slides, then post them.</div>
             <div className="mt-3.5 flex items-center gap-2">
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <span className="block h-full w-[22%] rounded-full bg-[linear-gradient(90deg,var(--violet-500),var(--pink-400))]" />

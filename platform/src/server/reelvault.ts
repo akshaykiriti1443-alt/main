@@ -209,6 +209,7 @@ export async function reelVaultAccessOk(user: { id: string; isPlatformAdmin: boo
   try {
     const tenancy = await import("@/server/tenancy");
     const unlocks = await import("@/server/unlocks");
+    // ReelVault is open from the start: course unlocks never gate it (it used to be Day 1's reward).
     let ticket: Awaited<ReturnType<typeof unlocks.getEntryTicket>> | undefined;
     const pending = async (ws: Parameters<typeof unlocks.entryTicketPending>[1], accessSource: string) => {
       if (user.isPlatformAdmin || accessSource !== "member") return false;

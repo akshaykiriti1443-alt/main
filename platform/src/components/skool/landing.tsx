@@ -19,6 +19,7 @@ import {
   UserRoundCheckIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WEEK } from "@/lib/week";
 import { Tilt } from "./fx/motion";
 import { CARD, Container, Em, Pete, SectionHead, type Cta } from "./parts";
 import { Browser, MiniLanding } from "./visuals";
@@ -89,15 +90,24 @@ export function Pain() {
 
 type Win = { day: number; title: string; line: string; icon: Icon };
 
-/** The week as seven wins, short enough to read at a glance. Same order and facts as the course. */
+/**
+ * The week as seven wins, short enough to read at a glance. Each title is the app's own day title
+ * (src/lib/week.ts, as the full tour uses), so this page can't drift from the course's order.
+ */
+const dayTitle = (day: number) => WEEK[day - 1].title;
 const WINS: Win[] = [
-  { day: 1, title: "Your website is live.", line: "The AI writes your page and a free checklist for your niche. You press publish.", icon: MegaphoneIcon },
-  { day: 2, title: "Two ways in, tested", line: "Two roads into your group, side by side.", icon: SignpostIcon },
-  { day: 3, title: "Seen like a stranger", line: "Sign up on your own site, all the way to Join.", icon: EyeIcon },
-  { day: 4, title: "A group that feels lived-in", line: "A welcome post, your first Unlock, one quick-win lesson.", icon: HouseIcon },
-  { day: 5, title: "Five real conversations", line: "Your first members probably know your name already.", icon: MessageCircleHeartIcon },
-  { day: 6, title: "Your numbers, in plain words", line: "What's working, what isn't, or too early to tell.", icon: ChartNoAxesColumnIcon },
-  { day: 7, title: "Your numbers. Your call.", line: "See where you stand on Skool's levels, then decide.", icon: CompassIcon },
+  {
+    day: 1,
+    title: dayTitle(1),
+    line: "Find a reel that already works in your niche, turn it into your first carousel and post it. Then open your own group, and the AI writes your About page and cover.",
+    icon: SignpostIcon,
+  },
+  { day: 2, title: dayTitle(2), line: "Your Facebook Page and Instagram, your website live, your Pixel, five ads live at $10 a day, and this week's posts scheduled.", icon: MegaphoneIcon },
+  { day: 3, title: dayTitle(3), line: "Five more ads straight to your Skool link at $5 a day. Then sign up on your own site like a stranger, all the way to Join.", icon: EyeIcon },
+  { day: 4, title: dayTitle(4), line: "A welcome post, your first Unlock, one quick-win lesson.", icon: HouseIcon },
+  { day: 5, title: dayTitle(5), line: "Your first members probably know your name already.", icon: MessageCircleHeartIcon },
+  { day: 6, title: dayTitle(6), line: "What's working, what isn't, or too early to tell.", icon: ChartNoAxesColumnIcon },
+  { day: 7, title: dayTitle(7), line: "See where you stand on Skool's levels, then decide.", icon: CompassIcon },
 ];
 
 function DayTag({ day }: { day: number }) {

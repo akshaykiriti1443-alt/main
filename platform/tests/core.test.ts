@@ -18,7 +18,7 @@ import {
 } from "@/lib/db/schema";
 import { encrypt, decrypt, hmacHex, sealState, openState, hashPassword, verifyPassword } from "@/lib/crypto";
 import { runLaunchKit, fallbackKit } from "@/server/ai/launchKit";
-import { listPages, listSites, publishSite } from "@/server/sites";
+import { listPages, listSites, publishSite, updateSite } from "@/server/sites";
 import { captureLead } from "@/server/leads";
 import { runDueJobs } from "@/server/jobs/runner";
 import { chargeUsage, getOrCreateWallet, creditWallet, InsufficientBalanceError, canAfford } from "@/server/wallet";
@@ -106,6 +106,34 @@ describe("workspace + launch kit + lead flow", () => {
 
     const leadActs = await db.select().from(activities).where(and(eq(activities.workspaceId, ws.id), eq(activities.type, "lead")));
     expect(leadActs.length).toBe(2);
+  });
+
+  it("builds the kit's website in the premium Glass style, in the member's brand colour, whatever the tone", async () => {
+    const { ws } = await makeWorkspace();
+    const kit = { businessName: "Calm Club", ownerName: "Ana", niche: "sleep", audience: "new parents", outcome: "sleep better" };
+    expect((await runLaunchKit(ws.id, { ...kit, tone: "calm", brandColor: "#0F766E" }, { useAi: false })).ok).toBe(true);
+    const [site] = await listSites(ws.id);
+    expect(site.theme).toEqual({ style: "glass", brandColor: "#0F766E", font: "sans" });
+    // A rebuild keeps the Glass look and takes the new colour; the one website is rewritten, not doubled.
+    expect((await runLaunchKit(ws.id, { ...kit, tone: "bold", brandColor: "#112233" }, { useAi: false })).ok).toBe(true);
+    const again = await listSites(ws.id);
+    expect(again).toHaveLength(1);
+    expect(again[0].theme).toMatchObject({ style: "glass", brandColor: "#112233" });
+
+    // The member picks another style: a rebuild keeps it and only takes the new colour.
+    await updateSite(ws.id, site.id, { theme: { ...again[0].theme, style: "luxe", font: "serif" } });
+    expect((await runLaunchKit(ws.id, { ...kit, brandColor: "#445566" }, { useAi: false })).ok).toBe(true);
+    expect((await listSites(ws.id))[0].theme).toEqual({ style: "luxe", brandColor: "#445566", font: "serif" });
+  });
+
+  it("a rebuild turns an untouched default-style website (from an older kit) Glass", async () => {
+    const { ws } = await makeWorkspace();
+    const kit = { businessName: "Old Club", ownerName: "Ana", niche: "sleep", audience: "new parents", outcome: "sleep better" };
+    expect((await runLaunchKit(ws.id, kit, { useAi: false })).ok).toBe(true);
+    const [site] = await listSites(ws.id);
+    await updateSite(ws.id, site.id, { theme: { ...site.theme, style: "bold" } });
+    expect((await runLaunchKit(ws.id, kit, { useAi: false })).ok).toBe(true);
+    expect((await listSites(ws.id))[0].theme.style).toBe("glass");
   });
 
   it("honeypot submissions are ignored", async () => {

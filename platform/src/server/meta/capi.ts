@@ -93,26 +93,8 @@ export async function processCapiJob(payload: Record<string, unknown>) {
 // It sends Meta one test event with the member's own Pixel ID and token, and shows Meta's answer.
 // ---------------------------------------------------------------------------
 
-/** Tidy what was pasted into the Pixel ID box, or say in plain words why it can't be a Pixel ID. */
-export function cleanPixelId(raw: string): { ok: true; id: string } | { ok: false; error: string } {
-  const text = raw.trim();
-  if (!text) return { ok: true, id: "" };
-  if (/^act_/i.test(text)) {
-    return { ok: false, error: "That's your ad account number (it starts with act_). Your Pixel ID is in Meta Events Manager: open your Pixel, go to Settings and copy the Dataset ID." };
-  }
-  if (/^EAA/i.test(text) || (text.length > 30 && /[a-z]/i.test(text))) {
-    return { ok: false, error: "That looks like the access token. It goes in the second box. The first box takes the Dataset ID, which is a long number." };
-  }
-  // Copied numbers sometimes carry spaces or dashes.
-  const digits = text.replace(/[\s-]/g, "");
-  if (!/^\d+$/.test(digits)) {
-    return { ok: false, error: "The Pixel ID is numbers only, like 123456789012345. In Meta Events Manager, open your Pixel, go to Settings and copy the Dataset ID." };
-  }
-  if (digits.length < 14 || digits.length > 17) {
-    return { ok: false, error: `The Pixel ID is about 15 digits long, like 123456789012345. You pasted ${digits.length}. Copy the Dataset ID again from your Pixel's Settings tab.` };
-  }
-  return { ok: true, id: digits };
-}
+// The Pixel ID check is pure, so the Settings box runs the same one before it saves.
+export { PIXEL_ID_DIGITS, cleanPixelId } from "@/lib/pixel";
 
 /** What Meta last said about this Pixel ID. Kept in the workspace settings. */
 export type PixelCheck = { ok: boolean; at: string; pixelId: string; reason?: string };

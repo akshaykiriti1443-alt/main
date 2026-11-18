@@ -21,12 +21,16 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { stepDef, WEEK } from "@/lib/week";
 import { Parallax, Tilt } from "./fx/motion";
 import { CARD, Container, Em, MenuChip, MINI, Penny, SectionHead } from "./parts";
 import { StepRow, UpNext } from "./visuals";
 
 // What the app does for a member. Every menu name here is spelled the way the app's menu spells it
 // (src/app/app/w/[wid]/layout.tsx), because the lessons quote those names. Keep them in step.
+
+/** A step's title as Your path shows it, so the sketch can't drift from the app. */
+const titleOf = (key: string) => stepDef(key)?.title ?? "";
 
 const MENU: { icon: LucideIcon; label: string; gap?: boolean }[] = [
   { icon: LayoutDashboardIcon, label: "Dashboard" },
@@ -197,17 +201,17 @@ function AppWindow({ reelVault }: { reelVault: boolean }) {
               <div className="flex min-w-0 flex-col gap-4 bg-[radial-gradient(120%_90%_at_70%_0%,rgb(124_92_255/0.16),transparent_60%)] p-4 md:p-7">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
                   <span className="font-display text-[30px] leading-none font-semibold tracking-[-0.04em] text-white md:text-[36px]">Day 1</span>
-                  <span className="text-[12px] text-white/45">Your website, Pixel and five ads</span>
+                  <span className="text-[12px] text-white/45">{WEEK[0].title}</span>
                 </div>
                 <div className="grid gap-3 lg:grid-cols-[1.05fr_1fr] lg:gap-4">
-                  <UpNext day={1} title="Put your website live" body="It's written. Change three lines so it sounds like you, then press publish." />
+                  <UpNext day={1} title={titleOf("carousel")} body="Your script is in. The app turns it into slides, you read them, then download." />
+                  {/* Day 1's first steps, in the app's own words and order (src/lib/week.ts). */}
                   <div className="flex flex-col gap-2">
-                    <StepRow state="done">Get your free Gemini key</StepRow>
-                    <StepRow state="done">Build your launch kit</StepRow>
-                    <StepRow state="now">Put your website live</StepRow>
-                    <StepRow state="later">Open your own Skool group</StepRow>
-                    <StepRow state="later">Connect your Meta Pixel</StepRow>
-                    <StepRow state="later">Make your first five ads</StepRow>
+                    <StepRow state="done">{titleOf("ai")}</StepRow>
+                    <StepRow state="done">{titleOf("reel1")}</StepRow>
+                    <StepRow state="now">{titleOf("carousel")}</StepRow>
+                    <StepRow state="later">{titleOf("firstpost")}</StepRow>
+                    <StepRow state="later">{titleOf("skool")}</StepRow>
                   </div>
                 </div>
               </div>

@@ -70,9 +70,11 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { aiRunsFor, needsKey } from "../../ai/runs";
-import { OutOfRunsCard, RunsNote } from "../../ai/runs-card";
+import { aiRunsFor, needsKey, studioJob } from "../../ai/runs";
+import { AiGateCard, RunsNote } from "../../ai/runs-card";
+import { connectorInUse } from "@/server/connectors";
 import { BudgetPicker } from "./budget-picker";
+import { CountrySelect } from "../country-select";
 
 export const metadata = { title: "Ad studio" };
 export const maxDuration = 300;
@@ -113,7 +115,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
   const { wid } = await params;
   const sp = await searchParams;
   const { workspace, user, viewAs } = await requireWorkspace(wid);
-  const [packs, defaults, research, runs, skoolTarget, funnelUrl, offers] = await Promise.all([
+  const [packs, defaults, research, runs, skoolTarget, funnelUrl, offers, claude] = await Promise.all([
     listAdStudioPacks(wid, 8),
     adStudioDefaults(workspace),
     latestResearchAds(wid),
@@ -121,6 +123,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
     skoolTargetFor(wid, workspace.settings.skoolUrl),
     publishedFunnelUrl(wid),
     studioOffers(workspace),
+    connectorInUse(wid),
   ]);
   const chosen = isUuid(sp.pack) ? (packs.find((p) => p.id === sp.pack) ?? (await getAdStudioPack(wid, sp.pack))) : (packs[0] ?? null);
   const pack = chosen?.pack ?? null;
@@ -162,7 +165,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
           </label>
         </div>
         <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-          Day 1&apos;s ads go to your website and offer your free checklist. Day 2&apos;s go to your Skool link and offer your free trial, in their own campaign.{" "}
+          Day 2&apos;s ads go to your website and offer your free checklist. Day 3&apos;s go to your Skool link and offer your free trial, in their own campaign.{" "}
           {funnelUrl ? null : (
             <>
               <Link href={`${base}/sites`}>Publish your website</Link> to send ads to it.
@@ -174,14 +177,8 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
       <div className="grid gap-5 @2xl/main:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="country">Country</FieldLabel>
-          <NativeSelect id="country" name="country" defaultValue={defaults.country} className="w-full">
-            {STUDIO_COUNTRIES.map(([c, label]) => (
-              <NativeSelectOption key={c} value={c}>
-                {label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          <FieldDescription>Where your members live. One country is easiest to start.</FieldDescription>
+          <CountrySelect wid={wid} id="country" defaultValue={defaults.country} options={STUDIO_COUNTRIES} />
+          <FieldDescription>Where your members live. One country is easiest to start. Picked in Ad research too, so both screens match.</FieldDescription>
         </Field>
         {skoolTarget ? (
           <Field>
@@ -194,8 +191,8 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
         ) : (
           <Field>
             <FieldLabel htmlFor="skoolUrl">Your Skool group link</FieldLabel>
-            <Input id="skoolUrl" name="skoolUrl" type="url" placeholder="https://www.skool.com/your-group" />
-            <FieldDescription>Your Skool-link ads and your Join button send people here.</FieldDescription>
+            <Input id="skoolUrl" name="skoolUrl" type="url" placeholder="https://www.skool.com/your-group/about" />
+            <FieldDescription>Open your group in Skool, go to its About page and copy the address bar. Your Skool-link ads and your Join button send people here.</FieldDescription>
           </Field>
         )}
         <Field>
@@ -298,7 +295,7 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
           Make my 5 statics
         </SubmitButton>
         <span className="grid max-w-[52ch] gap-0.5">
-          <RunsNote runs={runs} wid={wid} />
+          <RunsNote runs={runs} wid={wid} claude={claude} />
           <span className="text-xs leading-relaxed text-muted-foreground">
             {needsKey(runs) ? "Press it now and you get our quick pack in a second, not written by AI." : "Takes about a minute."}
           </span>
@@ -310,14 +307,15 @@ export default async function AdStudioPage({ params, searchParams }: { params: P
   return (
     <>
       <PageHead
-        lesson="Days 1 and 2"
+        lesson="Days 2 and 3"
         eyebrow="Get members"
         title="Ad studio"
         sub="Answer a few quick questions. Get your numbers, 5 statics ready to make, and the exact clicks to launch them today."
-        first={pack ? "Make each image with its prompt. On Days 1 and 2, post them in Skool first, then follow Your launch plan in Ads Manager." : "Check the answers below, then press Make my 5 statics."}
+        first={pack ? "Make each image with its prompt, then follow Your launch plan in Ads Manager. Your Skool post comes after." : "Check the answers below, then press Make my 5 statics."}
       />
       <Flash searchParams={sp} />
-      <OutOfRunsCard runs={runs} wid={wid} then="come back and press Make my 5 statics" />
+      {/* Day 2's pack goes to the website ($10 a day); once one exists, Day 3's goes to the Skool link ($5 a day). */}
+      <AiGateCard runs={runs} wid={wid} claude={claude} job={studioJob(defaults.destination)} then="come back and press Make my 5 statics" />
 
       {!skoolTarget ? (
         <Callout tone="warn" title="Add your Skool group link before your Skool-link ads">
@@ -507,7 +505,7 @@ function NumbersPanel({ n, lines, destination }: { n: StudioNumbers; lines: Numb
       <div className="grid grid-cols-2 gap-3 @3xl/main:grid-cols-4">
         <Stat label="Visits a day" value={statRange(n.visitsPerDay.low, n.visitsPerDay.high)} hint={`${guess}${website ? "your website" : "your Skool About page"}`} />
         <Stat label="Visits a month" value={statRange(n.visitsPerMonth.low, n.visitsPerMonth.high)} hint={`${money(n.monthlySpend)} a month in ads`} />
-        {website ? <Stat label="Your second campaign" value="$5" hint="A day, to your Skool link, on Day 2" /> : <Stat label="Days to 100 visitors" value={days} hint="Skool's Level 2 visitor bar" />}
+        {website ? <Stat label="Your second campaign" value="$5" hint="A day, to your Skool link, on Day 3" /> : <Stat label="Days to 100 visitors" value={days} hint="Skool's Level 2 visitor bar" />}
         <Stat label="Statics to run" value={n.statics} hint="All in one ad set" />
       </div>
       <ul className="grid gap-x-6 gap-y-4 pt-1 @3xl/main:grid-cols-2">

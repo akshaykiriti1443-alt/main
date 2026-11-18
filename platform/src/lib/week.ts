@@ -21,6 +21,10 @@ export type HrefKind =
   | "events"
   | "unlocks"
   | "ads"
+  | "reelvault"
+  | "carousel"
+  | "metaPages"
+  | "metaPlanner"
   | "none";
 /**
  * app: the app sees it happen. you: the member's word. you-upgrades: the member's word until the
@@ -33,7 +37,7 @@ export type WeekDayDef = {
   title: string;
   /** The Skool Community section for this day. */
   section: string;
-  /** "Make your own post" from the paste kit. {website} becomes the member's own site. */
+  /** "Make your own post" from the paste kit. {website} becomes the member's own site, {group} their own Skool group. */
   postLayout: string;
   /** What goes in the day's post, for the post step's one-line why. */
   postWhat: string;
@@ -63,28 +67,28 @@ export type WeekStepDef = {
 export const WEEK: WeekDayDef[] = [
   {
     day: 1,
-    title: "Your whole machine goes live",
-    section: "Day 1: 5-Second Test",
-    postWhat: "your website and your 5 ads",
-    postLayout: "My website: {website}\nMy 5 ads: [one image showing all five]\nThe bit I'm most nervous about: ___",
-    line: "Day 1 done. You have a Skool group, a live website, a Pixel and 5 ads.",
+    title: "Your first win",
+    section: "Day 1: My First Post",
+    postWhat: "the link to your first post, the reel you borrowed the hook from and your group",
+    postLayout: "My first post: [link]\nThe reel I borrowed the hook from: [link]\nMy group: {group}\nThe part that scared me: ___",
+    line: "Day 1 done. Your first post is out, and your group exists.",
   },
   {
     day: 2,
-    title: "Five more ads, straight to Skool",
-    section: "Day 2: Thumb-Stop Vote",
-    postWhat: "your next 5 ads in one image, labelled S1 to S5",
-    postLayout: 'For: [who]\nThe line I\'m least sure about: "___"\nWhich one stops your thumb, and which line would you change?\n[all 5 ads in one image, labelled S1 to S5]',
-    line: "Day 2 done. Ten ads, two roads in.",
+    title: "Your shop window and your first ads",
+    section: "Day 2: Website + Ads Live",
+    postWhat: "your website, your 5 ads and how many posts you scheduled",
+    postLayout: "My website: {website}\nMy 5 ads: [one image showing all five]\nPosts scheduled this week: __\nThe bit I'm most nervous about: ___",
+    line: "Day 2 done. Your website is live, 5 ads are with Meta and this week's posts are planned.",
   },
   {
     day: 3,
-    title: "Be your own stranger",
+    title: "A second road, and a stranger's eyes",
     section: "Day 3: Live or Stuck",
-    postWhat: "your website and your Lead in Events Manager, or exactly where you're stuck",
+    postWhat: "your 5 Skool-link ads, your website and your Lead in Events Manager, or exactly where you're stuck",
     postLayout:
-      "Live: {website}\n[a screenshot of Events Manager showing your Lead]\nThe one thing I fixed today: ___\n\n(Stuck instead? Post the exact part you're on and the exact words on your screen.)",
-    line: "Day 3 done. You've walked through your own machine.",
+      "Live: {website}\nMy 5 Skool-link ads: [one image showing all five]\n[a screenshot of Events Manager showing your Lead]\nThe one thing I fixed today: ___\n\n(Stuck instead? Post the exact part you're on and the exact words on your screen.)",
+    line: "Day 3 done. Ten ads on two roads, and you've walked through your own machine.",
   },
   {
     day: 4,
@@ -96,7 +100,7 @@ export const WEEK: WeekDayDef[] = [
   },
   {
     day: 5,
-    title: "Your first 20 already know your name",
+    title: "Five real conversations",
     section: "Day 5: Would You Reply?",
     postWhat: "one of your texts, with the name taken out, and the line you're least sure about",
     postLayout: 'My text, name taken out: "___"\nThe line I\'m least sure about: ___',
@@ -104,7 +108,7 @@ export const WEEK: WeekDayDef[] = [
   },
   {
     day: 6,
-    title: "Your first real numbers",
+    title: "Your ad numbers, in plain words",
     section: "Day 6: Three Numbers",
     postWhat: "your three numbers",
     postLayout: "Website ads: $__ spent ÷ __ leads = $__ a lead\nSkool ads: $__ spent ÷ __ ad visits = $__ a visit\nThe verdict I'm least sure about: Web/Skool S_ got ___",
@@ -112,7 +116,7 @@ export const WEEK: WeekDayDef[] = [
   },
   {
     day: 7,
-    title: "The scoreboard, and your decision",
+    title: "The Level 2 checkpoint, and your decision",
     section: "Day 7: Before and After",
     postWhat: "your before and after",
     postLayout: "Day 1, I was nervous about: ___\nDay 7, I've got: ___\nMy best number: ___\nNext week I'll change: ___",
@@ -133,7 +137,7 @@ const post = (day: number): WeekStepDef => {
     key: `post${day}`,
     day,
     title: `Post your Day ${day} and review one`,
-    why: `Post ${d.postWhat} in the section called ${d.section}. Then review the post right before yours and comment "Reviewed @their name" on your own post. That's what gets your post audited.${day <= 2 ? " Do it before you press Publish, so the feedback can still change your ads." : ""}`,
+    why: `Post ${d.postWhat} in the section called ${d.section}. Then review the post right before yours and comment "Reviewed @their name" on your own post. That's what gets your post audited.`,
     verb: "Open Skool",
     where: "skool",
     hrefKind: "skool",
@@ -148,26 +152,71 @@ const post = (day: number): WeekStepDef => {
 const ADS_MANAGER_NOTE = "The app can't see Ads Manager, so this one is on your word.";
 
 export const WEEK_STEPS: WeekStepDef[] = [
-  // Day 1
+  // Day 1: your first win. Content first: find what already works, make your first post and put it
+  // out, then open your group. Nothing spends money today, and nothing needs a paid tool.
   {
     key: "ai",
     day: 1,
-    title: "Get your free AI key",
-    why: "It writes your website, your emails and your ads. Google gives you a key for free and you paste it in once.",
-    verb: "Get my free key",
+    title: "Connect your Claude",
+    why: "Claude writes your carousel, your website and your emails, and saves them straight into the app. No Claude? A free Gemini key works too.",
+    verb: "Connect my Claude",
     where: "app",
     hrefKind: "ai",
-    // A member who can't get a free key where they live still gets through the week on the included runs.
+    // Claude through the connector, or a saved key: either ticks it. A member with neither still gets
+    // through the week on the included runs.
     tick: "you-upgrades",
     selfLabel: "I'll use my 3 included runs",
     canLater: true,
     win: "Done: your AI key is saved. No more counting runs.",
   },
   {
+    key: "reel1",
+    day: 1,
+    title: "Find what already works in your niche",
+    why: "Open ReelVault and add 1 to 3 accounts in your niche, or let it find the top ones. Open the outliers: reels that got 3 times that creator's normal views, or more. Pick one and press Remake this for a script in your own words.",
+    verb: "Open ReelVault",
+    where: "app",
+    hrefKind: "reelvault",
+    tick: "you",
+    canLater: false,
+    win: "Done: you have a script, borrowed from a reel that already works.",
+    selfLabel: "I've got my script",
+    note: "ReelVault doesn't tell the app which reel you picked, so this one is on your word.",
+  },
+  {
+    key: "carousel",
+    day: 1,
+    title: "Make your first post",
+    why: "Turn your script into a carousel in Make my carousel. Rather be on camera? Film it as a short talking-head video instead: phone at eye level, one take, no editing.",
+    verb: "Make my carousel",
+    where: "app",
+    hrefKind: "carousel",
+    // A saved carousel ticks it. A video on the member's phone is their word.
+    tick: "you-upgrades",
+    canLater: false,
+    win: "Done: your first post is made.",
+    selfLabel: "I filmed a video instead",
+    note: "A saved carousel ticks this by itself. The app can't see a video on your phone, so that one is on your word.",
+  },
+  {
+    key: "firstpost",
+    day: 1,
+    title: "Post it on Instagram",
+    why: "A carousel: post the slides in order and add music in the Instagram app. A video: post it as a reel, no editing needed. People who see your ads tomorrow will look at your profile, so this is the start of it.",
+    verb: "I posted it",
+    where: "phone",
+    hrefKind: "none",
+    tick: "you",
+    canLater: false,
+    win: "Done: your first post is out. That's your first win.",
+    selfLabel: "I posted it",
+    note: "The app can't see Instagram, so this one is on your word.",
+  },
+  {
     key: "skool",
     day: 1,
     title: "Open your own Skool group",
-    why: "This is the room people will pay to join. Start it, set your price and switch on the 7-day free trial, then paste its link here so every Join button knows where to go.",
+    why: "This is the room people will pay to join. Start it (or use the group you already have), set a monthly price and switch on the 7-day free trial, then paste its link here so every Join button knows where to go.",
     verb: "Start my group",
     where: "skool",
     hrefKind: "referral",
@@ -179,19 +228,36 @@ export const WEEK_STEPS: WeekStepDef[] = [
     key: "kit",
     day: 1,
     title: "Build your launch kit",
-    why: "AI writes your website, your free checklist, your emails and your Skool About page. Press it once.",
+    why: "AI writes your Skool About page and your group description, then makes your cover. It writes your website, free checklist and emails too: those go live tomorrow. Press it once.",
     verb: "Build my launch kit",
     where: "app",
     hrefKind: "launch",
     tick: "app",
     canLater: false,
-    win: "Done: your website, free checklist and emails are written.",
+    win: "Done: your About page, group description and cover are ready. Your website, free checklist and emails wait for tomorrow.",
+  },
+  post(1),
+  // Day 2: your shop window and your first ads. Your profile and your website first (half-time), then
+  // the Pixel, your first 5 ads and this week's posts.
+  {
+    key: "pages",
+    day: 2,
+    title: "Set up your Facebook Page and Instagram",
+    why: "Make both business (or creator) accounts, link them together in Meta, and put your Skool group's link in your Instagram bio. Your ads run from this Page, and anyone who looks you up finds a real profile.",
+    verb: "Open Meta Business Suite",
+    where: "meta",
+    hrefKind: "metaPages",
+    tick: "you",
+    canLater: false,
+    win: "Done: your Page and Instagram are linked, with your Skool link in the bio.",
+    selfLabel: "Both are set up",
+    note: "The app can't see Facebook or Instagram, so this one is on your word.",
   },
   {
     key: "publish",
-    day: 1,
+    day: 2,
     title: "Put your website live",
-    why: "Change three lines, check your thank-you page states the deal, then press Publish.",
+    why: "It's built on the premium template, with your free checklist on it. Change three lines, check your thank-you page states the deal, then press Publish.",
     verb: "Open my website",
     where: "app",
     hrefKind: "sites",
@@ -201,7 +267,7 @@ export const WEEK_STEPS: WeekStepDef[] = [
   },
   {
     key: "pixel",
-    day: 1,
+    day: 2,
     title: "Connect your Meta Pixel",
     why: "It tells Meta who gave you their email, so Meta can find more people like them. Your website ads use it.",
     verb: "Open Pixel setup",
@@ -213,7 +279,7 @@ export const WEEK_STEPS: WeekStepDef[] = [
   },
   {
     key: "research",
-    day: 1,
+    day: 2,
     title: "Find ads that already work",
     why: "Copy 3 ads that have run a month or more from Meta's Ad Library, paste them in, then press Analyse with AI to see what's working and the gaps nobody uses yet.",
     verb: "Open Ad research",
@@ -225,7 +291,7 @@ export const WEEK_STEPS: WeekStepDef[] = [
   },
   {
     key: "statics",
-    day: 1,
+    day: 2,
     title: "Make your 5 ads",
     why: "Five different image ads for your free checklist, with the exact clicks to launch them. Pick My website as where they go.",
     verb: "Open Ad studio",
@@ -235,13 +301,11 @@ export const WEEK_STEPS: WeekStepDef[] = [
     canLater: false,
     win: "Done: your 5 ads are written.",
   },
-  // The post comes before Publish: a stranger's 5-second read and the owner's audit can still change the ads.
-  post(1),
   {
     key: "clicks",
-    day: 1,
+    day: 2,
     title: "Put your 5 ads live",
-    why: "Follow your launch plan in Meta Ads Manager: a Leads campaign to your website. Press Publish, then come back and tick it.",
+    why: "Follow your launch plan in Meta Ads Manager: a Leads campaign to your website, $10 a day. Press Publish, then come back and tick it.",
     verb: "Open my launch plan",
     where: "meta",
     hrefKind: "studioPlan",
@@ -251,10 +315,25 @@ export const WEEK_STEPS: WeekStepDef[] = [
     selfLabel: "I pressed Publish",
     note: ADS_MANAGER_NOTE,
   },
-  // Day 2
+  {
+    key: "planweek",
+    day: 2,
+    title: "Plan this week's posts in one sitting",
+    why: "Make 3 more carousels or scripts, the same way as yesterday. Then schedule them for free in the Planner in Meta Business Suite, for Facebook and Instagram at once, so they go out without you.",
+    verb: "Open the Planner",
+    where: "meta",
+    hrefKind: "metaPlanner",
+    tick: "you",
+    canLater: true,
+    win: "Done: this week's posts are scheduled.",
+    selfLabel: "They're scheduled",
+    note: "The app can't see Meta's Planner, so this one is on your word.",
+  },
+  post(2),
+  // Day 3: a second road (5 ads to the Skool link), and a stranger's eyes on your own website.
   {
     key: "refresh",
-    day: 2,
+    day: 3,
     title: "Make 5 more ads for your Skool link",
     why: "Fresh ideas from Gaps nobody uses yet. Pick My Skool link and $5 a day, so these go straight to your group.",
     verb: "Open Ad studio",
@@ -264,12 +343,11 @@ export const WEEK_STEPS: WeekStepDef[] = [
     canLater: false,
     win: "Done: five more ads, made for your Skool link.",
   },
-  post(2),
   {
     key: "live2",
-    day: 2,
+    day: 3,
     title: "Launch them in their own campaign",
-    why: "A Traffic campaign to your Skool link, separate from yesterday's, so your website ads are left alone. Press Publish, then tick it.",
+    why: "A Traffic campaign to your Skool link at $5 a day, separate from yesterday's, so your website ads are left alone. Press Publish, then tick it.",
     verb: "Open my launch plan",
     where: "meta",
     hrefKind: "studioPlan",
@@ -279,7 +357,6 @@ export const WEEK_STEPS: WeekStepDef[] = [
     selfLabel: "I pressed Publish",
     note: ADS_MANAGER_NOTE,
   },
-  // Day 3
   {
     key: "lead1",
     day: 3,
@@ -438,7 +515,117 @@ export const HELLO_STEP: WeekStepDef = {
 export const REVIEW_WAITING_WIN = "Your numbers need more time. That's normal this early.";
 
 /** Day 1's AI step, ticked as "I'll use my 3 included runs": no key is saved, so its win says so. */
-export const AI_RUNS_WIN = "Done: you're on your 3 included runs. You can add a free key in Your AI any time.";
+export const AI_RUNS_WIN = "Done: you're on your 3 included runs. You can connect Claude or add a free key in Your AI any time.";
+
+/** Day 1's AI step, seen from a connected Claude (a connector link) rather than a saved key. */
+export const AI_CONNECTOR_WIN = "Done: your Claude is connected. Ask it to build your website and emails, and it saves them here.";
+
+/** A step carried over from the old day order (withCarriedTicks): done on the member's post, not on anything the app saw. */
+export const CARRIED_WIN = "Counted as done: you'd posted this far before the week changed order.";
+
+/**
+ * Course unlocks: what pasting a day's post link gives, besides the next lesson opening in Skool.
+ * Each is a bonus lesson in Skool. Day 6 has none (every bonus is open by then). Nothing in the app
+ * is a reward: ReelVault and every other tool are open from the start.
+ */
+export const DAY_REWARDS: Record<number, string> = {
+  1: 'Your reward: the bonus lesson "Steal the Hook" opens in Skool too.',
+  2: 'Your reward: the bonus lesson "Ten Posts From One Reel" opens in Skool too.',
+  3: 'Your reward: the bonus lesson "The Text That Gets a Reply" opens in Skool too.',
+  4: 'Your reward: the bonus lesson "The About Page Swipe" opens in Skool too.',
+  5: 'Your reward: the bonus lesson "Your Second Week" opens in Skool too.',
+  7: "One more thing: the weekly live call is in the Skool calendar. Come and say hi.",
+};
+
+/** Day 2 is two sittings: the half-time line sits under this step on today's list. */
+export const HALF_TIME = { day: 2, after: "publish" } as const;
+
+/**
+ * Ticks saved under steps the week no longer has. A member who ticked "Post your first video or
+ * carousel" (video1, the old Day 2) made and posted their first post, so it counts for both of
+ * today's Day 1 steps. "Name 3 competitors" (rivals) has no step now and counts for nothing.
+ * Read through withLegacyTicks(), never written.
+ */
+export const LEGACY_TICKS: Record<string, string[]> = {
+  video1: ["carousel", "firstpost"],
+};
+
+/** The member's saved ticks, with old keys counted for the steps that replaced them. Pure. */
+export function withLegacyTicks<T>(ticks: Record<string, T> | undefined): Record<string, T> {
+  const out: Record<string, T> = { ...(ticks ?? {}) };
+  for (const [old, keys] of Object.entries(LEGACY_TICKS)) {
+    const t = ticks?.[old];
+    if (!t) continue;
+    for (const k of keys) if (!out[k]) out[k] = t;
+  }
+  return out;
+}
+
+/**
+ * When this day order went live. Before it, Day 1 was the website, the Pixel and 5 ads, and Day 2
+ * the Skool-link ads. Used only for carry-over (carriedTicks), nothing else.
+ */
+export const WEEK_V5_SINCE = new Date("2026-11-18T21:15:00Z");
+
+/**
+ * Steps only this day order has. A tick on one of them from before WEEK_V5_SINCE means the member was
+ * already on this order (a preview), so there is nothing to carry over for them.
+ */
+const V5_ONLY_KEYS = ["reel1", "carousel", "firstpost", "pages", "planweek", ...Object.keys(LEGACY_TICKS)];
+
+type SavedTick = { at: string; as?: string };
+type SavedPost = { url?: string; at?: string; flagged?: boolean };
+/** A step counted done because the member posted that day (or a later one) on the old week. Never saved. */
+export type CarriedTick = { at: string; as: "carried" };
+
+const before = (at: string | undefined, since: Date) => {
+  const t = at ? Date.parse(at) : NaN;
+  return Number.isFinite(t) && t < since.getTime();
+};
+
+/**
+ * Carry-over from the old day order: the last day whose post went in before WEEK_V5_SINCE (a ticked
+ * post, or a saved post link), and every key of that day and the days before it (both halves of each
+ * post). day 0 and no keys when there is nothing to carry. `at` is when that post went in. Pure.
+ */
+export function carryRange(ticks: Record<string, SavedTick> | undefined, posts?: Record<string, SavedPost> | undefined, since: Date = WEEK_V5_SINCE): { day: number; at: string; keys: string[] } {
+  const none = { day: 0, at: "", keys: [] as string[] };
+  if (V5_ONLY_KEYS.some((k) => before(ticks?.[k]?.at, since))) return none;
+  let day = 0;
+  let at = "";
+  for (const d of WEEK) {
+    const t = ticks?.[`post${d.day}`];
+    const p = posts?.[String(d.day)];
+    const tickAt = t && t.as !== "waiting" && before(t.at, since) ? t.at : "";
+    const linkAt = p?.url && !p.flagged && before(p.at, since) ? (p.at as string) : "";
+    const when = tickAt || linkAt;
+    if (when) {
+      day = d.day;
+      at = when;
+    }
+  }
+  if (!day) return none;
+  const keys = WEEK_STEPS.filter((s) => s.day <= day).flatMap((s) => (POST_KEYS.includes(s.key) ? [s.key, `${s.key}r`] : [s.key]));
+  return { day, at, keys };
+}
+
+/**
+ * The member's ticks, with every step they hadn't ticked on a carried-over day counted as done
+ * (as "carried"): a member who posted Days 1 and 2 on the old order lands on Day 3, not back on
+ * Day 1. `uncarried` holds the steps they undid since. Pass ticks through withLegacyTicks first.
+ * Read only, never written. Pure.
+ */
+export function withCarriedTicks<T extends SavedTick>(
+  ticks: Record<string, T>,
+  posts?: Record<string, SavedPost> | undefined,
+  uncarried?: Record<string, string> | undefined,
+  since: Date = WEEK_V5_SINCE,
+): Record<string, T | CarriedTick> {
+  const range = carryRange(ticks, posts, since);
+  const out: Record<string, T | CarriedTick> = { ...ticks };
+  for (const k of range.keys) if (!out[k] && !uncarried?.[k]) out[k] = { at: range.at, as: "carried" };
+  return out;
+}
 
 export const POST_KEYS = WEEK.map((d) => `post${d.day}`);
 export const POST_REVIEW_KEYS = WEEK.map((d) => `post${d.day}r`);
@@ -457,6 +644,19 @@ export const WHERE_LABEL: Record<Where, string> = {
   phone: "On your phone",
   you: "Just you",
 };
+
+/** The post-link box's example: the Skool group the post goes in, when we know it. */
+export function postLinkPlaceholder(group: string | null | undefined): string {
+  return group ? `https://www.skool.com/${group}/…` : "https://www.skool.com/…";
+}
+
+/** Day 5's "add someone who replied" link: Leads opens the form with the tag "friend" already in. */
+export const DAY5_ADD_CONTACT = "leads?add=1&from=day5#add-contact";
+
+/** What the Add contact form starts with. Opened from Day 5, the person is a friend you texted. */
+export function addContactPreset(from: string | undefined): { tags: string; welcome: boolean } {
+  return from === "day5" ? { tags: "friend", welcome: false } : { tags: "", welcome: false };
+}
 
 export type EventKey = "adLead" | "adClick" | "claim";
 /** Real events, shown once each whatever step the member is on. Only from data the app reads. */
@@ -511,6 +711,7 @@ export const JOURNEY_COPY = {
     pixelAccepted: "Meta accepted a test event",
     pixelUntested: "Not tested with Meta yet",
     research: "See the gaps",
+    carousel: "See your slides",
     statics: "Open your launch plan",
     lead1: "Open Leads",
     unlock: "Copy its Skool post",
@@ -542,6 +743,12 @@ export const JOURNEY_COPY = {
     wordYou: "Only you know this one, so it's on your word.",
     wordMeta: "The app can't see Meta, so this one is on your word.",
     noOwnGroup: "Open your own group in Skool.",
+    // Day 1's AI step: Claude is the pink button, the free key is the quiet way round.
+    aiFallback: "No Claude? Get a free Gemini key instead",
+    warmAdd: "Someone replied? Add them in Leads",
+    aiRunsNote: "Neither today? Your 3 included runs get you started.",
+    // Day 1's ReelVault step when ReelVault isn't switched on for this app: the same job, by hand.
+    reelVaultOff: "ReelVault isn't switched on here yet, so do it by hand: open 3 accounts in your niche on Instagram, look at their most-viewed reels, pick one and write its script in your own words.",
     reviewWaitEyebrow: "Day 6 · Nothing to judge yet",
     reviewWaitTitle: "Your ads need more time",
     reviewWaitBody: "Ad review only works on an ad with 1,000 impressions or more. None there yet is normal this early. It isn't a bad sign or a good one.",
@@ -556,6 +763,23 @@ export const JOURNEY_COPY = {
     copyPost: "Copy my post",
     firstIn: "First one in today? Review the owner's post in that section.",
     word: "The app can't see Skool. These two ticks are your word.",
+    // Course unlocks: the post half is the pasted link instead of a tick.
+    linkWhy: "Then copy your post's link in Skool (the ⋯ menu › Copy link) and paste it here. That opens your next lesson.",
+    linkField: "Link to your Day {day} post",
+    linkPlaceholder: "https://www.skool.com/…",
+    linkHint: "In Skool: ⋯ on your post › Copy link",
+    linkSave: "Save my post link",
+    linkSaved: "Posted · link saved",
+    linkWord: "The app can't see Skool. Your post's link opens the next lesson, and the review is your word.",
+    linkNext: "Tomorrow's lesson is opening in Skool now.",
+    linkLast: "Your last post of the week is in.",
+    // A post ticked before course unlocks went on: it counts, but Skool only opens the next lesson from its link.
+    linkCatchUp: "Paste your Day {day} post link to open your next lesson in Skool.",
+    linkCatchUpLast: "Paste your Day {day} post link so your last post of the week counts in Skool too.",
+    linkFlagged: "Saved. The owner takes a quick look at this link before your next lesson opens ({reason}). Pasted the wrong one? Paste your own post's link below.",
+    linkInstead: "Paste your post's link to tick this one.",
+    opensToday: "Opens when you post today's",
+    opensAfter: "Opens after your Day {day} post",
     posted: "Posted",
     reviewed: "Reviewed",
     pathRow: "Post in {section}, then review the post before yours",
@@ -584,11 +808,12 @@ export const JOURNEY_COPY = {
   today: {
     title: "Today's steps",
     sub: "Day {day} · step {n} of {count} today",
-    firstTitle: "Today builds your whole machine",
-    firstSub: "{count} steps. The app ticks most of them for you as you go.",
+    firstTitle: "Today is your first win",
+    firstSub: "{count} steps. By the last one, your first post is out and your group exists.",
     whole: "Whole week",
-    halfTimeDone: "Half-time. Your group and website are done, and nothing is spending. The Pixel and the ads are the second sitting. Stop here or carry on, the app remembers where you were.",
-    halfTimeAhead: "Half-time comes once your website is live. The Pixel and the ads are the second sitting, so you can stop there and carry on later. The app remembers where you were.",
+    // Day 2 is two sittings: your profile and your website, then the Pixel, the ads and this week's posts.
+    halfTimeDone: "Half-time. Your Page, your Instagram and your website are sorted, and nothing is spending. The Pixel, the ads and this week's posts are the second sitting. Stop here or carry on, the app remembers where you were.",
+    halfTimeAhead: "Half-time comes once your website is live. The Pixel, the ads and this week's posts are the second sitting, so you can stop there and carry on later. The app remembers where you were.",
   },
   later: {
     line: "Saved for later: {title}",
@@ -614,6 +839,8 @@ export const JOURNEY_COPY = {
     eyebrow: "The Anti-Pete Week",
     title: "Your path",
     sub: "Seven days, in the same order as your lessons in Skool. Go at your own speed. Nothing locks and nothing closes.",
+    // Course unlocks on: Skool drips the lessons, so "nothing locks" would not be true there.
+    subUnlocks: "Seven days, in the same order as your lessons in Skool. Go at your own speed. Each day's lesson opens in Skool when you paste the link to your post from the day before. The app's tools never lock.",
     dayTag: "Day {day}",
     youreHere: "You're here",
     done: "Done",
@@ -625,7 +852,7 @@ export const JOURNEY_COPY = {
     loopSub: "Ad, Skool link, lead, customer. Each number opens where it comes from.",
     loopClicks: "Skool link clicks",
     loopLeads: "Leads",
-    loopCustomers: "New customers",
+    loopCustomers: "New paying members",
     last30: "last 30 days",
     fromCheckin: "from your check-in",
     veteranLine: "This checklist is newer than your account. Nothing here is owed.",
@@ -680,11 +907,11 @@ export function fill(text: string, vars: Record<string, string | number | undefi
   return text.replace(/\{(\w+)\}/g, (m, k: string) => (vars[k] === undefined ? m : String(vars[k])));
 }
 
-/** A day's post layout with the member's website in place of {website}. */
-export function postFor(day: number, website?: string): string {
+/** A day's post layout with the member's website in place of {website} and their own Skool group in place of {group}. */
+export function postFor(day: number, website?: string, group?: string): string {
   const d = WEEK[day - 1];
   if (!d) return "";
-  return d.postLayout.replaceAll("{website}", website || JOURNEY_COPY.post.noWebsite);
+  return d.postLayout.replaceAll("{website}", website || JOURNEY_COPY.post.noWebsite).replaceAll("{group}", group || JOURNEY_COPY.post.noWebsite);
 }
 
 export const stepDef = (key: string): WeekStepDef | undefined => (key === "hello" ? HELLO_STEP : WEEK_STEPS.find((s) => s.key === key));
@@ -697,6 +924,6 @@ export function allWeekStrings(): string[] {
     else if (Array.isArray(v)) v.forEach(walk);
     else if (v && typeof v === "object") Object.values(v).forEach(walk);
   };
-  walk([WEEK, WEEK_STEPS, HELLO_STEP, EVENT_WINS, JOURNEY_COPY, DAY6_WAITING_LINE, REVIEW_WAITING_WIN, AI_RUNS_WIN, WHERE_LABEL]);
+  walk([WEEK, WEEK_STEPS, HELLO_STEP, EVENT_WINS, JOURNEY_COPY, DAY6_WAITING_LINE, REVIEW_WAITING_WIN, AI_RUNS_WIN, AI_CONNECTOR_WIN, CARRIED_WIN, DAY_REWARDS, WHERE_LABEL]);
   return out;
 }

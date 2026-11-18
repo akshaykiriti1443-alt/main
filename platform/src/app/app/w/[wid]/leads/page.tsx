@@ -8,6 +8,7 @@ import { contactName, listContacts } from "@/server/contacts";
 import { addContactAction } from "@/actions/crm";
 import type { Stage, Temperature } from "@/lib/db/schema";
 import { relativeTime } from "@/lib/util";
+import { addContactPreset } from "@/lib/week";
 import { cn } from "@/lib/utils";
 import { Empty, Flash, MoreOptions, PageHead, TempBadge } from "@/components/ui";
 import { Avatar, SegmentedLinks, StageChip } from "@/components/crm-ui";
@@ -53,6 +54,8 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
   const hotName = hottest ? contactName(hottest) : "";
   // The Add contact button opens the form (and adding someone comes back to it, ready for the next).
   const adding = sp.add === "1";
+  // Opened from Day 5 on Your path: the person is a friend they texted, so the tag is filled in.
+  const preset = addContactPreset(sp.from);
 
   const addByHand = (
     <MoreOptions
@@ -64,13 +67,15 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
       sub="Someone who replied to your text, a past client, a person who DM'd you once. Your first paying member is usually one of them."
     >
       <form action={addContactAction.bind(null, wid)} className="grid gap-4 @2xl/main:grid-cols-2">
+        {sp.from === "day5" ? <input type="hidden" name="from" value="day5" /> : null}
         <Field>
           <FieldLabel htmlFor="firstName">First name</FieldLabel>
-          <Input id="firstName" name="firstName" autoFocus={adding} />
+          <Input id="firstName" name="firstName" autoFocus={adding} placeholder="Jamie" />
         </Field>
         <Field>
           <FieldLabel htmlFor="phone">Phone</FieldLabel>
-          <Input id="phone" name="phone" type="tel" />
+          <Input id="phone" name="phone" type="tel" placeholder="+1 555 123 4567" />
+          <FieldDescription>With the country code, like +1 555 123 4567.</FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
@@ -83,8 +88,10 @@ export default async function LeadsPage({ params, searchParams }: { params: Prom
         </Field>
         <Field className="@2xl/main:col-span-2">
           <FieldLabel htmlFor="tags">Tags</FieldLabel>
-          <Input id="tags" name="tags" placeholder="friend" />
-          <FieldDescription>One word to tell them apart later, like friend. Put a comma between two.</FieldDescription>
+          <Input id="tags" name="tags" placeholder="friend" defaultValue={preset.tags} />
+          <FieldDescription>
+            {preset.tags ? "Filled in for you: someone you texted on Day 5 is a friend. " : ""}One word to tell them apart later, like friend. Put a comma between two.
+          </FieldDescription>
         </Field>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-muted/50 px-4 py-3 text-sm ring-1 ring-ink/[0.03] ring-inset @2xl/main:col-span-2 dark:ring-white/[0.04]">
           <input type="checkbox" name="welcome" className="mt-0.5" />

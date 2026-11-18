@@ -82,4 +82,53 @@ export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
+/**
+ * Words the member typed, ready to sit in the middle of a sentence: "Busy dads over 35" → "busy dads over 35",
+ * so a template reads "Free for busy dads over 35". A first word with another capital in it stays as typed
+ * ("CEOs", "AI", "YouTube", "McKinsey"), and so does "I". "iPhone" already starts small.
+ */
+export function midSentence(text: string): string {
+  const first = /^\S+/.exec(text)?.[0] ?? "";
+  if (!/^\p{Lu}/u.test(first) || /\p{Lu}/u.test(first.slice(1)) || /^I(?:['’]|$)/.test(first)) return text;
+  return text[0].toLowerCase() + text.slice(1);
+}
+
+// Verbs a niche or a result often starts with ("Get strong…", "Lose 10 lbs…").
+const ACTION_VERBS = new Set(
+  "get lose build make start grow learn become stop find gain run eat sleep write launch sell earn save fix quit feel look move train lift walk cook play speak sing draw paint go stay keep beat pass land hire scale double triple finish create master improve boost cut drop burn tone heal reduce increase raise teach help turn".split(" "),
+);
+
+/**
+ * True when a phrase starts with an action rather than a thing: a verb or an -ing word ("getting strong in
+ * 3 gym sessions", "lose 10 lbs"), so a template can't treat it as a noun ("My getting strong… checklist").
+ */
+export function startsWithAction(text: string): boolean {
+  const first = (/^[\p{L}'’-]+/u.exec(text.trim())?.[0] ?? "").toLowerCase();
+  return first.length > 3 && first.endsWith("ing") ? true : ACTION_VERBS.has(first);
+}
+
+// Words that start a role or a brand, not a person's name: "Dad Coach Demo", "Coach Mike", "The 45-Minute Dad".
+const NOT_FIRST_NAMES = new Set(
+  "the a an my your our team dad dads daddy mom mum moms mums mama papa coach coaches mr mrs ms miss mx dr doc sir madam captain chef trainer admin owner founder demo test user community group club academy gym fit fitness official real big little uncle aunt auntie grandpa grandma grandad nana".split(" "),
+);
+
+/**
+ * The owner's first name, only when what they typed reads like a person's name ("Sam Jones" → "Sam").
+ * Anything else ("Dad Coach Demo", "Coach Mike", "The 45-Minute Dad", "FitTeam2") → "", so the words
+ * are phrased without a name ("Help from me").
+ */
+export function personFirstName(raw: string | null | undefined): string {
+  const words = (raw ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length || words.length > 4) return "";
+  if (!words.every((w) => /^[\p{L}][\p{L}'’.-]*$/u.test(w))) return "";
+  const first = words[0].replace(/[.,]+$/, "");
+  if (first.length < 2 || NOT_FIRST_NAMES.has(first.toLowerCase())) return "";
+  return first[0].toUpperCase() + first.slice(1);
+}
+
+/** How the owner signs off: their first name when it reads like one, else the name exactly as they typed it. */
+export function ownerSignOff(raw: string | null | undefined): string {
+  return personFirstName(raw) || (raw ?? "").trim();
+}
+
 export const isUuid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);

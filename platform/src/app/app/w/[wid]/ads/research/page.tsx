@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { requireWorkspace } from "@/server/tenancy";
 import { adLibraryConfigured, adLibraryWebUrl, searchAdLibraryFor, type LibraryAd } from "@/server/meta/adLibrary";
 import type { AdAnalysis } from "@/server/ai/adResearch";
+import { adCountryFor, listAdStudioPacks, STUDIO_COUNTRIES } from "@/server/ai/adStudio";
 import { ANGLE_HINT, ANGLE_LABEL, type AdAngle } from "@/server/ai/adFramework";
 import { adResearchAction } from "@/actions/adResearch";
 import { Callout, Empty, Flash, MoreOptions, PageHead, Panel, StepDot } from "@/components/ui";
@@ -16,27 +17,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { aiRunsFor, needsKey } from "../../ai/runs";
-import { OutOfRunsCard, RunsNote } from "../../ai/runs-card";
+import { AiGateCard, RunsNote } from "../../ai/runs-card";
+import { connectorInUse } from "@/server/connectors";
+import { CountrySelect } from "../country-select";
 
 export const metadata = { title: "Ad research" };
 export const maxDuration = 300;
 
-const COUNTRIES: [string, string][] = [
-  ["ALL", "All countries"],
-  ["US", "United States"],
-  ["GB", "United Kingdom"],
-  ["CA", "Canada"],
-  ["AU", "Australia"],
-  ["IN", "India"],
-  ["DE", "Germany"],
-  ["FR", "France"],
-  ["ES", "Spain"],
-  ["NL", "Netherlands"],
-  ["IE", "Ireland"],
-];
+/** Every country Ad studio offers, plus All: a country picked here carries over to Ad studio. */
+const COUNTRIES: [string, string][] = [["ALL", "All countries"], ...STUDIO_COUNTRIES];
 
 /** Each angle to borrow gets its own colour, so the three read as a set (Ad studio uses the same). */
 const ANGLE_TONE: Record<AdAngle, { bar: string; chip: string }> = {
@@ -55,7 +46,9 @@ export default async function AdResearchPage({ params, searchParams }: { params:
   const pageIdRaw = (sp.pageId ?? "").trim();
   const pageId = /^\d{3,30}$/.test(pageIdRaw) ? pageIdRaw : "";
   const pageIdError = pageIdRaw && !pageId ? "A Page ID is only numbers. Open the competitor's ads in the Ad Library and copy the number after view_all_page_id= in the address bar." : "";
-  const country = COUNTRIES.some(([c]) => c === sp.country) ? sp.country : "ALL";
+  // The one in the address bar, else the one picked last here or in Ad studio, else their address's, else All.
+  const [lastPack] = sp.country ? [] : await listAdStudioPacks(wid, 1);
+  const country = COUNTRIES.some(([c]) => c === sp.country) ? sp.country : (adCountryFor(workspace.settings, lastPack?.input.country) ?? "ALL");
   const configured = adLibraryConfigured();
   const webUrl = adLibraryWebUrl({ q: q || workspace.settings.niche || "", pageId, country });
 
@@ -69,7 +62,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
     }
   }
 
-  const runs = await aiRunsFor(workspace);
+  const [runs, claude] = await Promise.all([aiRunsFor(workspace), connectorInUse(wid)]);
   const db = await getDb();
   const [row] = await db
     .select()
@@ -123,7 +116,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
           </span>
         )}
         <span className="grid gap-0.5">
-          <RunsNote runs={runs} wid={wid} />
+          <RunsNote runs={runs} wid={wid} claude={claude} />
           <span className="text-xs text-muted-foreground">{needsKey(runs) ? "Press it now and you get a quick read, not written by AI." : "Three or more ads gives the AI something to work with."}</span>
         </span>
       </div>
@@ -143,13 +136,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
       </Field>
       <Field>
         <FieldLabel htmlFor="metaCountry">Country</FieldLabel>
-        <NativeSelect id="metaCountry" name="country" defaultValue={country} className="w-full">
-          {COUNTRIES.map(([c, label]) => (
-            <NativeSelectOption key={c} value={c}>
-              {label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+        <CountrySelect wid={wid} id="metaCountry" defaultValue={country} options={COUNTRIES} />
       </Field>
       <Button type="submit" variant="outline">
         Search in Meta Ad Library
@@ -161,14 +148,14 @@ export default async function AdResearchPage({ params, searchParams }: { params:
   return (
     <>
       <PageHead
-        lesson="Days 1 and 2"
+        lesson="Day 2"
         eyebrow="Get members"
         title="Ad research"
         sub="Copy a few ads your competitors keep paying for, paste them here, and AI shows you what's working in your niche and the gaps nobody uses yet."
         first="Open Meta's Ad Library, copy 3 ads that have run a month or more, paste them below and press Analyse with AI."
       />
       <Flash searchParams={sp} />
-      <OutOfRunsCard runs={runs} wid={wid} then="come back and press Analyse with AI" />
+      <AiGateCard runs={runs} wid={wid} claude={claude} job="ad_research" then="come back and press Analyse with AI" />
 
       <Panel step={1} title="Copy 3 ads that have run a month or more" sub="Ads that keep running for a month or more are usually the ones making money. It's the best free clue there is.">
         {metaSearch}
@@ -208,13 +195,7 @@ export default async function AdResearchPage({ params, searchParams }: { params:
             </Field>
             <Field>
               <FieldLabel htmlFor="country">Country</FieldLabel>
-              <NativeSelect id="country" name="country" defaultValue={country} className="w-full">
-                {COUNTRIES.map(([c, label]) => (
-                  <NativeSelectOption key={c} value={c}>
-                    {label}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              <CountrySelect wid={wid} id="country" defaultValue={country} options={COUNTRIES} />
             </Field>
             <Button type="submit">
               <SearchIcon data-icon="inline-start" />

@@ -218,7 +218,7 @@ describe("Days 5 and 7 on Growth ladder", () => {
     expect(page).toContain('data-guide="checkin"');
     expect(page).not.toMatch(/Monday/);
     // The four boxes the course names come first; the bio tick waits in the extras until Level 3.
-    const fourBoxes = ["About-page visitors", "New customers", "Skool Network sign-ups", "Level Skool shows"].map((l) => page.indexOf(`>${l}<`));
+    const fourBoxes = ["About-page visitors", "New paying members", "Skool Network sign-ups", "Level Skool shows"].map((l) => page.indexOf(`>${l}<`));
     expect(fourBoxes.every((i) => i > 0)).toBe(true);
     expect(page.indexOf('name="linkInBio"')).toBeGreaterThan(page.indexOf('title="A few extra numbers"'));
     // The stay-or-go line points at the course's facts and never at a date.

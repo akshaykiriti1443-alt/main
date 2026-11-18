@@ -16,7 +16,7 @@ export function NewConnector({ wid, cta }: { wid: string; cta?: boolean }) {
   return (
     <div className="flex flex-col gap-3">
       <form action={action} data-guide="ai-connect" className="flex flex-col gap-2.5 sm:flex-row">
-        <Input name="name" placeholder="Name it, e.g. My Claude" className="h-10 sm:max-w-60" aria-label="Connector name" />
+        <Input name="name" defaultValue="OneX" placeholder="Name it, e.g. OneX" className="h-10 sm:max-w-60" aria-label="Connector name" />
         <Button type="submit" variant={cta ? "cta" : "default"} disabled={pending} className="h-10">
           {pending ? <Spinner data-icon="inline-start" /> : <LinkIcon data-icon="inline-start" />}
           {pending ? "Creating…" : "Create connector URL"}

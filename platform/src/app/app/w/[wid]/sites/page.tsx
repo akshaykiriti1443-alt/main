@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, eq, sql } from "drizzle-orm";
-import { ArrowRightIcon, ExternalLinkIcon, FileTextIcon, GraduationCapIcon, MailCheckIcon, PlusIcon, RocketIcon, SparklesIcon, UsersIcon } from "lucide-react";
+import { ArrowRightIcon, ExternalLinkIcon, FileTextIcon, GemIcon, GraduationCapIcon, MailCheckIcon, PlusIcon, RocketIcon, SparklesIcon, UsersIcon } from "lucide-react";
 import { getDb } from "@/lib/db";
 import { contacts, pages } from "@/lib/db/schema";
 import type { SiteTheme } from "@/lib/db/types";
@@ -58,6 +58,7 @@ function HowAFunnelWorks() {
  * so this stays light (or dark, for the Dark style) whatever the app theme is. Decorative only.
  */
 function FunnelThumb({ theme, address, framed }: { theme: SiteTheme; address: string; framed?: boolean }) {
+  if (theme.style === "glass") return <GlassThumb theme={theme} address={address} framed={framed} />;
   const filled = theme.style === "bold" || theme.style === "luxe";
   const dark = theme.style === "dark";
   const surface = filled ? "" : dark ? "bg-ink" : theme.style === "editorial" ? "bg-marshmallow" : "bg-white";
@@ -81,6 +82,37 @@ function FunnelThumb({ theme, address, framed }: { theme: SiteTheme; address: st
         <span className={`relative h-2.5 w-[52%] rounded-full ${strong}`} />
         <span className={`relative mt-1 h-1.5 w-[62%] rounded-full ${line}`} />
         <span className={`relative mt-1.5 h-5 w-24 rounded-full shadow-xs ${filled ? "bg-white" : ""}`} style={filled ? undefined : brand} />
+      </div>
+    </div>
+  );
+}
+
+/** The Glass style in miniature: brand light on a pale page, a gradient headline, a frosted card, a pill. */
+function GlassThumb({ theme, address, framed }: { theme: SiteTheme; address: string; framed?: boolean }) {
+  const c = theme.brandColor;
+  return (
+    <div aria-hidden className={cn("overflow-hidden rounded-t-xl shadow-card ring-1 ring-ink/[0.07] dark:ring-white/10", framed && "@2xl/main:rounded-xl")}>
+      <div className="flex h-6 items-center gap-1 border-b border-border bg-card px-2.5">
+        <span className="size-1.5 rounded-full bg-border-strong" />
+        <span className="size-1.5 rounded-full bg-border-strong" />
+        <span className="size-1.5 rounded-full bg-border-strong" />
+        <span className="ml-2 min-w-0 truncate rounded-full bg-muted px-2 text-[9.5px] leading-4 text-subtle-foreground">{address}</span>
+      </div>
+      <div
+        className="relative flex h-[120px] items-center gap-3 px-5"
+        style={{ background: `radial-gradient(60% 100% at 6% 0%, ${c}5c, transparent 72%), radial-gradient(45% 90% at 100% 40%, ${c}33, transparent 70%), #f8f7fd` }}
+      >
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <span className="h-3 w-14 rounded-full bg-white/80 shadow-xs ring-1 ring-black/[0.05]" />
+          <span className="h-2.5 w-[88%] rounded-full" style={{ background: `linear-gradient(90deg, ${c}, ${c}99)` }} />
+          <span className="h-2.5 w-[64%] rounded-full" style={{ background: `linear-gradient(90deg, ${c}cc, ${c}66)` }} />
+          <span className="mt-1 h-1.5 w-[70%] rounded-full bg-ink/10" />
+        </div>
+        <div className="flex w-[38%] shrink-0 flex-col gap-1.5 rounded-xl bg-white/85 p-2.5 shadow-[0_10px_24px_-14px_rgb(0_0_0/0.35)] ring-1 ring-black/[0.05]">
+          <span className="h-3 rounded-md bg-ink/[0.06]" />
+          <span className="h-3 rounded-md bg-ink/[0.06]" />
+          <span className="h-3.5 rounded-full" style={{ background: c, boxShadow: `0 6px 14px -6px ${c}` }} />
+        </div>
       </div>
     </div>
   );
@@ -129,6 +161,24 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
       </MoreOptions>
     ) : null;
 
+  // Our own premium design (the Glass style, the look of our Skool page) with starter words to edit.
+  const premiumFunnel =
+    sites.length < limit ? (
+      <MoreOptions icon={GemIcon} title="Start from the premium template" sub="Our own premium design: soft glow, frosted cards. Starter words you (or Claude) can tweak.">
+        <form action={createSiteAction.bind(null, wid)} className="flex flex-col gap-2">
+          <input type="hidden" name="template" value="glass" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <Field className="flex-1">
+              <FieldLabel htmlFor="premium-name">Funnel name</FieldLabel>
+              <Input id="premium-name" name="name" placeholder="Community funnel" />
+            </Field>
+            <SubmitButton variant="outline">Use the premium template</SubmitButton>
+          </div>
+          <FieldDescription>You get an opt-in page and a thank-you page in the Glass style. Change the colour any time in Funnel settings.</FieldDescription>
+        </form>
+      </MoreOptions>
+    ) : null;
+
   if (sites.length === 0) {
     return (
       <>
@@ -148,6 +198,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
           icon={SparklesIcon}
         />
         <HowAFunnelWorks />
+        {premiumFunnel}
         {blankFunnel}
       </>
     );
@@ -156,7 +207,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
   return (
     <>
       <PageHead
-        lesson="Day 1"
+        lesson="Day 2"
         title="Funnels & pages"
         sub="Your funnels: the pages your ads send people to. Open one to edit its pages or publish it."
         first={anyLive ? undefined : "Open your funnel, check the pages, then press Publish."}
@@ -173,7 +224,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
 
       {!anyLive && firstDraft ? (
         <NextStep
-          eyebrow="Up next · Day 1"
+          eyebrow="Up next · Day 2"
           title="Publish your funnel"
           body="Edit three lines, then press the scary button. You can change anything later and publish again."
           href={`${base}/sites/${firstDraft.id}`}
@@ -258,6 +309,7 @@ export default async function SitesPage({ params, searchParams }: { params: Prom
         })}
       </ul>
 
+      {premiumFunnel}
       {blankFunnel}
     </>
   );

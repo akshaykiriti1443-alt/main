@@ -50,14 +50,16 @@ describe("View as: preview a member's experience", () => {
 describe("Your path: the week as a checklist", () => {
   const all = (p: Awaited<ReturnType<typeof computePath>>) => p.days.flatMap((d) => d.steps);
 
-  it("starts at the free AI key, ticks steps off from real data and moves the next step on", async () => {
+  it("starts at the member's Claude, ticks steps off from real data and moves the next step on", async () => {
     const { ws, user } = await makeWorkspace();
     const fresh = await computePath({ ...ws, settings: { ...ws.settings, skoolUrl: "" } }, user.id);
     expect(fresh.current?.key).toBe("ai");
-    // Post and get reviewed before spending money: on Days 1 and 2 the post comes before Publish.
-    expect(fresh.days[0].steps.map((x) => x.key)).toEqual(["ai", "skool", "kit", "publish", "pixel", "research", "statics", "post1", "clicks"]);
-    expect(fresh.days[1].steps.map((x) => x.key)).toEqual(["refresh", "post2", "live2"]);
-    expect(fresh.total).toBe(27); // 28 with "Say hi"
+    // Day 1 is the first win: Claude, a reel that works, a carousel, the post, then the group and kit.
+    // Day 2 is the shop window and the ads: profile, website (half-time), Pixel, 5 ads, this week's posts.
+    expect(fresh.days[0].steps.map((x) => x.key)).toEqual(["ai", "reel1", "carousel", "firstpost", "skool", "kit", "post1"]);
+    expect(fresh.days[1].steps.map((x) => x.key)).toEqual(["pages", "publish", "pixel", "research", "statics", "clicks", "planweek", "post2"]);
+    expect(fresh.days[2].steps.map((x) => x.key)).toEqual(["refresh", "live2", "lead1", "skoolvisit", "events", "post3"]);
+    expect(fresh.total).toBe(32); // 33 with "Say hi"
     expect(fresh.loop).toEqual({ clicks: 0, leads: 0, customers: 0 });
     // No always-done "Open your app", and no Day 3 tracking bundle.
     for (const k of ["app", "tracking"]) expect(all(fresh).map((x) => x.key)).not.toContain(k);
@@ -87,27 +89,27 @@ describe("Your path: the week as a checklist", () => {
     for (const k of ["visitors", "network", "weeks"]) expect(month.after.find((s) => s.key === k)?.done, k).toBe(true);
   });
 
-  it("follows the course: Day 1 to Day 7, each with its Skool post (before Publish on Days 1 and 2), then a closed list after the week", async () => {
+  it("follows the course: Day 1 to Day 7, each ending on its Skool post, then a closed list after the week", async () => {
     const { ws, user } = await makeWorkspace();
     const p = await computePath({ ...ws, accessSource: "member", settings: { ...ws.settings, entryClaimedAt: new Date().toISOString() } }, user.id, { entryTicketOn: true });
     expect(p.days.map((d) => d.steps.map((x) => x.key))).toEqual([
-      ["hello", "ai", "skool", "kit", "publish", "pixel", "research", "statics", "post1", "clicks"],
-      ["refresh", "post2", "live2"],
-      ["lead1", "skoolvisit", "events", "post3"],
+      ["hello", "ai", "reel1", "carousel", "firstpost", "skool", "kit", "post1"],
+      ["pages", "publish", "pixel", "research", "statics", "clicks", "planweek", "post2"],
+      ["refresh", "live2", "lead1", "skoolvisit", "events", "post3"],
       ["welcome", "unlock", "lesson", "post4"],
       ["warm", "post5"],
       ["review", "post6"],
       ["checkin", "decide", "post7"],
     ]);
-    expect(p.total).toBe(28);
+    expect(p.total).toBe(33);
     expect(p.days.map((d) => d.title)).toEqual([
-      "Your whole machine goes live",
-      "Five more ads, straight to Skool",
-      "Be your own stranger",
+      "Your first win",
+      "Your shop window and your first ads",
+      "A second road, and a stranger's eyes",
       "Furnish the room before guests arrive",
-      "Your first 20 already know your name",
-      "Your first real numbers",
-      "The scoreboard, and your decision",
+      "Five real conversations",
+      "Your ad numbers, in plain words",
+      "The Level 2 checkpoint, and your decision",
     ]);
     expect(p.stages.map((s) => s.key)).toEqual(["day1", "day2", "day3", "day4", "day5", "day6", "day7", "season2", "second"]);
     expect(p.stages.map((s) => s.tag)).toEqual(["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7", "Season 2", "Bonus"]);
@@ -119,14 +121,13 @@ describe("Your path: the week as a checklist", () => {
     expect(keys).not.toContain("price");
     expect(keys).not.toContain("sync");
     for (const x of p.stages.flatMap((s) => s.steps)) expect(x.href, x.key).not.toMatch(/\/skool(\/|$|[?#])/);
-    // Every day has its post, in its own section. Days 3 to 7 end on it; on Days 1 and 2 it sits
-    // right before "I pressed Publish", so the ads get reviewed before any money is spent.
+    // Every day ends on its post, in its own section, and the post link opens the next day.
     for (const d of p.days) {
       const post = d.steps.findIndex((x) => x.key === `post${d.day}`);
       expect(d.steps[post], `Day ${d.day}`).toMatchObject({ key: `post${d.day}`, section: d.section, selfLabel: "I posted mine", reviewLabel: "I reviewed the one before me" });
-      if (d.day <= 2) expect(d.steps.slice(post + 1).map((x) => x.key), `Day ${d.day}`).toEqual([d.day === 1 ? "clicks" : "live2"]);
-      else expect(post, `Day ${d.day}`).toBe(d.steps.length - 1);
+      expect(post, `Day ${d.day}`).toBe(d.steps.length - 1);
     }
+    expect(p.days.slice(0, 2).map((d) => d.section)).toEqual(["Day 1: My First Post", "Day 2: Website + Ads Live"]);
     expect(all(p).find((x) => x.key === "hello")?.why).not.toMatch(/likes?|usually|same day/i);
   });
 
@@ -146,16 +147,20 @@ describe("Your path: the week as a checklist", () => {
     expect(p.loop.leads).toBe(0);
   });
 
-  it("makes the Pixel a Day 1 to-do right after the website, and walks past outcomes, which still tick", async () => {
+  it("makes the Pixel a Day 2 to-do right after the website, and walks past outcomes, which still tick", async () => {
     const { ws, user } = await makeWorkspace();
     const db = await getDb();
     const gen = (kind: "launch_kit" | "ad_research" | "ad_studio" | "ad_review") => db.insert(aiGenerations).values({ workspaceId: ws.id, kind, model: "rules" });
-    const keyed = { ...ws, settings: { ...ws.settings, aiKeyEnc: "x" } };
+    const old = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const now = new Date().toISOString();
+    // Day 1's word-only steps done two days ago (the first post through the old video1 key), and Day 2's Page today.
+    const ticks = { reel1: { at: old }, video1: { at: old }, post1: { at: old }, post1r: { at: old }, pages: { at: now } };
+    const keyed = { ...ws, settings: { ...ws.settings, aiKeyEnc: "x", journey: { ticks } } };
 
     let p = await computePath(keyed, user.id);
-    const keys = p.days[0].steps.map((x) => x.key);
+    const keys = p.days[1].steps.map((x) => x.key);
     expect(keys.indexOf("pixel")).toBe(keys.indexOf("publish") + 1);
-    expect(p.days[0].steps.find((s) => s.key === "pixel")).toMatchObject({ title: "Connect your Meta Pixel", day: 1, done: false, canLater: true });
+    expect(p.days[1].steps.find((s) => s.key === "pixel")).toMatchObject({ title: "Connect your Meta Pixel", day: 2, done: false, canLater: true });
 
     // Everything before it done: the Pixel is the next step, not skipped.
     await gen("launch_kit");
